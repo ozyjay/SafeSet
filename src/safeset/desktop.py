@@ -14,6 +14,15 @@ from .desktop_flow import (
     restore_results,
 )
 from .errors import SafetyError
+from .policy import NAME
+from .policy_authoring import (
+    RuleDraft,
+    load_drafts,
+    local_categories,
+    parse_number,
+    parse_pairs,
+    save_policy,
+)
 from .storage import check_map_read, output_destination
 
 BACKGROUND = "#f5f7f5"
@@ -33,6 +42,15 @@ PICKER_TYPES = {
     "yaml": (("YAML policies", "*.yaml *.yml"), ("All files", "*")),
     "enc": (("Encrypted maps", "*.enc"), ("All files", "*")),
 }
+CLASS_LABELS = {
+    "Direct identifier": "direct_identifier",
+    "Quasi-identifier": "quasi_identifier",
+    "Analytical attribute": "analytical_attribute",
+    "Free text": "free_text",
+    "Unknown": "unknown",
+    "Existing pseudonym": "pseudonymous_identifier",
+}
+ACTION_FROM_LABEL = {label: action for action, label in ACTION_LABELS.items()}
 
 
 def _path_row(
@@ -119,6 +137,9 @@ class Desktop:
         self.review: ExportReview | None = None
         self.returned_review: ReturnedReview | None = None
         self.inspected_path: Path | None = None
+        self.policy_drafts: dict[str, RuleDraft] = {}
+        self.policy_controls: dict[str, tuple[tk.StringVar, tk.StringVar]] = {}
+        self.policy_details_buttons: dict[str, ttk.Button] = {}
         root.title("SafeSet · local data review")
         root.geometry("840x700")
         root.minsize(700, 620)
@@ -148,12 +169,15 @@ class Desktop:
         self.notebook = ttk.Notebook(shell)
         self.notebook.pack(fill="both", expand=True)
         self.inspect_tab = ttk.Frame(self.notebook, padding=20)
+        self.policy_tab = ttk.Frame(self.notebook, padding=20)
         self.export_tab = ttk.Frame(self.notebook, padding=20)
         self.restore_tab = ttk.Frame(self.notebook, padding=20)
         self.notebook.add(self.inspect_tab, text="1  Inspect")
-        self.notebook.add(self.export_tab, text="2  Export")
-        self.notebook.add(self.restore_tab, text="3  Restore")
+        self.notebook.add(self.policy_tab, text="2  Policy")
+        self.notebook.add(self.export_tab, text="3  Export")
+        self.notebook.add(self.restore_tab, text="4  Restore")
         self._build_inspect()
+        self._build_policy()
         self._build_export()
         self._build_restore()
         ttk.Label(
@@ -191,10 +215,15 @@ class Desktop:
             controls, text="Inspect locally", style="Accent.TButton", command=self._inspect
         ).pack(side="left")
         self.use_source_button = ttk.Button(
-            controls, text="Use this CSV for export →", command=self._use_inspected_source
+            controls, text="Use existing policy →", command=self._use_inspected_source
         )
         self.use_source_button.pack(side="left", padx=(10, 0))
         self.use_source_button.state(["disabled"])
+        self.make_policy_button = ttk.Button(
+            controls, text="Create policy →", command=self._use_inspected_for_policy
+        )
+        self.make_policy_button.pack(side="left", padx=(10, 0))
+        self.make_policy_button.state(["disabled"])
         self.inspect_result = ttk.Label(tab, text="Choose a file to begin.", justify="left")
         self.inspect_result.pack(anchor="w")
         grid_area = ttk.Frame(tab)
@@ -259,6 +288,7 @@ class Desktop:
                 )
             self.inspected_path = source
             self.use_source_button.state(["!disabled"])
+            self.make_policy_button.state(["!disabled"])
         except (SafetyError, OSError, UnicodeError) as error:
             self._error(error)
 
@@ -266,6 +296,7 @@ class Desktop:
         self.inspected_path = None
         if hasattr(self, "use_source_button"):
             self.use_source_button.state(["disabled"])
+            self.make_policy_button.state(["disabled"])
             self.inspect_result.configure(text="Source changed. Inspect again to continue.")
             self.inspect_grid.delete(*self.inspect_grid.get_children())
 
@@ -273,6 +304,343 @@ class Desktop:
         if self.inspected_path is not None:
             self.source.set(str(self.inspected_path))
             self.notebook.select(self.export_tab)
+
+    def _use_inspected_for_policy(self) -> None:
+        if self.inspected_path is not None:
+            self.policy_source.set(str(self.inspected_path))
+            self.notebook.select(self.policy_tab)
+            self._load_policy_columns()
+
+    def _build_policy(self) -> None:
+        footer = ttk.Frame(self.policy_tab)
+        footer.pack(side="bottom", fill="x", pady=(12, 0))
+        canvas = tk.Canvas(self.policy_tab, background=BACKGROUND, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(self.policy_tab, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        body = ttk.Frame(canvas, padding=(0, 0, 15, 16))
+        window = canvas.create_window((0, 0), window=body, anchor="nw")
+        body.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window, width=event.width))
+        ttk.Label(body, text="Build a policy", style="Heading.TLabel").pack(anchor="w")
+        ttk.Label(
+            body,
+            text=(
+                "Choose an action and classification for every source column. "
+                "Replace exactly one source key with a random record ID; remove other "
+                "direct identifiers and free text. Hints are advisory."
+            ),
+            style="Muted.TLabel",
+            wraplength=540,
+        ).pack(anchor="w", pady=(5, 15))
+        self.policy_source = tk.StringVar()
+        self.policy_source.trace_add("write", self._invalidate_policy_source)
+        _path_row(body, "Source CSV", self.policy_source)
+        ttk.Button(body, text="Load source columns", command=self._load_policy_columns).pack(
+            anchor="w", pady=(9, 8)
+        )
+        self.existing_policy = tk.StringVar()
+        _path_row(body, "Existing policy", self.existing_policy, kind="yaml")
+        ttk.Button(body, text="Load existing choices", command=self._load_existing_policy).pack(
+            anchor="w", pady=(8, 10)
+        )
+        self.policy_status = ttk.Label(body, text="No source columns loaded.", style="Muted.TLabel")
+        self.policy_status.pack(anchor="w", pady=(0, 12))
+        ttk.Label(body, text="Minimum group size").pack(anchor="w")
+        self.policy_threshold = tk.StringVar()
+        ttk.Entry(body, textvariable=self.policy_threshold, width=8).pack(anchor="w", pady=(4, 4))
+        ttk.Label(
+            body,
+            text="Choose a threshold of at least 2. Retained values and joint groups must meet it.",
+            style="Muted.TLabel",
+            wraplength=540,
+        ).pack(anchor="w", pady=(0, 12))
+        self.policy_rows = ttk.Frame(body)
+        self.policy_rows.pack(fill="x")
+        ttk.Separator(body).pack(fill="x", pady=(15, 12))
+        self.policy_output = tk.StringVar()
+        _path_row(body, "New policy YAML", self.policy_output, save=True, kind="yaml")
+        ttk.Label(
+            body,
+            text=(
+                "Save to a new file outside repositories. Category labels in this policy "
+                "may still be sensitive. Export is validated separately."
+            ),
+            style="Muted.TLabel",
+            wraplength=540,
+        ).pack(anchor="w", pady=(4, 0))
+        ttk.Button(
+            footer,
+            text="Save policy and continue →",
+            style="Accent.TButton",
+            command=self._save_policy,
+        ).pack(side="left")
+
+    def _invalidate_policy_source(self, *_args: object) -> None:
+        self.policy_drafts.clear()
+        self.policy_controls.clear()
+        self.policy_details_buttons.clear()
+        if hasattr(self, "policy_rows"):
+            for child in self.policy_rows.winfo_children():
+                child.destroy()
+            self.policy_status.configure(text="Source changed. Load its columns again.")
+
+    def _load_policy_columns(self) -> None:
+        self._invalidate_policy_source()
+        try:
+            summary = inspect_source(Path(self.policy_source.get()))
+            if any(not NAME.fullmatch(column["column"]) for column in summary["columns"]):
+                raise SafetyError("Policy source headings must use lowercase snake_case.")
+            self.policy_status.configure(
+                text=(
+                    f"{summary['rows']:,} rows · {len(summary['columns'])} columns. "
+                    "Set each row explicitly."
+                )
+            )
+            friendly_classes = {value: key for key, value in CLASS_LABELS.items()}
+            for column in summary["columns"]:
+                name = column["column"]
+                self.policy_drafts[name] = RuleDraft()
+                row = ttk.Frame(self.policy_rows, padding=(0, 8))
+                row.pack(fill="x")
+                top = ttk.Frame(row)
+                top.pack(fill="x")
+                ttk.Label(top, text=name, width=23).pack(side="left")
+                hint = friendly_classes.get(column["inferred_classification"], "Unknown")
+                ttk.Label(top, text=f"Hint: {hint}", style="Muted.TLabel").pack(side="left")
+                details = ttk.Button(
+                    top,
+                    text="Settings…",
+                    command=lambda field=name: self._edit_policy_settings(field),
+                )
+                details.pack(side="right")
+                self.policy_details_buttons[name] = details
+                lower = ttk.Frame(row)
+                lower.pack(fill="x", pady=(6, 0))
+                action = tk.StringVar()
+                classification = tk.StringVar()
+                ttk.Label(lower, text="Action").pack(side="left", padx=(0, 5))
+                ttk.Combobox(
+                    lower,
+                    textvariable=action,
+                    values=tuple(ACTION_FROM_LABEL),
+                    state="readonly",
+                    width=31,
+                ).pack(side="left", padx=(0, 10))
+                ttk.Label(lower, text="Class").pack(side="left", padx=(0, 5))
+                ttk.Combobox(
+                    lower,
+                    textvariable=classification,
+                    values=tuple(CLASS_LABELS),
+                    state="readonly",
+                    width=22,
+                ).pack(side="left")
+                self.policy_controls[name] = (action, classification)
+                action.trace_add(
+                    "write", lambda *_args, button=details: button.configure(text="Settings…")
+                )
+                ttk.Separator(self.policy_rows).pack(fill="x")
+        except (SafetyError, OSError, UnicodeError) as error:
+            self._error(error)
+
+    def _load_existing_policy(self) -> None:
+        if not self.existing_policy.get().strip():
+            messagebox.showerror(
+                "SafeSet", "Choose an existing policy YAML file.", parent=self.root
+            )
+            return
+        if not self.policy_drafts:
+            self._load_policy_columns()
+        if not self.policy_drafts:
+            return
+        try:
+            drafts, threshold = load_drafts(
+                Path(self.policy_source.get()), Path(self.existing_policy.get())
+            )
+            action_labels = {action: label for label, action in ACTION_FROM_LABEL.items()}
+            class_labels = {value: key for key, value in CLASS_LABELS.items()}
+            for name, draft in drafts.items():
+                self.policy_drafts[name] = draft
+                action, classification = self.policy_controls[name]
+                action.set(action_labels[draft.action])
+                classification.set(class_labels[draft.classification])
+                if draft.action in {"keep", "code", "bin", "keep_numeric"}:
+                    self.policy_details_buttons[name].configure(text="Settings ✓")
+            self.policy_threshold.set(str(threshold))
+            self.policy_status.configure(
+                text="Existing choices loaded. Review each field and save to a new policy file."
+            )
+        except (SafetyError, OSError, UnicodeError) as error:
+            self._error(error)
+
+    def _edit_policy_settings(self, name: str) -> None:
+        action_label = self.policy_controls[name][0].get()
+        action = ACTION_FROM_LABEL.get(action_label)
+        if action is None:
+            messagebox.showinfo("SafeSet", "Choose an action first.", parent=self.root)
+            return
+        if action in {"drop", "pseudonymise"}:
+            messagebox.showinfo("SafeSet", "This action needs no settings.", parent=self.root)
+            return
+        draft = self.policy_drafts[name]
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Field settings")
+        dialog.transient(self.root)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+        body = ttk.Frame(dialog, padding=20)
+        body.pack(fill="both")
+        ttk.Label(body, text=name, style="Heading.TLabel").pack(anchor="w")
+        text_widget = None
+        lower = upper = places = None
+        if action in {"keep", "code"}:
+            ttk.Label(body, text="One approved category per line. Enter every allowed value.").pack(
+                anchor="w", pady=(12, 6)
+            )
+            text_widget = tk.Text(body, width=46, height=8, wrap="none")
+            text_widget.pack()
+            text_widget.insert("1.0", "\n".join(draft.allowed_values))
+
+            def load_values() -> None:
+                classification = CLASS_LABELS.get(self.policy_controls[name][1].get())
+                if classification not in {"quasi_identifier", "analytical_attribute"}:
+                    messagebox.showerror(
+                        "SafeSet", "Choose an eligible classification first.", parent=dialog
+                    )
+                    return
+                if not messagebox.askyesno(
+                    "Show local categories",
+                    "Display distinct source values in this window for review? "
+                    "Do not allowlist personal identifiers or free text.",
+                    parent=dialog,
+                    default="no",
+                ):
+                    return
+                try:
+                    values = local_categories(Path(self.policy_source.get()), name)
+                    text_widget.delete("1.0", "end")
+                    text_widget.insert("1.0", "\n".join(values))
+                except (SafetyError, OSError, UnicodeError) as error:
+                    messagebox.showerror(
+                        "SafeSet",
+                        str(error)
+                        if isinstance(error, SafetyError)
+                        else "Local file operation failed. No details shown.",
+                        parent=dialog,
+                    )
+
+            ttk.Button(body, text="Load distinct values locally", command=load_values).pack(
+                anchor="w", pady=(8, 0)
+            )
+        elif action == "bin":
+            ttk.Label(
+                body,
+                text="One lower,upper pair per line, such as 0,4 then 4,7. Bins must join.",
+            ).pack(anchor="w", pady=(12, 6))
+            text_widget = tk.Text(body, width=46, height=8, wrap="none")
+            text_widget.pack()
+            text_widget.insert("1.0", "\n".join(f"{lo},{hi}" for lo, hi in draft.bins))
+        else:
+            lower = tk.StringVar(value="" if draft.bounds is None else str(draft.bounds[0]))
+            upper = tk.StringVar(value="" if draft.bounds is None else str(draft.bounds[1]))
+            places = tk.StringVar(
+                value="" if draft.max_decimal_places is None else str(draft.max_decimal_places)
+            )
+            for label, variable in (
+                ("Minimum value (inclusive)", lower),
+                ("Maximum value (inclusive)", upper),
+                ("Maximum decimal places (0–6)", places),
+            ):
+                ttk.Label(body, text=label).pack(anchor="w", pady=(10, 3))
+                ttk.Entry(body, textvariable=variable, width=20).pack(anchor="w")
+
+        def accept() -> None:
+            try:
+                if action in {"keep", "code"}:
+                    draft.allowed_values = tuple(text_widget.get("1.0", "end-1c").splitlines())
+                elif action == "bin":
+                    draft.bins = parse_pairs(text_widget.get("1.0", "end-1c"))
+                else:
+                    if not places.get().isascii() or not places.get().isdecimal():
+                        raise SafetyError("Enter a whole number of decimal places from 0 to 6.")
+                    draft.bounds = (parse_number(lower.get()), parse_number(upper.get()))
+                    draft.max_decimal_places = int(places.get())
+                self.policy_details_buttons[name].configure(text="Settings ✓")
+                dialog.destroy()
+            except SafetyError as error:
+                messagebox.showerror("SafeSet", str(error), parent=dialog)
+
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x", pady=(16, 0))
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right")
+        ttk.Button(buttons, text="Save settings", command=accept).pack(side="right", padx=(0, 8))
+        dialog.wait_window()
+
+    def _save_policy(self) -> None:
+        if not self.policy_drafts:
+            messagebox.showerror("SafeSet", "Load source columns first.", parent=self.root)
+            return
+        for name, draft in self.policy_drafts.items():
+            action, classification = self.policy_controls[name]
+            draft.action = ACTION_FROM_LABEL.get(action.get(), "")
+            draft.classification = CLASS_LABELS.get(classification.get(), "")
+        if any(
+            not draft.action or not draft.classification for draft in self.policy_drafts.values()
+        ):
+            messagebox.showerror(
+                "SafeSet", "Choose an action and classification for every column.", parent=self.root
+            )
+            return
+        if any(
+            draft.action in {"keep", "code"} and not draft.allowed_values
+            for draft in self.policy_drafts.values()
+        ):
+            messagebox.showerror(
+                "SafeSet",
+                "Set approved categories for every kept or coded column.",
+                parent=self.root,
+            )
+            return
+        if any(
+            draft.action == "bin" and len(draft.bins) < 2 for draft in self.policy_drafts.values()
+        ):
+            messagebox.showerror(
+                "SafeSet", "Set at least two bins for each binned column.", parent=self.root
+            )
+            return
+        if any(
+            draft.action == "keep_numeric"
+            and (draft.bounds is None or draft.max_decimal_places is None)
+            for draft in self.policy_drafts.values()
+        ):
+            messagebox.showerror(
+                "SafeSet",
+                "Set bounds and decimal places for exact numeric columns.",
+                parent=self.root,
+            )
+            return
+        if not self.policy_output.get().strip():
+            messagebox.showerror("SafeSet", "Choose a new policy YAML filename.", parent=self.root)
+            return
+        try:
+            source = Path(self.policy_source.get())
+            path = save_policy(
+                source,
+                Path(self.policy_output.get()),
+                self.policy_drafts,
+                self.policy_threshold.get(),
+            )
+            self.source.set(str(source))
+            self.policy.set(str(path))
+            self.notebook.select(self.export_tab)
+            messagebox.showinfo(
+                "SafeSet",
+                "Policy saved. Prepare the export to run the data checks.",
+                parent=self.root,
+            )
+        except (SafetyError, OSError, UnicodeError) as error:
+            self._error(error)
 
     def _build_export(self) -> None:
         actions = ttk.Frame(self.export_tab)

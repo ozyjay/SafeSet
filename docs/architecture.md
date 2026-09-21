@@ -15,6 +15,12 @@ uses native file pickers and masked passphrase entries. A prepared candidate rem
 in memory until its validation summary is reviewed and export is approved. Editing
 an input field invalidates the review. The publication boundary revalidates and
 checks destinations again.
+`policy_authoring` builds strict version 2 policies from explicit desktop choices,
+checks the source heading set again, and publishes a private, no-clobber YAML file
+outside repositories. Advisory classification hints never select an action. Distinct
+category values appear in the desktop only after a separate local review action;
+the user must then approve the allowlist. An existing strict policy can prefill the
+form, but revisions publish to a new file. Saving a policy does not approve export.
 The desktop restoration flow reads returned headings and checks ID format before
 asking for the passphrase. The user explicitly approves every non-ID returned
 column; restoration still requires exact schema and mapping coverage. Its output

@@ -4,7 +4,7 @@ Verified on macOS ARM64 using the active pyenv Python 3.12.13.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **125 passed**.
+- `.venv/bin/python -m pytest`: **135 passed**.
 - `ruff check .` and `ruff format --check .`: passed.
 - `python -m pip check`: no broken requirements.
 - `.venv/bin/python -m build`: built a source distribution and wheel with isolated
@@ -43,7 +43,7 @@ declined export, failed-validation non-publication, expanded-output size rejecti
 missing restore authorisation, hidden-input fallback refusal and export-publication
 failure retaining an encrypted map. Passphrases in fixtures are synthetic test
 strings only; they must never be reused operationally.
-The desktop controller, including returned-heading review, is tested without a
+The desktop controller, returned-heading review and policy authoring are tested without a
 display. This execution environment
 could not open a Tk window, so visual layout and interaction remain unverified.
 

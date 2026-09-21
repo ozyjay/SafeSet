@@ -34,7 +34,15 @@ systems are supported for private mapping storage; Windows ACLs are not implemen
 
 For a guided local interface, run `safeset desktop` after installation (or
 `safeset-desktop` after reinstalling this version). **Inspect** shows aggregate
-characteristics only; you can carry the selected CSV into **Export**. There,
+characteristics only. From there, use an existing policy or open **Policy** to
+create a version 2 policy from the CSV headings. Choose an action and classification
+for every column, set its allowed categories or numeric limits, and choose a
+minimum group size. Category values are shown only if you explicitly request them
+locally in a field's settings. You can also load an existing policy's choices and
+save a revised policy under a new filename. Save policies outside repositories;
+it is then selected in **Export**. The policy may contain sensitive category labels.
+
+In **Export**,
 choose a policy and a *new* export filename outside a repository. Leave the map
 destination empty for a random filename in SafeSet's private map directory, or
 choose a separate private directory. **Prepare review** shows the validation
