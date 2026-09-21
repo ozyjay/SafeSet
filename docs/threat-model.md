@@ -15,6 +15,8 @@ real identities or credentials.
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
+| Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; no persistent codebook exists |
+| Exact numeric disclosure | Version 2 requires bounds, precision and all-attribute group checks | Exact values remain visible and may be distinctive, even when category labels are coded |
 | Sensitive logging | Fixed error messages, aggregate findings, no cell samples | Inspect displays escaped headings, which may themselves contain sensitive text |
 | Schema drift | Missing/extra columns and duplicate headings rejected | Same heading can acquire a different meaning |
 | Malformed/malicious CSV | UTF-8, size/row/column/field limits, strict shape, formula/control checks | No formal parser proof; resource bounds are conservative MVP limits |

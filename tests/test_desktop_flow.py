@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from safeset.desktop_flow import approve_export, prepare_export, restore_results
+from safeset.desktop_flow import approve_export, inspect_returned, prepare_export, restore_results
 from safeset.errors import SafetyError
-from safeset.ingestion import read_csv
+from safeset.ingestion import Table, csv_bytes, read_csv
 
 from .conftest import PASSPHRASE, ROOT
 
@@ -30,7 +30,7 @@ def test_failed_review_cannot_export(destinations, tmp_path):
     output, mapping = destinations
     source = tmp_path / "synthetic-invalid.csv"
     source.write_text(
-        (ROOT / "examples/synthetic_students.csv").read_text().replace("Moon", "Unapproved")
+        (ROOT / "examples/synthetic_students.csv").read_text().replace("4.2", "5.2", 1)
     )
     review = prepare_export(source, ROOT / "examples/example-policy.yaml", output, mapping)
     assert not review.validation.passed
@@ -68,3 +68,33 @@ def test_map_must_be_separate_before_review(destinations):
             Path(output.parent / "map.enc"),
         )
     assert not output.exists()
+
+
+def test_returned_review_shows_headings_and_counts_only(candidate, tmp_path):
+    returned = Table(
+        ("record_id", "team"),
+        tuple(
+            {"record_id": row["record_id"], "team": "Invented Team"} for row in candidate.table.rows
+        ),
+    )
+    path = tmp_path / "returned.csv"
+    path.write_bytes(csv_bytes(returned))
+    review = inspect_returned(path)
+    assert review.rows == 4
+    assert review.result_columns == ("team",)
+    assert "Invented Team" not in str(review)
+
+
+def test_returned_review_rejects_bad_ids_before_passphrase(candidate, tmp_path):
+    returned = Table(
+        ("record_id", "team"),
+        tuple(
+            {"record_id": "private-invalid-id" if i == 0 else row["record_id"], "team": "A"}
+            for i, row in enumerate(candidate.table.rows)
+        ),
+    )
+    path = tmp_path / "returned.csv"
+    path.write_bytes(csv_bytes(returned))
+    with pytest.raises(SafetyError) as caught:
+        inspect_returned(path)
+    assert "private-invalid-id" not in str(caught.value)

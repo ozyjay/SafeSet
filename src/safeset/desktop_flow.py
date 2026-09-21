@@ -7,7 +7,8 @@ from .classification import inspect_table
 from .errors import SafetyError
 from .ingestion import csv_bytes, read_csv
 from .mapping import read_mapping
-from .policy import Policy, load_policy
+from .policy import NAME, Policy, load_policy
+from .pseudonyms import valid_id
 from .restoration import restore
 from .storage import default_map_path, map_destination, output_destination, publish
 from .transform import Candidate, sanitise
@@ -28,9 +29,31 @@ class ExportReview:
     dropped_columns: int
 
 
+@dataclass(frozen=True)
+class ReturnedReview:
+    path: Path
+    rows: int
+    result_columns: tuple[str, ...]
+
+
 def inspect_source(source: Path) -> dict:
     """Return aggregate characteristics only; the UI does not show cell samples."""
     return inspect_table(read_csv(source))
+
+
+def inspect_returned(path: Path) -> ReturnedReview:
+    """Read returned headings and ID shape without exposing cell values to the UI."""
+    table = read_csv(path)
+    if "record_id" not in table.columns or len(table.columns) < 2:
+        raise SafetyError("Returned CSV needs record_id and at least one result column.")
+    if any(not NAME.fullmatch(name) for name in table.columns if name != "record_id"):
+        raise SafetyError("Result headings must use lowercase snake_case, such as team.")
+    ids = [row["record_id"] for row in table.rows]
+    if not ids or any(not valid_id(value) for value in ids) or len(set(ids)) != len(ids):
+        raise SafetyError("Returned IDs are malformed or duplicated.")
+    return ReturnedReview(
+        path, len(table.rows), tuple(c for c in table.columns if c != "record_id")
+    )
 
 
 def prepare_export(

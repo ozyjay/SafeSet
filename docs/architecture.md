@@ -15,6 +15,10 @@ uses native file pickers and masked passphrase entries. A prepared candidate rem
 in memory until its validation summary is reviewed and export is approved. Editing
 an input field invalidates the review. The publication boundary revalidates and
 checks destinations again.
+The desktop restoration flow reads returned headings and checks ID format before
+asking for the passphrase. The user explicitly approves every non-ID returned
+column; restoration still requires exact schema and mapping coverage. Its output
+picker selects a new filename rather than an existing file.
 
 Inputs must be regular files. CSV limits are 10 MiB, 50,000 rows, 128 columns and
 4,096 characters per field. Policies are limited to 256 KiB and encrypted maps to
@@ -25,14 +29,18 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
 
 - Python 3.12+, Typer, PyYAML, cryptography, pytest. Standard-library CSV avoids
   inferred numeric identifiers, automatic NA conversion and dataframe overhead.
-- Strict version 1 policies; unknown options, duplicate YAML keys, aliases,
-  unknown classifications, malformed bins and source-schema drift are errors.
+- Strict version 1 and 2 policies; unknown options, duplicate YAML keys, aliases,
+  unknown classifications, malformed bounds/bins and source-schema drift are errors.
 - Exactly one unique, non-empty source identifier is pseudonymised to `record_id`.
   Other direct identifiers and all free text must be dropped. Map only that key,
   never names, notes or whole source rows. Rejoining other authorised source fields
   is a separate local operation outside the MVP.
-- Keep actions require explicit finite categorical `allowed_values`. Bins generate
-  labels under the original column heading. No inferred text redaction.
+- Keep and code actions require explicit finite categorical `allowed_values`.
+  Codes are random per distinct observed category, column and run. The category
+  codebook exists only in memory and is not added to the encrypted identity map.
+  Bins generate labels under the original column heading. Version 2 numeric keep
+  requires bounds and precision and preserves exact numeric text. No inferred
+  text redaction.
 - Every retained attribute participates in the joint equivalence-class check,
   including analytical attributes; no silent risk exemption via classification.
 - Candidate data stays in memory until validation and explicit export approval.

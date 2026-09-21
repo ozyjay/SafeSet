@@ -44,6 +44,8 @@ class ColumnRule:
     classification: str
     allowed_values: tuple[str, ...] = ()
     bins: tuple[tuple[Decimal, Decimal], ...] = ()
+    bounds: tuple[Decimal, Decimal] | None = None
+    max_decimal_places: int = 0
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -64,7 +66,14 @@ class Policy:
 
     @property
     def output_columns(self) -> tuple[str, ...]:
-        return ("record_id", *(k for k, v in self.columns.items() if v.action in {"keep", "bin"}))
+        return (
+            "record_id",
+            *(
+                k
+                for k, v in self.columns.items()
+                if v.action in {"keep", "bin", "code", "keep_numeric"}
+            ),
+        )
 
 
 def parse_policy(raw: object) -> Policy:
@@ -76,7 +85,8 @@ def parse_policy(raw: object) -> Policy:
 
     require(isinstance(raw, dict))
     require(set(raw) == {"version", "columns", "min_group_size"})
-    require(type(raw["version"]) is int and raw["version"] == 1)
+    require(type(raw["version"]) is int and raw["version"] in {1, 2})
+    version = raw["version"]
     require(type(raw["min_group_size"]) is int and 2 <= raw["min_group_size"] <= 50_000)
     require(isinstance(raw["columns"], dict) and 1 <= len(raw["columns"]) <= 128)
     columns = {}
@@ -85,18 +95,28 @@ def parse_policy(raw: object) -> Policy:
         require(isinstance(config, dict))
         action = config.get("action")
         classification = config.get("classification")
-        require(isinstance(action, str) and action in {"drop", "keep", "bin", "pseudonymise"})
+        actions = {"drop", "keep", "bin", "pseudonymise"}
+        if version == 2:
+            actions |= {"code", "keep_numeric"}
+        require(isinstance(action, str) and action in actions)
         require(isinstance(classification, str) and classification in CLASSES)
-        extra = {"allowed_values"} if action == "keep" else {"bins"} if action == "bin" else set()
+        if action in {"keep", "code"}:
+            extra = {"allowed_values"}
+        elif action == "bin":
+            extra = {"bins"}
+        elif action == "keep_numeric":
+            extra = {"bounds", "max_decimal_places"}
+        else:
+            extra = set()
         require(set(config) == {"action", "classification"} | extra)
-        if action in {"keep", "bin"}:
+        if action in {"keep", "bin", "code", "keep_numeric"}:
             require(classification in {"quasi_identifier", "analytical_attribute"})
             require(inferred_classification(name) not in {"direct_identifier", "free_text"})
         if action == "pseudonymise":
             require(classification == "direct_identifier")
         allowed = ()
         bins = []
-        if action == "keep":
+        if action in {"keep", "code"}:
             values = config["allowed_values"]
             require(isinstance(values, list) and 1 <= len(values) <= 1000)
             require(all(isinstance(v, str) and safe_category(v) for v in values))
@@ -112,7 +132,20 @@ def parse_policy(raw: object) -> Policy:
                 require(lo.is_finite() and hi.is_finite() and lo < hi)
                 require(not bins or bins[-1][1] == lo)
                 bins.append((lo, hi))
-        columns[name] = ColumnRule(action, classification, allowed, tuple(bins))
+        bounds = None
+        max_decimal_places = 0
+        if action == "keep_numeric":
+            pair = config["bounds"]
+            require(isinstance(pair, list) and len(pair) == 2)
+            require(all(type(n) in {int, float} for n in pair))
+            lo, hi = (Decimal(str(n)) for n in pair)
+            require(lo.is_finite() and hi.is_finite() and 0 <= lo < hi)
+            bounds = (lo, hi)
+            max_decimal_places = config["max_decimal_places"]
+            require(type(max_decimal_places) is int and 0 <= max_decimal_places <= 6)
+        columns[name] = ColumnRule(
+            action, classification, allowed, tuple(bins), bounds, max_decimal_places
+        )
         require(all(len(label) <= 64 for label in columns[name].labels))
     require(sum(r.action == "pseudonymise" for r in columns.values()) == 1)
     return Policy(columns, raw["min_group_size"])

@@ -1,7 +1,7 @@
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 
-from .classification import inferred_classification, safe_category
+from .classification import canonical_numeric, inferred_classification, safe_category
 from .errors import SafetyError
 from .ingestion import Table
 from .policy import Policy
@@ -73,8 +73,17 @@ def validate(table: Table, policy: Policy) -> ValidationReport:
         rule = policy.columns[name]
         report.classifications[name] = rule.classification
         values = [r[name] for r in table.rows]
-        domain = rule.allowed_values if rule.action == "keep" else rule.labels
-        if any(v not in domain or (rule.action == "keep" and not safe_category(v)) for v in values):
+        if rule.action == "keep":
+            valid_values = all(v in rule.allowed_values and safe_category(v) for v in values)
+        elif rule.action == "bin":
+            valid_values = all(v in rule.labels for v in values)
+        elif rule.action == "code":
+            valid_values = all(valid_id(v) for v in values)
+        else:
+            valid_values = all(
+                canonical_numeric(v, rule.bounds, rule.max_decimal_places) == v for v in values
+            )
+        if not valid_values:
             report.errors.append(
                 "Retained values violate an approved domain or contain unsafe text."
             )
@@ -82,13 +91,17 @@ def validate(table: Table, policy: Policy) -> ValidationReport:
         report.small_cells += sum(n < policy.min_group_size for n in counts.values())
         if len(counts) / len(values) > 0.5:
             report.warnings.append("A retained attribute has high cardinality.")
+    if any(policy.columns[name].action == "keep_numeric" for name in attributes):
+        report.warnings.append("Exact numeric values are retained; review disclosure risk.")
+    if any(policy.columns[name].action == "code" for name in attributes):
+        report.warnings.append("Coded categories still reveal grouping and frequency patterns.")
     classes = Counter(tuple(r[n] for n in attributes) for r in table.rows)
     report.minimum_class_size = min(classes.values())
     report.unique_records = sum(n == 1 for n in classes.values())
     report.unique_fraction = report.unique_records / len(table.rows)
     report.small_class_records = sum(n for n in classes.values() if n < policy.min_group_size)
     if report.small_cells:
-        report.errors.append("Small categorical cells fall below the policy threshold.")
+        report.errors.append("Small retained-value groups fall below the policy threshold.")
     if report.small_class_records:
         report.errors.append("Small joint equivalence classes fall below the policy threshold.")
     report.errors = list(dict.fromkeys(report.errors))

@@ -49,7 +49,7 @@ def test_non_utf8_and_size_bounds(tmp_path):
         "x: !!python/object:thing {}",
         "version: true\ncolumns: {}\nmin_group_size: 2",
         "- a\n- b",
-        "version: 2\ncolumns: {}\nmin_group_size: 2",
+        "version: 3\ncolumns: {}\nmin_group_size: 2",
     ],
 )
 def test_hostile_or_invalid_yaml(text, tmp_path):
@@ -77,9 +77,14 @@ def test_hostile_or_invalid_yaml(text, tmp_path):
         ),
         lambda p: p["columns"]["campus"].update(allowed_values=[True]),
         lambda p: p["columns"]["campus"].update(allowed_values=["Moon", "Moon"]),
-        lambda p: p["columns"]["gpa"].update(bins=[[0, 4], [3, 7]]),
-        lambda p: p["columns"]["gpa"].update(bins=[[0, 4], [5, 7]]),
-        lambda p: p["columns"]["gpa"].update(bins=[[0, 4], [4, float("inf")]]),
+        lambda p: p["columns"]["gpa"].update(bounds=[0, 0]),
+        lambda p: p["columns"]["gpa"].update(bounds=[0, float("inf")]),
+        lambda p: p["columns"]["gpa"].update(bounds=[-1, 7]),
+        lambda p: p["columns"]["gpa"].update(bounds=[True, 7]),
+        lambda p: p["columns"]["gpa"].update(max_decimal_places=True),
+        lambda p: p["columns"]["gpa"].update(max_decimal_places=7),
+        lambda p: p["columns"]["gpa"].update(bins=[[0, 7]]),
+        lambda p: p["columns"]["campus"].update(bins=[[0, 7]]),
         lambda p: p["columns"]["student_number"].update(action="drop"),
         lambda p: p["columns"]["email"].update(action="pseudonymise"),
         lambda p: p["columns"].update(record_id={"action": "drop", "classification": "unknown"}),
@@ -98,7 +103,10 @@ def test_policy_fail_closed(change):
         parse_policy(raw)
 
 
-@pytest.mark.parametrize("value", ["", "NaN", "Infinity", "-1", "7.1", "secret-nonnumeric"])
+@pytest.mark.parametrize(
+    "value",
+    ["", "NaN", "Infinity", "-1", "7.1", "secret-nonnumeric", "4.123", "4e0", "+4.2"],
+)
 def test_invalid_numeric_values_do_not_leak(source, policy, value):
     rows = deepcopy(source.rows)
     rows[0]["gpa"] = value
@@ -108,13 +116,44 @@ def test_invalid_numeric_values_do_not_leak(source, policy, value):
         assert value not in str(caught.value)
 
 
+def test_numeric_value_is_preserved_without_formatting(source, policy):
+    rows = tuple({**row, "gpa": "04.20"} for row in source.rows)
+    candidate = sanitise(Table(source.columns, rows), policy)
+    assert [row["gpa"] for row in candidate.table.rows] == ["4.2"] * len(rows)
+
+
+def test_unapproved_category_does_not_leak(source, policy):
+    rows = deepcopy(source.rows)
+    rows[0]["campus"] = "Secret synthetic campus"
+    with pytest.raises(SafetyError) as caught:
+        sanitise(Table(source.columns, rows), policy)
+    assert "Secret synthetic campus" not in str(caught.value)
+
+
 @pytest.mark.parametrize(
     "value,label",
     [("0", "[0, 4)"), ("4", "[4, 5)"), ("5", "[5, 6)"), ("6", "[6, 7]"), ("7", "[6, 7]")],
 )
-def test_bin_boundaries(source, policy, value, label):
+def test_v1_bin_boundaries(source, value, label):
+    raw = yaml.safe_load((ROOT / "examples/example-policy.yaml").read_text())
+    raw["version"] = 1
+    raw["columns"]["campus"]["action"] = "keep"
+    raw["columns"]["subject"]["action"] = "keep"
+    raw["columns"]["gpa"] = {
+        "action": "bin",
+        "classification": "quasi_identifier",
+        "bins": [[0, 4], [4, 5], [5, 6], [6, 7]],
+    }
+    policy = parse_policy(raw)
     rows = tuple({**r, "gpa": value} for r in source.rows)
     assert sanitise(Table(source.columns, rows), policy).table.rows[0]["gpa"] == label
+
+
+def test_v1_rejects_new_actions():
+    raw = yaml.safe_load((ROOT / "examples/example-policy.yaml").read_text())
+    raw["version"] = 1
+    with pytest.raises(SafetyError):
+        parse_policy(raw)
 
 
 @pytest.mark.parametrize("mode", ["extra", "missing", "duplicate_key", "empty_key", "empty"])

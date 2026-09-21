@@ -16,6 +16,7 @@ QUASI = re.compile(r"campus|subject|course|year|gpa|postcode|birth|date|gender",
 EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 DATE = re.compile(r"\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b")
 LONG_DIGITS = re.compile(r"(?:\d[ ()+.-]*){7,}")
+PLAIN_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?\Z")
 
 
 def inferred_classification(name: str) -> str:
@@ -50,6 +51,23 @@ def safe_category(value: str) -> bool:
         and not identifier_shaped(value)
         and not free_text_shaped(value)
     )
+
+
+def canonical_numeric(
+    value: str, bounds: tuple[Decimal, Decimal] | None, max_decimal_places: int
+) -> str | None:
+    """Check a bounded number and discard non-analytical text formatting."""
+    if bounds is None or len(value) > 64 or not PLAIN_NUMBER.fullmatch(value):
+        return None
+    if "." in value and len(value.partition(".")[2]) > max_decimal_places:
+        return None
+    number = Decimal(value)
+    if not number.is_finite() or not bounds[0] <= number <= bounds[1]:
+        return None
+    whole, separator, fraction = value.partition(".")
+    whole = whole.lstrip("0") or "0"
+    fraction = fraction.rstrip("0") if separator else ""
+    return whole + (f".{fraction}" if fraction else "")
 
 
 def inferred_type(values: list[str]) -> str:

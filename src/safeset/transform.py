@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
-from .classification import formula_or_control
+from .classification import canonical_numeric, formula_or_control
 from .errors import SafetyError
 from .ingestion import Table
 from .policy import Policy
@@ -26,15 +26,35 @@ def sanitise(source: Table, policy: Policy) -> Candidate:
         raise SafetyError("Source keys must be non-empty and unique.")
     records = {}
     rows = []
+    codes: dict[str, dict[str, str]] = {}
+    issued: set[str] = set()
     for row in source.rows:
         record_id = new_id()
-        if record_id in records:
+        if record_id in issued:
             raise SafetyError("Random ID collision; no export produced.")
+        issued.add(record_id)
         records[record_id] = row[policy.source_key]
         result = {"record_id": record_id}
         for name, rule in policy.columns.items():
             if rule.action == "keep":
                 result[name] = row[name]
+            elif rule.action == "code":
+                value = row[name]
+                if value not in rule.allowed_values:
+                    raise SafetyError("Source category is outside the approved domain.")
+                column_codes = codes.setdefault(name, {})
+                if value not in column_codes:
+                    token = new_id()
+                    if token in issued:
+                        raise SafetyError("Random code collision; no export produced.")
+                    issued.add(token)
+                    column_codes[value] = token
+                result[name] = column_codes[value]
+            elif rule.action == "keep_numeric":
+                value = canonical_numeric(row[name], rule.bounds, rule.max_decimal_places)
+                if value is None:
+                    raise SafetyError("Numeric input violates approved bounds or precision.")
+                result[name] = value
             elif rule.action == "bin":
                 try:
                     value = Decimal(row[name])

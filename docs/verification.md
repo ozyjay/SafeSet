@@ -1,13 +1,14 @@
-# Bootstrap verification
+# Verification
 
 Verified on macOS ARM64 using the active pyenv Python 3.12.13.
 
 ## Executed checks
 
-- `python -m pytest -q`: **105 passed**.
+- `.venv/bin/python -m pytest`: **125 passed**.
 - `ruff check .` and `ruff format --check .`: passed.
 - `python -m pip check`: no broken requirements.
-- `python -m build`: built a source distribution and wheel.
+- `.venv/bin/python -m build`: built a source distribution and wheel with isolated
+  Hatchling 1.32.4.
 - Imported the package directly from the built wheel and exercised CLI help and
   synthetic inspection; inspected archive contents. The wheel includes only the
   package and metadata; the source archive contains only the synthetic example CSV.
@@ -28,8 +29,10 @@ pseudo-terminal test performs both secret prompts and confirms no passphrase ech
 
 Negative cases cover unknown/missing schemas, duplicate headings, malformed UTF-8
 and CSV, input byte/field bounds, FIFO rejection, duplicate/aliased/unsafe YAML,
-unknown policy keys/actions/classifications, invalid category domains, invalid or
-overlapping/gapped bins, numeric boundaries, non-finite/out-of-range values,
+unknown policy keys/actions/classifications, version 1 compatibility, invalid
+category domains, invalid or overlapping/gapped bins, numeric boundaries,
+non-finite/out-of-range values, exact-number precision and normalisation, fresh
+per-export category codes and rejected unapproved source categories,
 duplicate/blank/unsafe source keys, direct/free-text retention, small joint groups,
 invalid/duplicate/missing/unmatched returned IDs, malformed map structures, result
 allowlists, identity-column collisions, formulas and control characters.
@@ -40,6 +43,9 @@ declined export, failed-validation non-publication, expanded-output size rejecti
 missing restore authorisation, hidden-input fallback refusal and export-publication
 failure retaining an encrypted map. Passphrases in fixtures are synthetic test
 strings only; they must never be reused operationally.
+The desktop controller, including returned-heading review, is tested without a
+display. This execution environment
+could not open a Tk window, so visual layout and interaction remain unverified.
 
 ## Not established
 

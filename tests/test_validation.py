@@ -29,6 +29,9 @@ def test_group_metrics(candidate, policy):
         "duplicate",
         "malformed",
         "small_joint",
+        "numeric_out_of_bounds",
+        "numeric_precision",
+        "numeric_formatting",
         "empty",
     ],
 )
@@ -53,6 +56,12 @@ def test_validation_rejects(candidate, policy, mode):
     elif mode == "small_joint":
         # Marginals remain size 2, but every joint combination becomes unique.
         rows[0]["gpa"], rows[2]["gpa"] = rows[2]["gpa"], rows[0]["gpa"]
+    elif mode == "numeric_out_of_bounds":
+        rows[0]["gpa"] = "7.1"
+    elif mode == "numeric_precision":
+        rows[0]["gpa"] = "4.123"
+    elif mode == "numeric_formatting":
+        rows[0]["gpa"] = "04.20"
     else:
         rows = ()
     report = validate(Table(columns, rows), policy)

@@ -21,13 +21,22 @@ members. Reports include minimum class size, unique-record count and fraction,
 small-class record count, and high-cardinality warnings. This is a configurable
 k-style diagnostic, not a formal privacy guarantee. IDs are excluded from grouping.
 
-Categorical allowlists and bin intervals are a deliberate minimisation boundary.
+Categorical allowlists, numeric bounds and bin intervals are deliberate
+minimisation boundaries.
 Keep values must be non-empty short labels (at most 64 characters and four words),
 with no identifier/date/formula shapes. This sacrifices flexibility to avoid silent
 free-text passthrough. Blank retained values and out-of-range numeric values fail.
 Finite bins are contiguous, increasing and non-overlapping: left-inclusive and
 right-exclusive except that the final upper endpoint is included. Labels are
 `[lower, upper)` and `[lower, upper]` respectively.
+
+Version 2 can replace allowed categorical values with fresh random codes. This
+hides their labels while preserving equality and frequency patterns within each
+column; it does not remove linkability through those patterns. The codebook is
+ephemeral. Version 2 can retain exact plain decimal values within policy bounds
+and precision. Exact numbers may form rare groups and increase disclosure risk;
+the same per-field and joint checks apply. The validation report warns when either
+action is used.
 
 No check measures auxiliary-data attacks, within-group sensitive-attribute
 homogeneity, longitudinal linkage or the suitability of a particular AI service.

@@ -11,6 +11,10 @@ an export is suitable for the system or service receiving it.
 approve export → analyse only the minimised CSV → restore authorised results locally.
 The encrypted identity map stays outside the repository and export directory.
 No runtime operation calls a network service. All included records are invented.
+The version 2 example replaces campus and subject values with fresh random codes
+per export, while retaining GPA exactly within a declared 0–7 range and two decimal
+places. Exact GPA can still disclose information; passing validation is not a
+decision to share the CSV with any particular service.
 
 ## Set up
 
@@ -29,14 +33,20 @@ systems are supported for private mapping storage; Windows ACLs are not implemen
 ## Try the synthetic round trip
 
 For a guided local interface, run `safeset desktop` after installation (or
-`safeset-desktop` after reinstalling this version). The
-**Inspect** tab shows aggregate characteristics only. In **Export**, select the
-source CSV, policy YAML and an export destination outside the repository. Leave the
-map destination empty to use a random filename in SafeSet's private map directory,
-or choose a separate private directory. **Prepare and validate** shows the counts,
-findings and both destinations before **Approve export and create map** becomes
-available. A failed check blocks that button. **Restore** requires a separate
-authorisation, a map passphrase and an explicit comma-separated result-column list.
+`safeset-desktop` after reinstalling this version). **Inspect** shows aggregate
+characteristics only; you can carry the selected CSV into **Export**. There,
+choose a policy and a *new* export filename outside a repository. Leave the map
+destination empty for a random filename in SafeSet's private map directory, or
+choose a separate private directory. **Prepare review** shows the validation
+findings, policy decisions and both destinations. A failed check blocks export.
+After approval, both saved paths stay visible and the map path carries into Restore.
+
+In **Restore**, choose the analysed CSV and click **Read result columns**. SafeSet
+shows only its row count and headings; approve every returned non-ID column you
+intend to restore. If a returned column is not wanted, remove it from the analysed
+CSV locally and read the file again. Then choose the encrypted map and a *new*
+restored CSV filename. SafeSet checks those paths before asking for the map
+passphrase and separate restoration authorisation.
 The desktop interface uses Tk locally; it opens no server or network connection.
 The CLI remains available for scripts and terminals.
 
@@ -59,6 +69,10 @@ safeset restore "$DEMO_DIR/exports/safe.csv" \
   --output "$DEMO_DIR/private/restored.csv" --authorise
 ```
 
+The no-change restoration retains coded campus and subject values; it does not
+decode them. SafeSet stores no category codebook. An analysis result such as
+`record_id,team` can be restored with `--result-column team` instead.
+
 Sanitise prints a summary and asks for export approval, then a hidden passphrase
 (minimum 16 characters, confirmed). `--approve-export` explicitly approves the
 reviewed operation for scripted use but does not bypass validation or the secret
@@ -75,7 +89,8 @@ validation failure or missing authorisation return a non-zero exit status.
 
 ## Scope and development
 
-MVP actions: drop, categorical keep, numeric bin and random pseudonymisation.
+Policy actions: drop, categorical keep, random category code, numeric bin, bounded
+exact numeric keep and random source-key pseudonymisation.
 CSV and YAML have strict schemas and resource limits. Passing group-size checks
 is not evidence of anonymity. This foundation has no independent security audit.
 See [architecture](docs/architecture.md), [threat model](docs/threat-model.md),

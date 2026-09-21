@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 from safeset.cli import app
 from safeset.ingestion import Table, csv_bytes, read_csv
 from safeset.mapping import read_mapping
+from safeset.pseudonyms import valid_id
 from safeset.restoration import restore
 from safeset.transform import sanitise
 from safeset.validation import validate
@@ -25,6 +26,17 @@ def test_round_trip_without_network(source, policy, destinations, monkeypatch):
     first = sanitise(source, policy)
     second = sanitise(source, policy)
     assert set(first.mapping["records"]).isdisjoint(second.mapping["records"])
+    for name in ("campus", "subject"):
+        first_codes = [row[name] for row in first.table.rows]
+        second_codes = [row[name] for row in second.table.rows]
+        assert all(valid_id(code) for code in first_codes)
+        assert set(first_codes).isdisjoint(second_codes)
+        for left in range(len(source.rows)):
+            for right in range(len(source.rows)):
+                assert (first_codes[left] == first_codes[right]) == (
+                    source.rows[left][name] == source.rows[right][name]
+                )
+    assert [row["gpa"] for row in first.table.rows] == [row["gpa"] for row in source.rows]
     assert validate(first.table, policy).passed
     output, map_path = destinations
     export_candidate(
@@ -39,7 +51,7 @@ def test_round_trip_without_network(source, policy, destinations, monkeypatch):
     )
     exported = output.read_text()
     for row in source.rows:
-        for field in ["student_name", "student_number", "email", "notes"]:
+        for field in ["student_name", "student_number", "email", "notes", "campus", "subject"]:
             assert row[field] not in exported
             assert row[field].encode() not in map_path.read_bytes()
     assert "student_number" not in exported
@@ -109,7 +121,7 @@ def test_cli_round_trip_and_no_value_logging(destinations, monkeypatch):
     assert result2.exit_code == 0, result2.output
     assert read_csv(restored_path).rows[0]["student_number"] == "SYNTH-001"
     for row in read_csv(source_path).rows:
-        for field in ["student_name", "student_number", "email", "notes"]:
+        for field in ["student_name", "student_number", "email", "notes", "campus", "subject"]:
             assert row[field] not in result.output + result2.output + inspected.output
     assert PASSPHRASE not in result.output + result2.output
 

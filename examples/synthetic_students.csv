@@ -1,5 +1,5 @@
 student_name,student_number,email,campus,subject,gpa,notes
 Invented Robot Alpha,SYNTH-001,robot-alpha@example.invalid,Moon,Imaginary101,4.2,Entirely invented fixture
-Invented Robot Beta,SYNTH-002,robot-beta@example.invalid,Moon,Imaginary101,4.8,Entirely invented fixture
+Invented Robot Beta,SYNTH-002,robot-beta@example.invalid,Moon,Imaginary101,4.2,Entirely invented fixture
 Invented Robot Gamma,SYNTH-003,robot-gamma@example.invalid,Mars,Imaginary101,6.1,Entirely invented fixture
-Invented Robot Delta,SYNTH-004,robot-delta@example.invalid,Mars,Imaginary101,7,Entirely invented fixture
+Invented Robot Delta,SYNTH-004,robot-delta@example.invalid,Mars,Imaginary101,6.1,Entirely invented fixture

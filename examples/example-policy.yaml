@@ -1,4 +1,4 @@
-version: 1
+version: 2
 min_group_size: 2
 columns:
   student_name:
@@ -11,17 +11,18 @@ columns:
     action: drop
     classification: direct_identifier
   campus:
-    action: keep
+    action: code
     classification: quasi_identifier
     allowed_values: [Moon, Mars]
   subject:
-    action: keep
+    action: code
     classification: quasi_identifier
     allowed_values: [Imaginary101]
   gpa:
-    action: bin
+    action: keep_numeric
     classification: quasi_identifier
-    bins: [[0, 4], [4, 5], [5, 6], [6, 7]]
+    bounds: [0, 7]
+    max_decimal_places: 2
   notes:
     action: drop
     classification: free_text
