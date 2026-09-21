@@ -1,0 +1,27 @@
+version: 1
+min_group_size: 2
+columns:
+  student_name:
+    action: drop
+    classification: direct_identifier
+  student_number:
+    action: pseudonymise
+    classification: direct_identifier
+  email:
+    action: drop
+    classification: direct_identifier
+  campus:
+    action: keep
+    classification: quasi_identifier
+    allowed_values: [Moon, Mars]
+  subject:
+    action: keep
+    classification: quasi_identifier
+    allowed_values: [Imaginary101]
+  gpa:
+    action: bin
+    classification: quasi_identifier
+    bins: [[0, 4], [4, 5], [5, 6], [6, 7]]
+  notes:
+    action: drop
+    classification: free_text
