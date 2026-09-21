@@ -1,15 +1,20 @@
 # Architecture and decisions
 
-The CLI delegates to typed Python domain modules. No domain module uses a network
-client, telemetry or remote classification. Installation may download dependencies;
-runtime does not need network access.
+The CLI and optional Tk desktop interface delegate to typed Python domain modules.
+No domain module uses a network client, telemetry or remote classification.
+Installation may download dependencies; runtime does not need network access.
 
 `ingestion` reads bounded UTF-8 CSV as strings. `policy` loads a strict YAML schema.
 `classification` supplies advisory local heuristics. `transform` creates an
 in-memory candidate and minimal mapping. `validation` evaluates export conditions.
 `mapping` encrypts/decrypts the identity map. `storage` enforces destination
 separation and exclusive file publication. `restoration` performs exact joins.
-`workflow` coordinates approved export; `cli` handles review and secret prompts.
+`workflow` coordinates approved export; `cli` handles terminal review and secret
+prompts. `desktop_flow` coordinates the same domain operations for `desktop`, which
+uses native file pickers and masked passphrase entries. A prepared candidate remains
+in memory until its validation summary is reviewed and export is approved. Editing
+an input field invalidates the review. The publication boundary revalidates and
+checks destinations again.
 
 Inputs must be regular files. CSV limits are 10 MiB, 50,000 rows, 128 columns and
 4,096 characters per field. Policies are limited to 256 KiB and encrypted maps to

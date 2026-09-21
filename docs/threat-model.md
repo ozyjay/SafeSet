@@ -20,6 +20,7 @@ real identities or credentials.
 | Malformed/malicious CSV | UTF-8, size/row/column/field limits, strict shape, formula/control checks | No formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
 | Incorrect restoration | Authenticated map schema, exact ID coverage, no fuzzy joins | Cannot verify whether external analysis assigned the right result to an ID |
+| Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |
 
 ## Encryption and keys
 

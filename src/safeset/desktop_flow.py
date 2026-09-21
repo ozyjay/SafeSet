@@ -1,0 +1,93 @@
+"""Local desktop workflow state; no UI toolkit or network dependencies."""
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from .classification import inspect_table
+from .errors import SafetyError
+from .ingestion import csv_bytes, read_csv
+from .mapping import read_mapping
+from .policy import Policy, load_policy
+from .restoration import restore
+from .storage import default_map_path, map_destination, output_destination, publish
+from .transform import Candidate, sanitise
+from .validation import ValidationReport, validate
+from .workflow import export_candidate
+
+
+@dataclass(frozen=True)
+class ExportReview:
+    source: Path
+    output: Path
+    map_path: Path
+    policy: Policy
+    candidate: Candidate
+    validation: ValidationReport
+    source_rows: int
+    source_columns: int
+    dropped_columns: int
+
+
+def inspect_source(source: Path) -> dict:
+    """Return aggregate characteristics only; the UI does not show cell samples."""
+    return inspect_table(read_csv(source))
+
+
+def prepare_export(
+    source: Path, policy_path: Path, output: Path, map_path: Path | None
+) -> ExportReview:
+    """Prepare and validate a candidate without publishing either artefact."""
+    policy = load_policy(policy_path)
+    table = read_csv(source)
+    candidate = sanitise(table, policy)
+    validation = validate(candidate.table, policy)
+    destination = output_destination(output, source)
+    mapping = map_destination(map_path or default_map_path(), destination, source)
+    return ExportReview(
+        source,
+        destination,
+        mapping,
+        policy,
+        candidate,
+        validation,
+        len(table.rows),
+        len(table.columns),
+        sum(rule.action == "drop" for rule in policy.columns.values()),
+    )
+
+
+def approve_export(review: ExportReview, passphrase: str, *, approved: bool) -> None:
+    """Use the reviewed in-memory candidate; domain workflow revalidates at publication."""
+    if not approved:
+        raise SafetyError("Explicit export approval is required.")
+    review.validation.require_pass()
+    export_candidate(
+        review.candidate,
+        review.policy,
+        review.output,
+        review.map_path,
+        passphrase,
+        approved=True,
+        create_map=True,
+        source_path=review.source,
+    )
+
+
+def restore_results(
+    analysed_path: Path,
+    map_path: Path,
+    output: Path,
+    result_columns: tuple[str, ...],
+    passphrase: str,
+    *,
+    authorised: bool,
+) -> int:
+    """Restore exact IDs after a separate, explicit local authorisation."""
+    if not authorised:
+        raise SafetyError("Explicit restoration authorisation is required.")
+    destination = output_destination(output, analysed_path, map_path)
+    analysed = read_csv(analysed_path)
+    mapping = read_mapping(map_path, passphrase, analysed_path, output)
+    restored = restore(analysed, mapping, result_columns)
+    publish(destination, csv_bytes(restored))
+    return len(restored.rows)

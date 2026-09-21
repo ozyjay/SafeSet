@@ -61,6 +61,14 @@ def secret(*, confirm: bool = False) -> str:
     return value
 
 
+@app.command("desktop")
+def desktop_command() -> None:
+    """Open the offline desktop interface."""
+    from .desktop import main
+
+    main()
+
+
 @app.command("inspect")
 @guarded
 def inspect_command(input_path: Path) -> None:

@@ -26,10 +26,13 @@ a security audit. No production-readiness or anonymity claim is made.
 
 ## Deferred
 
-Generalisation hierarchies, redaction, free-text processing, GUI, partial/cohort
+Generalisation hierarchies, redaction, free-text processing, partial/cohort
 restoration, map rotation/recovery, additional privacy models and large-file
 streaming. Do not add an export override. Resolve any security-sensitive change
 in the architecture and threat model before coding it.
+
+An offline Tk desktop interface now presents the existing inspect, export and
+restore workflow. It does not edit policies or change the validation model.
 
 ## Dataset-owner choices
 

@@ -1,6 +1,7 @@
 # SafeSet
 
-A local-first CLI for minimising and pseudonymising student-allocation datasets.
+A local-first desktop interface and CLI for minimising and pseudonymising
+student-allocation datasets.
 **This tool can reduce disclosure risk but cannot establish that a dataset is
 anonymous.** Pseudonymised information may remain re-identifiable through other
 attributes or auxiliary information. Users remain responsible for deciding whether
@@ -26,6 +27,18 @@ Dependency installation needs package access; core commands work offline. POSIX
 systems are supported for private mapping storage; Windows ACLs are not implemented.
 
 ## Try the synthetic round trip
+
+For a guided local interface, run `safeset desktop` after installation (or
+`safeset-desktop` after reinstalling this version). The
+**Inspect** tab shows aggregate characteristics only. In **Export**, select the
+source CSV, policy YAML and an export destination outside the repository. Leave the
+map destination empty to use a random filename in SafeSet's private map directory,
+or choose a separate private directory. **Prepare and validate** shows the counts,
+findings and both destinations before **Approve export and create map** becomes
+available. A failed check blocks that button. **Restore** requires a separate
+authorisation, a map passphrase and an explicit comma-separated result-column list.
+The desktop interface uses Tk locally; it opens no server or network connection.
+The CLI remains available for scripts and terminals.
 
 Choose private local directories outside any repository and outside cloud-synced
 folders. The following creates a disposable synthetic workspace:
