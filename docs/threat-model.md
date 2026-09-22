@@ -18,7 +18,7 @@ real identities or credentials.
 | Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; no persistent codebook exists |
 | Exact numeric disclosure | Version 2 requires bounds, precision and all-attribute group checks | Exact values remain visible and may be distinctive, even when category labels are coded |
 | Sensitive logging | Private local log accepts only fixed stage and reason codes; no values, headings, paths or exception text | Event timestamps reveal when operations were attempted; inspect output still displays escaped headings |
-| Schema drift | Missing/extra columns and duplicate headings rejected | Same heading can acquire a different meaning |
+| Schema drift | Missing/extra columns and duplicate headings rejected; Excel Table headers checked against metadata | Same heading can acquire a different meaning |
 | Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, formula/link/hidden-content checks | No formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
 | Incorrect restoration | Authenticated map schema, exact ID coverage, no fuzzy joins | Cannot verify whether external analysis assigned the right result to an ID |

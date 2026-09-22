@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import pytest
 import yaml
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from openpyxl.chart import BarChart, Reference
 from openpyxl.worksheet.table import Table as ExcelTable
 
@@ -113,7 +113,10 @@ def test_selected_worksheets_append_rows_and_require_matching_headings(tmp_path,
 def test_structured_tables_use_only_their_ranges(tmp_path):
     workbook = Workbook()
     sheet = workbook.active
-    sheet["A1"] = "=1+2"  # Unselected note outside either table.
+    sheet.merge_cells("A1:F1")
+    sheet["A1"] = "Synthetic allocation report title"
+    sheet["A2"] = "=1+2"  # Unselected note outside either table.
+    sheet["H3"] = "Synthetic instructions beside tables"
     sheet["B3"], sheet["C3"] = "key", "team"
     sheet["B4"], sheet["C4"] = "SYNTH-001", "Robot A"
     sheet.add_table(ExcelTable(displayName="EarlierTable", ref="B3:C4"))
@@ -129,6 +132,22 @@ def test_structured_tables_use_only_their_ranges(tmp_path):
     sheet["F4"] = "=1+2"
     workbook.save(path)
     with pytest.raises(SafetyError, match="unsupported cell type"):
+        read_excel(path)
+
+
+def test_structured_table_rejects_header_metadata_mismatch(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(("Student Number", "Team"))
+    sheet.append(("SYNTH-001", "Robot A"))
+    sheet.add_table(ExcelTable(displayName="Allocations", ref="A1:B2"))
+    path = tmp_path / "mismatch.xlsx"
+    workbook.save(path)
+
+    changed = load_workbook(path)
+    changed.active["A1"] = "Different Heading"
+    changed.save(path)
+    with pytest.raises(SafetyError, match="table headings differ"):
         read_excel(path)
 
 

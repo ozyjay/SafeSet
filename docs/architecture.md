@@ -43,7 +43,10 @@ inspection, sanitisation or restoration. Formulas, links, hidden rows or columns
 and merged cells in selected data ranges are rejected. Where a selected sheet
 contains structured Excel Tables, only their defined ranges are ingested;
 matching tables are appended in sheet position order. A declared totals row is
-excluded. Cells outside tables do not enter inspection or export. External
+excluded. Titles, notes, merged cells and other content outside table ranges are
+ignored and do not enter inspection or export. A range that only looks like a
+table is treated as a plain worksheet, so title rows may then be read as headings.
+Table header cells must match the table metadata exactly. External
 workbook links are rejected. Policies are limited to 256 KiB and encrypted maps to 32 MiB.
 Plain worksheets may contain filters and drawings; these do not enter the data
 table. Size limits apply to populated cells, so formatting of empty cells outside

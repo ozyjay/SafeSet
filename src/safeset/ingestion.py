@@ -140,18 +140,15 @@ def _read_region(
         worksheet.iter_rows(min_row=min_row, max_row=min_row, min_col=min_col, max_col=max_col)
     )
     header = tuple(_cell_text(cell) for cell in header_cells)
-    if (
-        not header
-        or len(set(header)) != len(header)
-        or any(
-            not name
-            or name != name.strip()
-            or len(name) > 64
-            or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
-            for name in header
-        )
+    if not header or any(not name for name in header):
+        raise SafetyError("Excel headings are missing.")
+    if len(set(header)) != len(header):
+        raise SafetyError("Excel headings are duplicated.")
+    if any(
+        name != name.strip() or len(name) > 64 or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
+        for name in header
     ):
-        raise SafetyError("Excel headings are missing, duplicated or malformed.")
+        raise SafetyError("Excel headings contain unsupported text.")
     if any(cell.hyperlink or cell.comment for cell in header_cells):
         raise SafetyError("Excel workbook contains unsupported cell features.")
     rows = []
@@ -220,7 +217,7 @@ def _read_worksheet(worksheet) -> Table:
         if cell.value is not None or cell.hyperlink or cell.comment
     )
     if not occupied:
-        raise SafetyError("Excel headings are missing, duplicated or malformed.")
+        raise SafetyError("Excel headings are missing.")
     last_row = max(cell.row for cell in occupied)
     last_column = max(cell.column for cell in occupied)
     if last_row > MAX_ROWS + 1:

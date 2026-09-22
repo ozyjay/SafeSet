@@ -6,7 +6,9 @@ unknown keys and types fail. Top-level keys are exactly `version`, `columns` and
 >=2. Version 1 policies retain their original meaning. Version 2 adds `code` and
 `keep_numeric`; those actions are rejected under version 1. The example uses version 2.
 Column names are ASCII snake_case, at most 64 characters. `record_id` is reserved.
-Source headings must match the policy exactly (order may differ).
+Source headings must match the policy exactly (order may differ). For structured
+Excel Tables, the visible header cells must also match the table's header metadata
+exactly.
 
 Classifications: `direct_identifier`, `pseudonymous_identifier`, `quasi_identifier`,
 `analytical_attribute`, `free_text`, `unknown`. Pseudonymous source fields and
