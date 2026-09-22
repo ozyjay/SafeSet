@@ -344,6 +344,13 @@ class Desktop:
                 "",
                 "Classify every field in a policy. These heuristics are incomplete.",
             ]
+            if summary["formula_cells"]:
+                lines.extend(
+                    (
+                        f"{summary['formula_cells']} saved formula results used",
+                        "Formula results may be stale. Recalculate and save locally.",
+                    )
+                )
             self.inspect_result.configure(text="\n".join(lines))
             self.inspect_grid.delete(*self.inspect_grid.get_children())
             for column in summary["columns"]:
@@ -851,8 +858,15 @@ class Desktop:
                 f"Export destination: {review.output}",
                 f"Encrypted map destination: {review.map_path}",
             ]
+            if review.formula_cells:
+                details.append(f"Saved formula results used: {review.formula_cells}")
             details += [f"Error: {error}" for error in report.errors]
             details += [f"Warning: {warning}" for warning in report.warnings]
+            if review.formula_cells:
+                details.append(
+                    "Warning: Formula results may be stale. Recalculate and save the "
+                    "source workbook locally before approving this export."
+                )
             details.append("Policy decisions:")
             details += [
                 f"  {name}: {ACTION_LABELS[rule.action]} ({rule.classification})"

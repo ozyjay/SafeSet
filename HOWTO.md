@@ -171,6 +171,11 @@ it.
 
 ## When a step fails
 
+- **Source formulas:** SafeSet reads saved results from formula cells in selected
+  source data. Recalculate and save the workbook locally before inspection or
+  export, then review the formula count shown in the desktop. Formulas without a
+  saved result, formulas in headings, and formulas in returned analysis files are
+  rejected. SafeSet cannot verify that a saved result is current.
 - **Source and policy headings differ:** update the policy for every current
   source heading, or select the correct source and policy pair. Unknown columns
   cannot pass through silently.

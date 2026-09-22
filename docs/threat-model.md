@@ -19,7 +19,7 @@ real identities or credentials.
 | Exact numeric disclosure | Version 2 requires bounds, precision and all-attribute group checks | Exact values remain visible and may be distinctive, even when category labels are coded |
 | Sensitive logging | Private local log accepts only fixed stage and reason codes; no values, headings, paths or exception text | Event timestamps reveal when operations were attempted; inspect output still displays escaped headings |
 | Schema drift | Missing/extra columns and duplicate headings rejected; Excel Table headers checked against metadata | Same heading can acquire a different meaning |
-| Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, formula/link/hidden-content checks | No formal parser proof; resource bounds are conservative MVP limits |
+| Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, cached-result checks for source formulas, formula rejection in returned files, link/hidden-content checks | Saved source formula results can be stale or inconsistent with the formula; no formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
 | Incorrect restoration | Authenticated map schema, exact ID coverage, no fuzzy joins | Cannot verify whether external analysis assigned the right result to an ID |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |

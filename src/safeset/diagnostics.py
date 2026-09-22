@@ -78,6 +78,7 @@ REASON_CODES = {
     "Excel headings contain unsupported text.": "heading_format",
     "Excel workbook contains unsupported cell features.": "cell_features",
     "Excel workbook contains an unsupported cell type.": "cell_type",
+    "Excel formula has no saved result. Recalculate and save locally.": "formula_result_missing",
     "Excel row shape or field size is invalid.": "row_shape",
     "Excel output must have an .xlsx filename.": "output_format",
     "Source schema differs from policy; missing or unexpected columns.": "policy_schema",

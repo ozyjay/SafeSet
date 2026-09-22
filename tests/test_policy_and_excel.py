@@ -1,4 +1,7 @@
 from copy import deepcopy
+from io import BytesIO
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 import pytest
 import yaml
@@ -60,6 +63,42 @@ def test_excel_only_and_literal_text_round_trip(tmp_path):
     assert read_excel(path).rows == ({"key": "000123", "value": "=1+2"},)
     with pytest.raises(SafetyError, match="Only .xlsx"):
         read_excel(tmp_path / "old.csv")
+
+
+def test_source_formula_uses_saved_result_but_returned_formula_is_rejected(tmp_path):
+    workbook = Workbook()
+    workbook.active.append(("key", "amount"))
+    workbook.active.append(("SYNTH-001", "=1+2"))
+    path = tmp_path / "formula.xlsx"
+    workbook.save(path)
+
+    with pytest.raises(SafetyError, match="no saved result"):
+        read_excel(path, allow_cached_formulas=True)
+    with pytest.raises(SafetyError, match="unsupported cell type"):
+        read_excel(path)
+
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    original = BytesIO(path.read_bytes())
+    updated = BytesIO()
+    with ZipFile(original) as source, ZipFile(updated, "w") as destination:
+        for entry in source.infolist():
+            data = source.read(entry.filename)
+            if entry.filename == "xl/worksheets/sheet1.xml":
+                tree = ElementTree.fromstring(data)
+                cell = tree.find(f".//{{{namespace}}}c[@r='B2']")
+                assert cell is not None
+                value = cell.find(f"{{{namespace}}}v")
+                assert value is not None
+                value.text = "3"
+                data = ElementTree.tostring(tree, encoding="utf-8")
+            destination.writestr(entry, data)
+    path.write_bytes(updated.getvalue())
+
+    table = read_excel(path, allow_cached_formulas=True)
+    assert table.rows == ({"key": "SYNTH-001", "amount": "3"},)
+    assert table.formula_cells == 1
+    with pytest.raises(SafetyError, match="unsupported cell type"):
+        read_excel(path)
 
 
 def test_selected_worksheet_only(tmp_path):

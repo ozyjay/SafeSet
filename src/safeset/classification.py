@@ -110,8 +110,14 @@ def inspect_table(table: Table) -> dict:
         )
     return {
         "rows": len(table.rows),
+        "formula_cells": table.formula_cells,
         "columns": columns,
         "recommendation": "Classify every field explicitly; drop identifiers and free text; "
         "review necessity, rare groups and numerical precision locally.",
-        "warning": "Heuristics are incomplete. This report does not establish anonymity.",
+        "warning": (
+            "Heuristics are incomplete. This report does not establish anonymity. "
+            "Saved formula results may be stale; recalculate and save locally."
+            if table.formula_cells
+            else "Heuristics are incomplete. This report does not establish anonymity."
+        ),
     }

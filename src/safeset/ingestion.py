@@ -24,6 +24,7 @@ MAX_TABLES = 128
 class Table:
     columns: tuple[str, ...]
     rows: tuple[dict[str, str], ...]
+    formula_cells: int = 0
 
 
 def read_bounded(path: Path, limit: int = MAX_BYTES) -> bytes:
@@ -110,6 +111,7 @@ def _read_region(
     bounds: tuple[int, int, int, int],
     *,
     last_data_row: int | None = None,
+    cached_worksheet=None,
 ) -> Table:
     min_col, min_row, max_col, max_row = bounds
     if (
@@ -152,6 +154,7 @@ def _read_region(
     if any(cell.hyperlink or cell.comment for cell in header_cells):
         raise SafetyError("Excel workbook contains unsupported cell features.")
     rows = []
+    formula_cells = 0
     data_end = last_data_row if last_data_row is not None else max_row
     for cells in (
         worksheet.iter_rows(
@@ -165,16 +168,28 @@ def _read_region(
     ):
         if any(cell.hyperlink or cell.comment for cell in cells):
             raise SafetyError("Excel workbook contains unsupported cell features.")
-        values = tuple(_cell_text(cell) for cell in cells)
+        values = []
+        for cell in cells:
+            if cell.data_type == "f" and cached_worksheet is not None:
+                cached = cached_worksheet[cell.coordinate]
+                if cached.value is None:
+                    raise SafetyError(
+                        "Excel formula has no saved result. Recalculate and save locally."
+                    )
+                values.append(_cell_text(cached))
+                formula_cells += 1
+            else:
+                values.append(_cell_text(cell))
+        values = tuple(values)
         if all(value == "" for value in values) or any(
             len(value) > MAX_FIELD or "\x00" in value for value in values
         ):
             raise SafetyError("Excel row shape or field size is invalid.")
         rows.append(dict(zip(header, values, strict=True)))
-    return Table(header, tuple(rows))
+    return Table(header, tuple(rows), formula_cells)
 
 
-def _read_worksheet(worksheet) -> Table:
+def _read_worksheet(worksheet, cached_worksheet=None) -> Table:
     if worksheet.tables:
         if len(worksheet.tables) > MAX_TABLES:
             raise SafetyError("Excel worksheet exceeds the supported table count.")
@@ -197,7 +212,10 @@ def _read_worksheet(worksheet) -> Table:
         tables = []
         for bounds, structured in ranges:
             data = _read_region(
-                worksheet, bounds, last_data_row=bounds[3] - (structured.totalsRowCount or 0)
+                worksheet,
+                bounds,
+                last_data_row=bounds[3] - (structured.totalsRowCount or 0),
+                cached_worksheet=cached_worksheet,
             )
             if (
                 structured.tableColumns
@@ -210,7 +228,11 @@ def _read_worksheet(worksheet) -> Table:
             raise SafetyError("Excel tables must have identical headings in the same order.")
         if sum(len(table.rows) for table in tables) > MAX_ROWS:
             raise SafetyError("Excel tables exceed the combined row limit.")
-        return Table(header, tuple(row for table in tables for row in table.rows))
+        return Table(
+            header,
+            tuple(row for table in tables for row in table.rows),
+            sum(table.formula_cells for table in tables),
+        )
     occupied = tuple(
         cell
         for cell in worksheet._cells.values()
@@ -224,16 +246,28 @@ def _read_worksheet(worksheet) -> Table:
         raise SafetyError("Excel worksheet exceeds the supported row limit.")
     if last_column > MAX_COLUMNS:
         raise SafetyError("Excel worksheet exceeds the supported column limit.")
-    return _read_region(worksheet, (1, 1, last_column, last_row))
+    return _read_region(
+        worksheet, (1, 1, last_column, last_row), cached_worksheet=cached_worksheet
+    )
 
 
-def read_excel(path: Path, sheet: str | tuple[str, ...] | None = None) -> Table:
+def read_excel(
+    path: Path,
+    sheet: str | tuple[str, ...] | None = None,
+    *,
+    allow_cached_formulas: bool = False,
+) -> Table:
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Only .xlsx Excel workbooks are supported.")
     data = read_bounded(path)
     _check_archive(data)
     try:
         workbook = load_workbook(io.BytesIO(data), read_only=False, data_only=False)
+        cached_workbook = (
+            load_workbook(io.BytesIO(data), read_only=False, data_only=True)
+            if allow_cached_formulas
+            else None
+        )
         if workbook._external_links:
             raise SafetyError("Excel workbook contains external links.")
         visible = tuple(ws.title for ws in workbook.worksheets if ws.sheet_state == "visible")
@@ -253,13 +287,22 @@ def read_excel(path: Path, sheet: str | tuple[str, ...] | None = None) -> Table:
             or any(name not in visible for name in selected)
         ):
             raise SafetyError("Selected worksheet is missing, hidden or repeated.")
-        tables = [_read_worksheet(workbook[name]) for name in selected]
+        tables = [
+            _read_worksheet(
+                workbook[name], cached_workbook[name] if cached_workbook is not None else None
+            )
+            for name in selected
+        ]
         header = tables[0].columns
         if any(table.columns != header for table in tables[1:]):
             raise SafetyError("Selected worksheets must have identical headings in the same order.")
         if sum(len(table.rows) for table in tables) > MAX_ROWS:
             raise SafetyError("Selected worksheets exceed the combined row limit.")
-        return Table(header, tuple(row for table in tables for row in table.rows))
+        return Table(
+            header,
+            tuple(row for table in tables for row in table.rows),
+            sum(table.formula_cells for table in tables),
+        )
     except SafetyError:
         raise
     except Exception:

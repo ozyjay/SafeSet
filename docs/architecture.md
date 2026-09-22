@@ -39,8 +39,13 @@ more when several are visible. Selected worksheets must have identical headings
 in the same order. Their rows are appended in the supplied order, with the row limit
 applied to the combined table. Duplicate source keys fail before export; no
 automatic choice is made between overlapping records. Only selected sheets enter
-inspection, sanitisation or restoration. Formulas, links, hidden rows or columns
-and merged cells in selected data ranges are rejected. Where a selected sheet
+inspection, sanitisation or restoration. Source data formulas use only scalar
+results saved in the workbook; SafeSet does not calculate formulas or verify that
+saved results are current. Missing or unsupported saved results and formulas in
+headings fail closed. The inspection and export review show the number of saved
+formula results used, and export review warns that they may be stale. Candidate
+validation and returned analysis files still reject formulas. Links, hidden rows
+or columns and merged cells in selected data ranges are rejected. Where a selected sheet
 contains structured Excel Tables, only their defined ranges are ingested;
 matching tables are appended in sheet position order. A declared totals row is
 excluded. Titles, notes, merged cells and other content outside table ranges are
