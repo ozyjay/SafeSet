@@ -4,7 +4,7 @@ Verified on macOS ARM64 using the active pyenv Python 3.12.13.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **152 passed**.
+- `.venv/bin/python -m pytest`: **155 passed**.
 - `ruff check .` and `ruff format --check .`: passed.
 - `python -m pip check`: no broken requirements.
 - `.venv/bin/python -m build`: built a source distribution and wheel with isolated
@@ -31,6 +31,8 @@ A round trip runs with Python socket creation blocked. A separate real POSIX
 pseudo-terminal test performs both secret prompts and confirms no passphrase echo.
 Diagnostic tests check private log permissions, rejection of linked or
 world-readable destinations, and the absence of source values and paths.
+Workbook tests distinguish populated size limits from distant blank formatting
+and accept filters and charts on plain sheets.
 
 Negative cases cover unknown/missing schemas, duplicate headings, malformed
 Excel workbooks, input byte/field bounds, FIFO rejection, duplicate/aliased/unsafe YAML,

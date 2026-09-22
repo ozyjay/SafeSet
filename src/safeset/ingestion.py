@@ -214,16 +214,20 @@ def _read_worksheet(worksheet) -> Table:
         if sum(len(table.rows) for table in tables) > MAX_ROWS:
             raise SafetyError("Excel tables exceed the combined row limit.")
         return Table(header, tuple(row for table in tables for row in table.rows))
-    if (
-        worksheet.max_row < 1
-        or worksheet.max_row > MAX_ROWS + 1
-        or worksheet.max_column > MAX_COLUMNS
-        or worksheet.auto_filter.ref
-        or worksheet._charts
-        or worksheet._images
-    ):
-        raise SafetyError("Excel workbook has unsupported sheet structure or dimensions.")
-    return _read_region(worksheet, (1, 1, worksheet.max_column, worksheet.max_row))
+    occupied = tuple(
+        cell
+        for cell in worksheet._cells.values()
+        if cell.value is not None or cell.hyperlink or cell.comment
+    )
+    if not occupied:
+        raise SafetyError("Excel headings are missing, duplicated or malformed.")
+    last_row = max(cell.row for cell in occupied)
+    last_column = max(cell.column for cell in occupied)
+    if last_row > MAX_ROWS + 1:
+        raise SafetyError("Excel worksheet exceeds the supported row limit.")
+    if last_column > MAX_COLUMNS:
+        raise SafetyError("Excel worksheet exceeds the supported column limit.")
+    return _read_region(worksheet, (1, 1, last_column, last_row))
 
 
 def read_excel(path: Path, sheet: str | tuple[str, ...] | None = None) -> Table:

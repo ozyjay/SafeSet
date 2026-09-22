@@ -45,6 +45,10 @@ contains structured Excel Tables, only their defined ranges are ingested;
 matching tables are appended in sheet position order. A declared totals row is
 excluded. Cells outside tables do not enter inspection or export. External
 workbook links are rejected. Policies are limited to 256 KiB and encrypted maps to 32 MiB.
+Plain worksheets may contain filters and drawings; these do not enter the data
+table. Size limits apply to populated cells, so formatting of empty cells outside
+the table does not trigger a limit. Hidden rows or columns within the data range
+still fail closed.
 Candidate exports must fit the same 10 MiB byte limit before publication.
 These bounds serve a modest local dataset workflow; this is not a streaming engine.
 

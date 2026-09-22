@@ -31,8 +31,12 @@ def test_only_allowlisted_reason_code_is_written():
         "cli.inspect", SafetyError("Select one or more worksheets from the Excel workbook.")
     )
     diagnostics.record_reason("cli.inspect", SafetyError("secret-synthetic-cell"))
+    diagnostics.record_reason(
+        "cli.inspect", SafetyError("Excel worksheet exceeds the supported column limit.")
+    )
     content = path.read_text()
     assert "cli.inspect sheet_selection" in content
+    assert "cli.inspect column_limit" in content
     assert "secret-synthetic-cell" not in content
 
 

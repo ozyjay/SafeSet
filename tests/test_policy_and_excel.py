@@ -3,6 +3,7 @@ from copy import deepcopy
 import pytest
 import yaml
 from openpyxl import Workbook
+from openpyxl.chart import BarChart, Reference
 from openpyxl.worksheet.table import Table as ExcelTable
 
 from safeset.errors import SafetyError
@@ -170,6 +171,40 @@ def test_structured_table_skips_totals_row(tmp_path):
         {"key": "SYNTH-001", "amount": "1"},
         {"key": "SYNTH-002", "amount": "2"},
     )
+
+
+def test_plain_sheet_filter_and_chart_do_not_block_data(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(("key", "amount"))
+    sheet.append(("SYNTH-001", 1))
+    sheet.append(("SYNTH-002", 2))
+    sheet.auto_filter.ref = "A1:B3"
+    sheet.cell(row=100_000, column=200).number_format = "@"
+    chart = BarChart()
+    chart.add_data(Reference(sheet, min_col=2, min_row=1, max_row=3), titles_from_data=True)
+    sheet.add_chart(chart, "D1")
+    path = tmp_path / "filtered.xlsx"
+    workbook.save(path)
+    assert read_excel(path).rows == (
+        {"key": "SYNTH-001", "amount": "1"},
+        {"key": "SYNTH-002", "amount": "2"},
+    )
+
+
+@pytest.mark.parametrize(
+    "cell,error",
+    [("DY2", "column limit"), ("A50002", "row limit")],
+)
+def test_populated_cells_still_enforce_sheet_limits(tmp_path, cell, error):
+    workbook = Workbook()
+    workbook.active.append(("key",))
+    workbook.active.append(("SYNTH-001",))
+    workbook.active[cell] = "Invented extra value"
+    path = tmp_path / "wide.xlsx"
+    workbook.save(path)
+    with pytest.raises(SafetyError, match=error):
+        read_excel(path)
 
 
 @pytest.mark.parametrize(
