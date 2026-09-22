@@ -38,7 +38,7 @@ ACTION_LABELS = {
     "keep_numeric": "Keep exact numeric value",
 }
 PICKER_TYPES = {
-    "csv": (("CSV files", "*.csv"), ("All files", "*")),
+    "xlsx": (("Excel workbooks", "*.xlsx"), ("All files", "*")),
     "yaml": (("YAML policies", "*.yaml *.yml"), ("All files", "*")),
     "enc": (("Encrypted maps", "*.enc"), ("All files", "*")),
 }
@@ -59,7 +59,7 @@ def _path_row(
     variable: tk.StringVar,
     *,
     save: bool = False,
-    kind: str = "csv",
+    kind: str = "xlsx",
 ) -> None:
     row = ttk.Frame(parent)
     row.pack(fill="x", pady=5)
@@ -200,7 +200,9 @@ class Desktop:
 
     def _build_inspect(self) -> None:
         tab = self.inspect_tab
-        ttk.Label(tab, text="Inspect a source CSV", style="Heading.TLabel").pack(anchor="w")
+        ttk.Label(tab, text="Inspect a source Excel workbook", style="Heading.TLabel").pack(
+            anchor="w"
+        )
         ttk.Label(
             tab,
             text="Only aggregate characteristics appear here. No source values are previewed.",
@@ -208,7 +210,7 @@ class Desktop:
         ).pack(anchor="w", pady=(5, 16))
         self.inspect_source = tk.StringVar()
         self.inspect_source.trace_add("write", self._invalidate_inspection)
-        _path_row(tab, "Source CSV", self.inspect_source)
+        _path_row(tab, "Source Excel workbook", self.inspect_source)
         controls = ttk.Frame(tab)
         controls.pack(anchor="w", pady=(12, 16))
         ttk.Button(
@@ -336,7 +338,7 @@ class Desktop:
         ).pack(anchor="w", pady=(5, 15))
         self.policy_source = tk.StringVar()
         self.policy_source.trace_add("write", self._invalidate_policy_source)
-        _path_row(body, "Source CSV", self.policy_source)
+        _path_row(body, "Source Excel workbook", self.policy_source)
         ttk.Button(body, text="Load source columns", command=self._load_policy_columns).pack(
             anchor="w", pady=(9, 8)
         )
@@ -666,9 +668,9 @@ class Desktop:
         self.output = tk.StringVar()
         self.map_path = tk.StringVar()
         for label, variable, save, kind in (
-            ("Source CSV", self.source, False, "csv"),
+            ("Source Excel workbook", self.source, False, "xlsx"),
             ("Policy YAML", self.policy, False, "yaml"),
-            ("New export CSV", self.output, True, "csv"),
+            ("New export Excel workbook", self.output, True, "xlsx"),
             ("Encrypted map", self.map_path, True, "enc"),
         ):
             _path_row(tab, label, variable, save=save, kind=kind)
@@ -772,7 +774,7 @@ class Desktop:
             return
         if not messagebox.askyesno(
             "Approve export",
-            "Create the minimised CSV and a separate encrypted identity map?\n\n"
+            "Create the minimised Excel workbook and a separate encrypted identity map?\n\n"
             "Confirm the intended recipient is suitable. "
             "Passing checks does not establish anonymity.",
             parent=self.root,
@@ -790,7 +792,7 @@ class Desktop:
             self.result_map.set(str(review.map_path))
             self.review_text.configure(
                 text=(
-                    f"Export CSV: {review.output}\n"
+                    f"Export Excel workbook: {review.output}\n"
                     f"Encrypted map: {review.map_path}\n\n"
                     "The map path is ready in Restore. Keep the map private and separate."
                 )
@@ -827,7 +829,7 @@ class Desktop:
         ttk.Label(tab, text="Restore authorised results", style="Heading.TLabel").pack(anchor="w")
         ttk.Label(
             tab,
-            text="Choose the returned CSV, then select the results to join to source keys.",
+            text="Choose the returned workbook, then select results to join to source keys.",
             style="Muted.TLabel",
             wraplength=540,
         ).pack(anchor="w", pady=(5, 15))
@@ -835,20 +837,20 @@ class Desktop:
         self.result_source.trace_add("write", self._invalidate_returned_review)
         self.result_map = tk.StringVar()
         self.result_output = tk.StringVar()
-        _path_row(tab, "Analysed CSV", self.result_source)
+        _path_row(tab, "Analysed Excel workbook", self.result_source)
         ttk.Button(tab, text="Read result columns", command=self._inspect_returned).pack(
             anchor="w", pady=(10, 8)
         )
         self.returned_status = ttk.Label(
-            tab, text="No returned CSV reviewed yet.", style="Muted.TLabel"
+            tab, text="No returned Excel workbook reviewed yet.", style="Muted.TLabel"
         )
         self.returned_status.pack(anchor="w")
         ttk.Label(tab, text="Approve returned columns").pack(anchor="w", pady=(14, 4))
         ttk.Label(
             tab,
             text=(
-                "Tick every result column in this CSV. To omit one, remove it from the "
-                "analysed CSV and read the file again. record_id is matched automatically."
+                "Tick every result column in this Excel workbook. To omit one, remove it from the "
+                "analysed workbook and read it again. record_id is matched automatically."
             ),
             style="Muted.TLabel",
             wraplength=540,
@@ -880,7 +882,7 @@ class Desktop:
         )
         self.returned_choices: dict[str, tk.BooleanVar] = {}
         _path_row(tab, "Encrypted map", self.result_map, kind="enc")
-        _path_row(tab, "New restored CSV", self.result_output, save=True)
+        _path_row(tab, "New restored Excel workbook", self.result_output, save=True)
         ttk.Label(
             tab,
             text=("Choose a new filename in an existing private directory outside a repository."),
@@ -894,7 +896,9 @@ class Desktop:
     def _invalidate_returned_review(self, *_args: object) -> None:
         self.returned_review = None
         if hasattr(self, "returned_status"):
-            self.returned_status.configure(text="Analysed CSV changed. Read its columns again.")
+            self.returned_status.configure(
+                text="Analysed Excel workbook changed. Read its columns again."
+            )
             for child in self.returned_choices_frame.winfo_children():
                 child.destroy()
             self.returned_choices.clear()
@@ -922,7 +926,7 @@ class Desktop:
         review = self.returned_review
         if review is None:
             messagebox.showerror(
-                "SafeSet", "Read the returned CSV before restoring.", parent=self.root
+                "SafeSet", "Read the returned Excel workbook before restoring.", parent=self.root
             )
             return
         columns = tuple(name for name, selected in self.returned_choices.items() if selected.get())
@@ -933,7 +937,7 @@ class Desktop:
             messagebox.showerror(
                 "SafeSet",
                 "Approve every returned result column, or remove unwanted columns "
-                "from the analysed CSV and read it again.",
+                "from the analysed Excel workbook and read it again.",
                 parent=self.root,
             )
             return

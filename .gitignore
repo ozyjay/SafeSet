@@ -24,4 +24,4 @@ data/
 exports/
 private/
 maps/
-!examples/synthetic_students.csv
+!examples/synthetic_students.xlsx

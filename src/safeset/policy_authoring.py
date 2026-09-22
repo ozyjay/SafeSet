@@ -8,7 +8,7 @@ import yaml
 
 from .classification import safe_category
 from .errors import SafetyError
-from .ingestion import read_csv
+from .ingestion import read_excel
 from .policy import load_policy, parse_policy
 from .storage import output_destination, publish
 
@@ -25,9 +25,9 @@ class RuleDraft:
 
 def local_categories(source: Path, column: str) -> tuple[str, ...]:
     """Return reviewed local labels only for bounded categorical domains."""
-    table = read_csv(source)
+    table = read_excel(source)
     if column not in table.columns:
-        raise SafetyError("Source headings changed; load the CSV headings again.")
+        raise SafetyError("Source headings changed; load the Excel workbook headings again.")
     values = set(row[column] for row in table.rows)
     if not values or len(values) > 1000 or any(not safe_category(value) for value in values):
         raise SafetyError("Column has too many or unsafe distinct values for a category allowlist.")
@@ -36,7 +36,7 @@ def local_categories(source: Path, column: str) -> tuple[str, ...]:
 
 def load_drafts(source: Path, policy_path: Path) -> tuple[dict[str, RuleDraft], int]:
     """Load an existing strict policy for review and saving under a new filename."""
-    table = read_csv(source)
+    table = read_excel(source)
     policy = load_policy(policy_path)
     if set(table.columns) != set(policy.columns):
         raise SafetyError("Policy and source headings differ.")
@@ -108,9 +108,9 @@ def save_policy(
     source: Path, destination: Path, drafts: dict[str, RuleDraft], threshold: str
 ) -> Path:
     """Save a validated policy privately outside repositories, without overwriting."""
-    table = read_csv(source)
+    table = read_excel(source)
     if set(table.columns) != set(drafts):
-        raise SafetyError("Source headings changed; load the CSV headings again.")
+        raise SafetyError("Source headings changed; load the Excel workbook headings again.")
     payload = policy_payload(drafts, threshold)
     data = yaml.safe_dump(payload, sort_keys=False, allow_unicode=False).encode("utf-8")
     if len(data) > 256 * 1024:

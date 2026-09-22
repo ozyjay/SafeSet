@@ -8,13 +8,13 @@ attributes or auxiliary information. Users remain responsible for deciding wheth
 an export is suitable for the system or service receiving it.
 
 **Workflow:** inspect locally → apply an explicit policy → review validation →
-approve export → analyse only the minimised CSV → restore authorised results locally.
+approve export → analyse only the minimised Excel workbook → restore authorised results locally.
 The encrypted identity map stays outside the repository and export directory.
 No runtime operation calls a network service. All included records are invented.
 The version 2 example replaces campus and subject values with fresh random codes
 per export, while retaining GPA exactly within a declared 0–7 range and two decimal
 places. Exact GPA can still disclose information; passing validation is not a
-decision to share the CSV with any particular service.
+decision to share the Excel workbook with any particular service.
 
 ## Set up
 
@@ -35,7 +35,7 @@ systems are supported for private mapping storage; Windows ACLs are not implemen
 For a guided local interface, run `safeset desktop` after installation (or
 `safeset-desktop` after reinstalling this version). **Inspect** shows aggregate
 characteristics only. From there, use an existing policy or open **Policy** to
-create a version 2 policy from the CSV headings. Choose an action and classification
+create a version 2 policy from the Excel workbook headings. Choose an action and classification
 for every column, set its allowed categories or numeric limits, and choose a
 minimum group size. Category values are shown only if you explicitly request them
 locally in a field's settings. You can also load an existing policy's choices and
@@ -49,14 +49,15 @@ choose a separate private directory. **Prepare review** shows the validation
 findings, policy decisions and both destinations. A failed check blocks export.
 After approval, both saved paths stay visible and the map path carries into Restore.
 
-In **Restore**, choose the analysed CSV and click **Read result columns**. SafeSet
+In **Restore**, choose the analysed Excel workbook and click **Read result columns**. SafeSet
 shows only its row count and headings; approve every returned non-ID column you
 intend to restore. If a returned column is not wanted, remove it from the analysed
-CSV locally and read the file again. Then choose the encrypted map and a *new*
-restored CSV filename. SafeSet checks those paths before asking for the map
+Excel workbook locally and read the file again. Then choose the encrypted map and a *new*
+restored Excel workbook filename. SafeSet checks those paths before asking for the map
 passphrase and separate restoration authorisation.
 The desktop interface uses Tk locally; it opens no server or network connection.
 The CLI remains available for scripts and terminals.
+For a step-by-step desktop and CLI guide, see [HOWTO.md](HOWTO.md).
 
 Choose private local directories outside any repository and outside cloud-synced
 folders. The following creates a disposable synthetic workspace:
@@ -68,19 +69,19 @@ $Maps = Join-Path $DemoDir 'maps'
 $Private = Join-Path $DemoDir 'private'
 New-Item -ItemType Directory -Path $Exports, $Maps, $Private | Out-Null
 chmod 700 $DemoDir $Exports $Maps $Private
-$ExportCsv = Join-Path $Exports 'safe.csv'
+$ExportExcel = Join-Path $Exports 'safe.xlsx'
 $MapFile = Join-Path $Maps 'identities.enc'
-$RestoredCsv = Join-Path $Private 'restored.csv'
-safeset inspect examples/synthetic_students.csv
-safeset sanitise examples/synthetic_students.csv --policy examples/example-policy.yaml --output $ExportCsv --create-map --map $MapFile
-safeset validate $ExportCsv --policy examples/example-policy.yaml
+$RestoredExcel = Join-Path $Private 'restored.xlsx'
+safeset inspect examples/synthetic_students.xlsx
+safeset sanitise examples/synthetic_students.xlsx --policy examples/example-policy.yaml --output $ExportExcel --create-map --map $MapFile
+safeset validate $ExportExcel --policy examples/example-policy.yaml
 # A no-change local result demonstrates restoration. Do not upload the map.
-safeset restore $ExportCsv --map $MapFile --result-column campus --result-column subject --result-column gpa --output $RestoredCsv --authorise
+safeset restore $ExportExcel --map $MapFile --result-column campus --result-column subject --result-column gpa --output $RestoredExcel --authorise
 ```
 
 The no-change restoration retains coded campus and subject values; it does not
 decode them. SafeSet stores no category codebook. An analysis result such as
-`record_id,team` can be restored with `--result-column team` instead.
+`record_id` and `team` columns can be restored with `--result-column team` instead.
 
 Sanitise prints a summary and asks for export approval, then a hidden passphrase
 (minimum 16 characters, confirmed). `--approve-export` explicitly approves the
@@ -100,7 +101,7 @@ validation failure or missing authorisation return a non-zero exit status.
 
 Policy actions: drop, categorical keep, random category code, numeric bin, bounded
 exact numeric keep and random source-key pseudonymisation.
-CSV and YAML have strict schemas and resource limits. Passing group-size checks
+Excel workbook and YAML have strict schemas and resource limits. Passing group-size checks
 is not evidence of anonymity. This foundation has no independent security audit.
 See [architecture](docs/architecture.md), [threat model](docs/threat-model.md),
 [safety model](docs/data-safety-model.md), [policy format](docs/policy-format.md),

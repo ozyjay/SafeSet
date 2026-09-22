@@ -84,7 +84,7 @@ def test_failed_validation_writes_nothing(candidate, policy, destinations):
             PASSPHRASE,
             approved=True,
             create_map=True,
-            source_path=ROOT / "examples/synthetic_students.csv",
+            source_path=ROOT / "examples/synthetic_students.xlsx",
         )
     assert not output.exists() and not map_path.exists()
 

@@ -3,13 +3,13 @@
 ## Milestone 1: bootstrap (before implementation)
 
 Establish package layout, the twelve invariants, architecture, threat model,
-policy contract, synthetic fixtures and five reusable agent skills. Use stdlib
-CSV rather than a dataframe dependency: preserve exact source identifiers such
-as leading-zero strings and reject malformed rows explicitly.
+policy contract, synthetic fixtures and five reusable agent skills. The current
+Excel workbook reader uses openpyxl with explicit workbook bounds and preserves
+text identifiers, including leading-zero strings.
 
 ## Milestone 2: smallest useful vertical slice
 
-1. Bounded strict CSV ingestion and duplicate-key-rejecting YAML policy loading.
+1. Bounded strict Excel workbook ingestion and duplicate-key-rejecting YAML policy loading.
 2. Drop, categorical keep, numeric bin and one source-key pseudonymisation action.
 3. Value-free local inspection; random UUIDv4 IDs; in-memory candidate and mapping.
 4. Mandatory schema, value-domain, identifier-shape and equivalence-class checks.

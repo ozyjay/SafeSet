@@ -9,7 +9,7 @@ import sys
 import time
 from pathlib import Path
 
-from safeset.ingestion import read_csv
+from safeset.ingestion import read_excel
 
 from .conftest import PASSPHRASE, ROOT
 
@@ -73,7 +73,7 @@ def test_real_terminal_round_trip(destinations: tuple[Path, Path]):
     run_terminal(
         [
             "sanitise",
-            str(ROOT / "examples/synthetic_students.csv"),
+            str(ROOT / "examples/synthetic_students.xlsx"),
             "--policy",
             str(ROOT / "examples/example-policy.yaml"),
             "--output",
@@ -85,7 +85,7 @@ def test_real_terminal_round_trip(destinations: tuple[Path, Path]):
         ],
         [b"Mapping passphrase: ", b"Confirm mapping passphrase: "],
     )
-    restored = output.parent.parent / "private/restored.csv"
+    restored = output.parent.parent / "private/restored.xlsx"
     run_terminal(
         [
             "restore",
@@ -104,4 +104,4 @@ def test_real_terminal_round_trip(destinations: tuple[Path, Path]):
         ],
         [b"Mapping passphrase: "],
     )
-    assert read_csv(restored).rows[0]["student_number"] == "SYNTH-001"
+    assert read_excel(restored).rows[0]["student_number"] == "SYNTH-001"

@@ -12,7 +12,7 @@ import typer
 
 from .classification import inspect_table
 from .errors import SafetyError
-from .ingestion import csv_bytes, read_csv
+from .ingestion import excel_bytes, read_excel, require_excel_path
 from .mapping import read_mapping
 from .policy import load_policy
 from .restoration import restore
@@ -73,7 +73,7 @@ def desktop_command() -> None:
 @guarded
 def inspect_command(input_path: Path) -> None:
     """Inspect headings and aggregate local characteristics, without cell samples."""
-    report(inspect_table(read_csv(input_path)))
+    report(inspect_table(read_excel(input_path)))
 
 
 @app.command("sanitise")
@@ -90,7 +90,7 @@ def sanitise_command(
     if not create_map:
         raise SafetyError("Use --create-map to explicitly authorise encrypted mapping creation.")
     parsed = load_policy(policy)
-    candidate = sanitise(read_csv(input_path), parsed)
+    candidate = sanitise(read_excel(input_path), parsed)
     validation = validate(candidate.table, parsed)
     report(validation.summary())
     validation.require_pass()
@@ -124,7 +124,7 @@ def sanitise_command(
 @guarded
 def validate_command(input_path: Path, policy: Annotated[Path, typer.Option()]) -> None:
     """Check a candidate dataset; failure returns a non-zero status."""
-    validation = validate(read_csv(input_path), load_policy(policy))
+    validation = validate(read_excel(input_path), load_policy(policy))
     report(validation.summary())
     validation.require_pass()
 
@@ -138,11 +138,12 @@ def restore_command(
     authorise: Annotated[bool, typer.Option("--authorise")] = False,
     result_column: Annotated[list[str] | None, typer.Option("--result-column")] = None,
 ) -> None:
-    """Restore exact source keys locally. The resulting CSV contains sensitive plaintext."""
+    """Restore exact source keys locally into a sensitive Excel workbook."""
     if not authorise:
         raise SafetyError("Use --authorise to explicitly authorise local re-identification.")
+    require_excel_path(output)
     destination = output_destination(output, input_path, map_path)
-    analysed = read_csv(input_path)
+    analysed = read_excel(input_path)
     mapping = read_mapping(map_path, secret(), input_path, output)
     restored = restore(analysed, mapping, tuple(result_column or ()))
     report(
@@ -152,5 +153,5 @@ def restore_command(
             "notice": "Authorised restoration produces sensitive local plaintext.",
         }
     )
-    publish(destination, csv_bytes(restored))
+    publish(destination, excel_bytes(restored))
     typer.echo("Restoration complete. Do not upload restored data.")

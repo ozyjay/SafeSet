@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from safeset.ingestion import read_csv
+from safeset.ingestion import read_excel
 from safeset.policy import load_policy
 from safeset.transform import sanitise
 
@@ -17,7 +17,7 @@ def policy():
 
 @pytest.fixture
 def source():
-    return read_csv(ROOT / "examples/synthetic_students.csv")
+    return read_excel(ROOT / "examples/synthetic_students.xlsx")
 
 
 @pytest.fixture
@@ -29,4 +29,4 @@ def candidate(source, policy):
 def destinations(tmp_path):
     for name in ["maps", "exports", "private"]:
         (tmp_path / name).mkdir(mode=0o700)
-    return tmp_path / "exports/safe.csv", tmp_path / "maps/identity.enc"
+    return tmp_path / "exports/safe.xlsx", tmp_path / "maps/identity.enc"

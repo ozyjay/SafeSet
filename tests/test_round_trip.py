@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from safeset.cli import app
-from safeset.ingestion import Table, csv_bytes, read_csv
+from safeset.ingestion import Table, excel_bytes, read_excel
 from safeset.mapping import read_mapping
 from safeset.pseudonyms import valid_id
 from safeset.restoration import restore
@@ -47,9 +47,9 @@ def test_round_trip_without_network(source, policy, destinations, monkeypatch):
         PASSPHRASE,
         approved=True,
         create_map=True,
-        source_path=ROOT / "examples/synthetic_students.csv",
+        source_path=ROOT / "examples/synthetic_students.xlsx",
     )
-    exported = output.read_text()
+    exported = str(read_excel(output).rows)
     for row in source.rows:
         for field in ["student_name", "student_number", "email", "notes", "campus", "subject"]:
             assert row[field] not in exported
@@ -60,7 +60,7 @@ def test_round_trip_without_network(source, policy, destinations, monkeypatch):
     mapping = read_mapping(map_path, PASSPHRASE)
     assert set(mapping) == {"version", "source_column", "records"}
     assert set(mapping["records"].values()) == {r["student_number"] for r in source.rows}
-    ids = [r["record_id"] for r in read_csv(output).rows]
+    ids = [r["record_id"] for r in read_excel(output).rows]
     analysed = Table(
         ("record_id", "team"), tuple({"record_id": v, "team": "RobotTeam"} for v in reversed(ids))
     )
@@ -76,7 +76,7 @@ def test_cli_round_trip_and_no_value_logging(destinations, monkeypatch):
     monkeypatch.setattr("safeset.cli.secret", lambda **kwargs: PASSPHRASE)
     runner = CliRunner()
     output, map_path = destinations
-    source_path = ROOT / "examples/synthetic_students.csv"
+    source_path = ROOT / "examples/synthetic_students.xlsx"
     policy_path = ROOT / "examples/example-policy.yaml"
     args = [
         "sanitise",
@@ -99,7 +99,7 @@ def test_cli_round_trip_and_no_value_logging(destinations, monkeypatch):
     inspected = runner.invoke(app, ["inspect", str(source_path)])
     assert inspected.exit_code == 0
     assert json.loads(inspected.output)["rows"] == 4
-    restored_path = output.parent.parent / "private/restored.csv"
+    restored_path = output.parent.parent / "private/restored.xlsx"
     result2 = runner.invoke(
         app,
         [
@@ -119,8 +119,8 @@ def test_cli_round_trip_and_no_value_logging(destinations, monkeypatch):
         ],
     )
     assert result2.exit_code == 0, result2.output
-    assert read_csv(restored_path).rows[0]["student_number"] == "SYNTH-001"
-    for row in read_csv(source_path).rows:
+    assert read_excel(restored_path).rows[0]["student_number"] == "SYNTH-001"
+    for row in read_excel(source_path).rows:
         for field in ["student_name", "student_number", "email", "notes", "campus", "subject"]:
             assert row[field] not in result.output + result2.output + inspected.output
     assert PASSPHRASE not in result.output + result2.output
@@ -142,7 +142,7 @@ def test_service_requires_explicit_authorisation(
             PASSPHRASE,
             approved=approval,
             create_map=create_map,
-            source_path=ROOT / "examples/synthetic_students.csv",
+            source_path=ROOT / "examples/synthetic_students.xlsx",
         )
     assert not output.exists() and not map_path.exists()
 
@@ -152,4 +152,4 @@ def test_leading_zero_source_keys_preserved(source, policy):
     candidate = sanitise(Table(source.columns, rows), policy)
     restored = restore(candidate.table, candidate.mapping, ("campus", "subject", "gpa"))
     assert restored.rows[0]["student_number"] == "000000"
-    assert b"000000" not in csv_bytes(candidate.table)
+    assert b"000000" not in excel_bytes(candidate.table)

@@ -4,7 +4,7 @@ The CLI and optional Tk desktop interface delegate to typed Python domain module
 No domain module uses a network client, telemetry or remote classification.
 Installation may download dependencies; runtime does not need network access.
 
-`ingestion` reads bounded UTF-8 CSV as strings. `policy` loads a strict YAML schema.
+`ingestion` reads one bounded `.xlsx` sheet into strings. `policy` loads a strict YAML schema.
 `classification` supplies advisory local heuristics. `transform` creates an
 in-memory candidate and minimal mapping. `validation` evaluates export conditions.
 `mapping` encrypts/decrypts the identity map. `storage` enforces destination
@@ -26,15 +26,19 @@ asking for the passphrase. The user explicitly approves every non-ID returned
 column; restoration still requires exact schema and mapping coverage. Its output
 picker selects a new filename rather than an existing file.
 
-Inputs must be regular files. CSV limits are 10 MiB, 50,000 rows, 128 columns and
-4,096 characters per field. Policies are limited to 256 KiB and encrypted maps to
-32 MiB. Candidate exports must fit the same CSV byte limit before publication.
+Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
+50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per
+field. Formulas, links, hidden rows or columns, merged cells and multiple sheets
+are rejected. Policies are limited to 256 KiB and encrypted maps to 32 MiB.
+Candidate exports must fit the same 10 MiB byte limit before publication.
 These bounds serve a modest local dataset workflow; this is not a streaming engine.
 
 ## Decisions
 
-- Python 3.12+, Typer, PyYAML, cryptography, pytest. Standard-library CSV avoids
-  inferred numeric identifiers, automatic NA conversion and dataframe overhead.
+- Python 3.12+, Typer, PyYAML, cryptography, openpyxl and pytest. Workbook
+  values are read without dataframe type inference; numeric cells become plain
+  decimal text. Source identifiers requiring exact formatting must be stored
+  as text in Excel. Exports write every cell as text.
 - Strict version 1 and 2 policies; unknown options, duplicate YAML keys, aliases,
   unknown classifications, malformed bounds/bins and source-schema drift are errors.
 - Exactly one unique, non-empty source identifier is pseudonymised to `record_id`.

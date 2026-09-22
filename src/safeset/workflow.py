@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from .errors import SafetyError
-from .ingestion import MAX_BYTES, csv_bytes
+from .ingestion import MAX_BYTES, excel_bytes, require_excel_path
 from .mapping import encrypt_mapping, validate_mapping
 from .policy import Policy
 from .storage import map_destination, output_destination, private_directory, publish
@@ -32,12 +32,13 @@ def export_candidate(
         candidate.mapping["records"]
     ) != {r["record_id"] for r in candidate.table.rows}:
         raise SafetyError("Candidate and mapping do not match.")
+    require_excel_path(output)
     output = output_destination(output, source_path)
     map_path = map_destination(map_path, output, source_path)
     encrypted = encrypt_mapping(candidate.mapping, passphrase)
-    data = csv_bytes(candidate.table)
+    data = excel_bytes(candidate.table)
     if len(data) > MAX_BYTES:
-        raise SafetyError("Candidate export exceeds the supported CSV size limit.")
+        raise SafetyError("Candidate export exceeds the supported Excel workbook size limit.")
     private_directory(map_path.parent, create=True)
     publish(map_path, encrypted)
     try:

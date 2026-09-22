@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from safeset.cli import app, secret
 from safeset.errors import SafetyError
-from safeset.ingestion import csv_bytes
+from safeset.ingestion import Table, excel_bytes, read_excel
 from safeset.mapping import read_mapping
 from safeset.storage import (
     default_map_path,
@@ -29,16 +29,16 @@ def test_default_map_outside_checkout_and_not_export():
 
 def test_repository_and_symlink_destination_rejected(tmp_path):
     with pytest.raises(SafetyError):
-        output_destination(ROOT / "unsafe.csv")
+        output_destination(ROOT / "unsafe.xlsx")
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
     link = tmp_path / "link"
     link.symlink_to(repo, target_is_directory=True)
     with pytest.raises(SafetyError):
-        map_destination(link / "map.enc", tmp_path / "out/safe.csv")
+        map_destination(link / "map.enc", tmp_path / "out/safe.xlsx")
     with pytest.raises(SafetyError):
-        output_destination(link / "out.csv")
+        output_destination(link / "out.xlsx")
 
 
 def test_mapping_not_next_to_or_under_export(destinations):
@@ -62,7 +62,7 @@ def test_private_directory_and_map_permissions(candidate, policy, destinations):
         PASSPHRASE,
         approved=True,
         create_map=True,
-        source_path=ROOT / "examples/synthetic_students.csv",
+        source_path=ROOT / "examples/synthetic_students.xlsx",
     )
     path.chmod(0o644)
     with pytest.raises(SafetyError):
@@ -70,7 +70,7 @@ def test_private_directory_and_map_permissions(candidate, policy, destinations):
 
 
 def test_no_overwrite_or_plaintext_staging(tmp_path):
-    path = tmp_path / "present.csv"
+    path = tmp_path / "present.xlsx"
     path.write_bytes(b"keep-existing")
     with pytest.raises(SafetyError):
         publish(path, b"replacement")
@@ -98,7 +98,7 @@ def test_publication_failure_retains_only_encrypted_map(
             PASSPHRASE,
             approved=True,
             create_map=True,
-            source_path=ROOT / "examples/synthetic_students.csv",
+            source_path=ROOT / "examples/synthetic_students.xlsx",
         )
     assert not output.exists()
     assert read_mapping(path, PASSPHRASE) == candidate.mapping
@@ -111,12 +111,15 @@ def test_cli_no_output_without_approval_and_validity(destinations, tmp_path, mon
 
     monkeypatch.setattr("safeset.cli.secret", unexpected_secret)
     output, path = destinations
-    source_path = ROOT / "examples/synthetic_students.csv"
+    source_path = ROOT / "examples/synthetic_students.xlsx"
     if mode == "bad_validation":
-        source_path = tmp_path / "bad.csv"
-        source_path.write_text(
-            (ROOT / "examples/synthetic_students.csv").read_text().replace("Moon", "Unapproved")
+        source_path = tmp_path / "bad.xlsx"
+        original = read_excel(ROOT / "examples/synthetic_students.xlsx")
+        rows = tuple(
+            {**row, "campus": "Unapproved"} if index == 0 else row
+            for index, row in enumerate(original.rows)
         )
+        source_path.write_bytes(excel_bytes(Table(original.columns, rows)))
     args = [
         "sanitise",
         str(source_path),
@@ -146,7 +149,7 @@ def test_restore_requires_authorisation(destinations):
             "--map",
             str(path),
             "--output",
-            str(output.parent / "restored.csv"),
+            str(output.parent / "restored.xlsx"),
         ],
     )
     assert result.exit_code != 0
@@ -155,8 +158,8 @@ def test_restore_requires_authorisation(destinations):
 
 def test_validate_failure_exit_status(candidate, tmp_path):
     candidate.table.rows[0]["record_id"] = "private-invalid-value"
-    path = tmp_path / "bad.csv"
-    path.write_bytes(csv_bytes(candidate.table))
+    path = tmp_path / "bad.xlsx"
+    path.write_bytes(excel_bytes(candidate.table))
     result = CliRunner().invoke(
         app, ["validate", str(path), "--policy", str(ROOT / "examples/example-policy.yaml")]
     )
@@ -192,7 +195,7 @@ def test_existing_map_prevents_export(candidate, policy, destinations):
             PASSPHRASE,
             approved=True,
             create_map=True,
-            source_path=ROOT / "examples/synthetic_students.csv",
+            source_path=ROOT / "examples/synthetic_students.xlsx",
         )
     assert not output.exists()
     assert path.read_bytes() == b"existing synthetic sentinel"
@@ -210,6 +213,6 @@ def test_expanded_export_limit_checked_before_writes(candidate, policy, destinat
             PASSPHRASE,
             approved=True,
             create_map=True,
-            source_path=ROOT / "examples/synthetic_students.csv",
+            source_path=ROOT / "examples/synthetic_students.xlsx",
         )
     assert not path.exists() and not output.exists()

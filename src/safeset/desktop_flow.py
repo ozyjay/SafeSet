@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .classification import inspect_table
 from .errors import SafetyError
-from .ingestion import csv_bytes, read_csv
+from .ingestion import excel_bytes, read_excel, require_excel_path
 from .mapping import read_mapping
 from .policy import NAME, Policy, load_policy
 from .pseudonyms import valid_id
@@ -38,14 +38,14 @@ class ReturnedReview:
 
 def inspect_source(source: Path) -> dict:
     """Return aggregate characteristics only; the UI does not show cell samples."""
-    return inspect_table(read_csv(source))
+    return inspect_table(read_excel(source))
 
 
 def inspect_returned(path: Path) -> ReturnedReview:
     """Read returned headings and ID shape without exposing cell values to the UI."""
-    table = read_csv(path)
+    table = read_excel(path)
     if "record_id" not in table.columns or len(table.columns) < 2:
-        raise SafetyError("Returned CSV needs record_id and at least one result column.")
+        raise SafetyError("Returned Excel workbook needs record_id and at least one result column.")
     if any(not NAME.fullmatch(name) for name in table.columns if name != "record_id"):
         raise SafetyError("Result headings must use lowercase snake_case, such as team.")
     ids = [row["record_id"] for row in table.rows]
@@ -61,9 +61,10 @@ def prepare_export(
 ) -> ExportReview:
     """Prepare and validate a candidate without publishing either artefact."""
     policy = load_policy(policy_path)
-    table = read_csv(source)
+    table = read_excel(source)
     candidate = sanitise(table, policy)
     validation = validate(candidate.table, policy)
+    require_excel_path(output)
     destination = output_destination(output, source)
     mapping = map_destination(map_path or default_map_path(), destination, source)
     return ExportReview(
@@ -108,9 +109,10 @@ def restore_results(
     """Restore exact IDs after a separate, explicit local authorisation."""
     if not authorised:
         raise SafetyError("Explicit restoration authorisation is required.")
+    require_excel_path(output)
     destination = output_destination(output, analysed_path, map_path)
-    analysed = read_csv(analysed_path)
+    analysed = read_excel(analysed_path)
     mapping = read_mapping(map_path, passphrase, analysed_path, output)
     restored = restore(analysed, mapping, result_columns)
-    publish(destination, csv_bytes(restored))
+    publish(destination, excel_bytes(restored))
     return len(restored.rows)

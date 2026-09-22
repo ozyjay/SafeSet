@@ -2,9 +2,10 @@ from copy import deepcopy
 
 import pytest
 import yaml
+from openpyxl import Workbook
 
 from safeset.errors import SafetyError
-from safeset.ingestion import MAX_FIELD, Table, read_bounded, read_csv
+from safeset.ingestion import MAX_FIELD, Table, excel_bytes, read_bounded, read_excel
 from safeset.policy import load_policy, parse_policy
 from safeset.transform import sanitise
 
@@ -12,33 +13,45 @@ from .conftest import ROOT
 
 
 @pytest.mark.parametrize(
-    "content",
+    "change",
     [
-        "a,a\nx,y\n",
-        "a,b\nx\n",
-        "a\nx,y\n",
-        'a\n"unclosed',
-        "\n",
-        " a\nx\n",
-        "a\nx\x00y\n",
-        "a\n" + "x" * (MAX_FIELD + 1),
+        lambda w: setattr(w.active["A1"], "value", "b"),
+        lambda w: setattr(w.active["A1"], "value", " a"),
+        lambda w: setattr(w.active["A2"], "value", "=" + "1+2"),
+        lambda w: setattr(w.active["A2"], "value", "x" * (MAX_FIELD + 1)),
+        lambda w: setattr(w.active.row_dimensions[2], "hidden", True),
+        lambda w: w.active.merge_cells("A1:B1"),
+        lambda w: w.create_sheet("Extra"),
+        lambda w: setattr(w.active["A2"], "hyperlink", "https://example.invalid"),
     ],
 )
-def test_malformed_csv_rejected(content, tmp_path):
-    path = tmp_path / "bad.csv"
-    path.write_text(content)
+def test_malformed_excel_rejected(change, tmp_path):
+    workbook = Workbook()
+    workbook.active.append(("a", "b"))
+    workbook.active.append(("safe", "value"))
+    change(workbook)
+    path = tmp_path / "bad.xlsx"
+    workbook.save(path)
     with pytest.raises(SafetyError):
-        read_csv(path)
+        read_excel(path)
 
 
 def test_non_utf8_and_size_bounds(tmp_path):
-    path = tmp_path / "bad.csv"
+    path = tmp_path / "bad.xlsx"
     path.write_bytes(b"\xff")
     with pytest.raises(SafetyError):
-        read_csv(path)
+        read_excel(path)
     path.write_bytes(b"x" * 21)
     with pytest.raises(SafetyError):
         read_bounded(path, 20)
+
+
+def test_excel_only_and_literal_text_round_trip(tmp_path):
+    path = tmp_path / "literal.xlsx"
+    path.write_bytes(excel_bytes(Table(("key", "value"), ({"key": "000123", "value": "=1+2"},))))
+    assert read_excel(path).rows == ({"key": "000123", "value": "=1+2"},)
+    with pytest.raises(SafetyError, match="Only .xlsx"):
+        read_excel(tmp_path / "old.csv")
 
 
 @pytest.mark.parametrize(
