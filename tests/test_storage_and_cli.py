@@ -37,10 +37,23 @@ def test_cli_inspect_requires_sheet_for_multi_sheet_workbook(tmp_path):
     runner = CliRunner()
     missing = runner.invoke(app, ["inspect", str(path)])
     assert missing.exit_code != 0
-    assert "Select a worksheet" in missing.output
+    assert "Select one or more worksheets" in missing.output
     selected = runner.invoke(app, ["inspect", str(path), "--sheet", "Allocations"])
     assert selected.exit_code == 0
     assert '"rows": 4' in selected.output
+
+
+def test_cli_accepts_repeated_sheet_options(tmp_path):
+    path = tmp_path / "multiple.xlsx"
+    workbook = load_workbook(ROOT / "examples/synthetic_students.xlsx")
+    workbook.active.title = "Earlier"
+    workbook.copy_worksheet(workbook.active).title = "Updated"
+    workbook.save(path)
+    result = CliRunner().invoke(
+        app, ["inspect", str(path), "--sheet", "Earlier", "--sheet", "Updated"]
+    )
+    assert result.exit_code == 0
+    assert '"rows": 8' in result.output
 
 
 def test_repository_and_symlink_destination_rejected(tmp_path):

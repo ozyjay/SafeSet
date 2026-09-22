@@ -1,4 +1,4 @@
-"""Bounded, single-sheet Excel ingestion preserving text identifiers."""
+"""Bounded Excel ingestion preserving text identifiers."""
 
 import io
 import stat
@@ -97,7 +97,49 @@ def list_excel_sheets(path: Path) -> tuple[str, ...]:
         raise SafetyError("Input is not a supported Excel workbook.") from None
 
 
-def read_excel(path: Path, sheet: str | None = None) -> Table:
+def _read_worksheet(worksheet) -> Table:
+    if (
+        worksheet.max_row < 1
+        or worksheet.max_row > MAX_ROWS + 1
+        or worksheet.max_column > MAX_COLUMNS
+        or worksheet.merged_cells.ranges
+        or worksheet.tables
+        or worksheet.auto_filter.ref
+        or worksheet._charts
+        or worksheet._images
+        or any(d.hidden for d in worksheet.row_dimensions.values())
+        or any(d.hidden for d in worksheet.column_dimensions.values())
+    ):
+        raise SafetyError("Excel workbook has unsupported sheet structure or dimensions.")
+    header = tuple(_cell_text(cell) for cell in worksheet[1])
+    if (
+        not header
+        or len(set(header)) != len(header)
+        or any(
+            not name
+            or name != name.strip()
+            or len(name) > 64
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
+            for name in header
+        )
+    ):
+        raise SafetyError("Excel headings are missing, duplicated or malformed.")
+    if any(cell.hyperlink or cell.comment for cell in worksheet[1]):
+        raise SafetyError("Excel workbook contains unsupported cell features.")
+    rows = []
+    for cells in worksheet.iter_rows(min_row=2, max_col=len(header)):
+        if any(cell.hyperlink or cell.comment for cell in cells):
+            raise SafetyError("Excel workbook contains unsupported cell features.")
+        values = tuple(_cell_text(cell) for cell in cells)
+        if all(value == "" for value in values) or any(
+            len(value) > MAX_FIELD or "\x00" in value for value in values
+        ):
+            raise SafetyError("Excel row shape or field size is invalid.")
+        rows.append(dict(zip(header, values, strict=True)))
+    return Table(header, tuple(rows))
+
+
+def read_excel(path: Path, sheet: str | tuple[str, ...] | None = None) -> Table:
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Only .xlsx Excel workbooks are supported.")
     data = read_bounded(path)
@@ -109,50 +151,27 @@ def read_excel(path: Path, sheet: str | None = None) -> Table:
         visible = tuple(ws.title for ws in workbook.worksheets if ws.sheet_state == "visible")
         if sheet is None:
             if len(visible) != 1:
-                raise SafetyError("Select a worksheet from the Excel workbook.")
-            sheet = visible[0]
-        if sheet not in visible:
-            raise SafetyError("Selected worksheet is missing or hidden.")
-        worksheet = workbook[sheet]
+                raise SafetyError("Select one or more worksheets from the Excel workbook.")
+            selected = visible
+        elif isinstance(sheet, str):
+            selected = (sheet,)
+        elif isinstance(sheet, tuple):
+            selected = sheet
+        else:
+            raise SafetyError("Worksheet selection is invalid.")
         if (
-            worksheet.max_row < 1
-            or worksheet.max_row > MAX_ROWS + 1
-            or worksheet.max_column > MAX_COLUMNS
-            or worksheet.merged_cells.ranges
-            or worksheet.tables
-            or worksheet.auto_filter.ref
-            or worksheet._charts
-            or worksheet._images
-            or any(d.hidden for d in worksheet.row_dimensions.values())
-            or any(d.hidden for d in worksheet.column_dimensions.values())
+            not selected
+            or len(set(selected)) != len(selected)
+            or any(name not in visible for name in selected)
         ):
-            raise SafetyError("Excel workbook has unsupported sheet structure or dimensions.")
-        header = tuple(_cell_text(cell) for cell in worksheet[1])
-        if (
-            not header
-            or len(set(header)) != len(header)
-            or any(
-                not name
-                or name != name.strip()
-                or len(name) > 64
-                or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
-                for name in header
-            )
-        ):
-            raise SafetyError("Excel headings are missing, duplicated or malformed.")
-        rows = []
-        for cells in worksheet.iter_rows(min_row=2, max_col=len(header)):
-            if any(cell.hyperlink or cell.comment for cell in cells):
-                raise SafetyError("Excel workbook contains unsupported cell features.")
-            values = tuple(_cell_text(cell) for cell in cells)
-            if all(value == "" for value in values) or any(
-                len(value) > MAX_FIELD or "\x00" in value for value in values
-            ):
-                raise SafetyError("Excel row shape or field size is invalid.")
-            rows.append(dict(zip(header, values, strict=True)))
-        if any(cell.hyperlink or cell.comment for cell in worksheet[1]):
-            raise SafetyError("Excel workbook contains unsupported cell features.")
-        return Table(header, tuple(rows))
+            raise SafetyError("Selected worksheet is missing, hidden or repeated.")
+        tables = [_read_worksheet(workbook[name]) for name in selected]
+        header = tables[0].columns
+        if any(table.columns != header for table in tables[1:]):
+            raise SafetyError("Selected worksheets must have identical headings in the same order.")
+        if sum(len(table.rows) for table in tables) > MAX_ROWS:
+            raise SafetyError("Selected worksheets exceed the combined row limit.")
+        return Table(header, tuple(row for table in tables for row in table.rows))
     except SafetyError:
         raise
     except Exception:

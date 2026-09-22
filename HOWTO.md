@@ -33,9 +33,12 @@ safeset desktop
 
 ## 2. Prepare the source and policy
 
-The source must be a regular `.xlsx` workbook. Select the worksheet in the desktop
-interface, or pass `--sheet 'Worksheet name'` to CLI commands when the workbook
-has several visible sheets. Each selected sheet needs one header row. Store
+The source must be a regular `.xlsx` workbook. Select one or more worksheets in
+the desktop interface, or repeat `--sheet 'Worksheet name'` on CLI commands.
+Each selected sheet needs the same headings in the same order. SafeSet appends
+their rows in workbook order in the desktop interface, or `--sheet` order in the
+CLI. Overlapping participant keys are rejected, so
+filter an updated sheet to new participants before combining cohorts. Store
 identifiers as text in Excel to preserve leading zeros. SafeSet reads
 text cells exactly and converts numeric cells to decimal text. The
 current limits are 10 MiB, 50,000 rows, 128 columns and 4,096 characters per
@@ -46,7 +49,7 @@ characteristics, but no cell samples. Headings may themselves be sensitive.
 safeset inspect examples/synthetic_students.xlsx
 ```
 
-The selected worksheet is used for policy authoring, export and restoration.
+The selected worksheets are used for policy authoring, export and restoration.
 Other worksheets are not exported. For a workbook with one visible worksheet,
 selection is automatic.
 

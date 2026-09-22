@@ -4,7 +4,7 @@ The CLI and optional Tk desktop interface delegate to typed Python domain module
 No domain module uses a network client, telemetry or remote classification.
 Installation may download dependencies; runtime does not need network access.
 
-`ingestion` reads a selected bounded `.xlsx` worksheet into strings. `policy`
+`ingestion` reads selected bounded `.xlsx` worksheets into one string table. `policy`
 loads a strict YAML schema.
 `classification` supplies advisory local heuristics. `transform` creates an
 in-memory candidate and minimal mapping. `validation` evaluates export conditions.
@@ -29,10 +29,13 @@ picker selects a new filename rather than an existing file.
 
 Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
 50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per
-field. A workbook may contain multiple worksheets; the operator must select one
-when more than one is visible. Only the selected sheet enters inspection,
-sanitisation or restoration. Formulas, links, hidden rows or columns and merged
-cells on the selected sheet are rejected. External workbook links are rejected.
+field. A workbook may contain multiple worksheets; the operator selects one or
+more when several are visible. Selected worksheets must have identical headings
+in the same order. Their rows are appended in the supplied order, with the row limit
+applied to the combined table. Duplicate source keys fail before export; no
+automatic choice is made between overlapping records. Only selected sheets enter
+inspection, sanitisation or restoration. Formulas, links, hidden rows or columns
+and merged cells on selected sheets are rejected. External workbook links are rejected.
 Policies are limited to 256 KiB and encrypted maps to 32 MiB.
 Candidate exports must fit the same 10 MiB byte limit before publication.
 These bounds serve a modest local dataset workflow; this is not a streaming engine.

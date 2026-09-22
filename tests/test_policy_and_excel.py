@@ -28,7 +28,6 @@ from .conftest import ROOT
         lambda w: setattr(w.active["A2"], "value", "x" * (MAX_FIELD + 1)),
         lambda w: setattr(w.active.row_dimensions[2], "hidden", True),
         lambda w: w.active.merge_cells("A1:B1"),
-        lambda w: w.create_sheet("Extra"),
         lambda w: setattr(w.active["A2"], "hyperlink", "https://example.invalid"),
     ],
 )
@@ -75,11 +74,38 @@ def test_selected_worksheet_only(tmp_path):
     workbook.save(path)
 
     assert list_excel_sheets(path) == ("Instructions", "Allocations")
-    with pytest.raises(SafetyError, match="Select a worksheet"):
+    with pytest.raises(SafetyError, match="Select one or more worksheets"):
         read_excel(path)
     assert read_excel(path, "Allocations").rows == ({"key": "000123", "value": "Synthetic"},)
-    with pytest.raises(SafetyError, match="missing or hidden"):
+    with pytest.raises(SafetyError, match="missing, hidden or repeated"):
         read_excel(path, "Hidden")
+
+
+def test_selected_worksheets_append_rows_and_require_matching_headings(tmp_path, monkeypatch):
+    workbook = Workbook()
+    first = workbook.active
+    first.title = "Earlier"
+    first.append(("key", "team"))
+    first.append(("SYNTH-001", "Robot A"))
+    second = workbook.create_sheet("New")
+    second.append(("key", "team"))
+    second.append(("SYNTH-002", "Robot B"))
+    path = tmp_path / "cohorts.xlsx"
+    workbook.save(path)
+    assert read_excel(path, ("Earlier", "New")).rows == (
+        {"key": "SYNTH-001", "team": "Robot A"},
+        {"key": "SYNTH-002", "team": "Robot B"},
+    )
+    with pytest.raises(SafetyError, match="repeated"):
+        read_excel(path, ("Earlier", "Earlier"))
+    monkeypatch.setattr("safeset.ingestion.MAX_ROWS", 1)
+    with pytest.raises(SafetyError, match="combined row limit"):
+        read_excel(path, ("Earlier", "New"))
+    monkeypatch.setattr("safeset.ingestion.MAX_ROWS", 50_000)
+    second["B1"] = "allocation"
+    workbook.save(path)
+    with pytest.raises(SafetyError, match="identical headings"):
+        read_excel(path, ("Earlier", "New"))
 
 
 @pytest.mark.parametrize(

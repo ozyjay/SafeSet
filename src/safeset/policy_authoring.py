@@ -23,7 +23,9 @@ class RuleDraft:
     max_decimal_places: int | None = None
 
 
-def local_categories(source: Path, column: str, sheet: str | None = None) -> tuple[str, ...]:
+def local_categories(
+    source: Path, column: str, sheet: str | tuple[str, ...] | None = None
+) -> tuple[str, ...]:
     """Return reviewed local labels only for bounded categorical domains."""
     table = read_excel(source, sheet)
     if column not in table.columns:
@@ -35,7 +37,7 @@ def local_categories(source: Path, column: str, sheet: str | None = None) -> tup
 
 
 def load_drafts(
-    source: Path, policy_path: Path, sheet: str | None = None
+    source: Path, policy_path: Path, sheet: str | tuple[str, ...] | None = None
 ) -> tuple[dict[str, RuleDraft], int]:
     """Load an existing strict policy for review and saving under a new filename."""
     table = read_excel(source, sheet)
@@ -111,7 +113,7 @@ def save_policy(
     destination: Path,
     drafts: dict[str, RuleDraft],
     threshold: str,
-    sheet: str | None = None,
+    sheet: str | tuple[str, ...] | None = None,
 ) -> Path:
     """Save a validated policy privately outside repositories, without overwriting."""
     table = read_excel(source, sheet)

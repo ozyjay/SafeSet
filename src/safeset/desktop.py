@@ -1,5 +1,6 @@
 """Offline Tk desktop interface for SafeSet's existing domain workflow."""
 
+import json
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -86,23 +87,61 @@ def _path_row(
     ttk.Button(row, text="Choose…", command=choose).pack(side="right")
 
 
+def _selected_sheets(variable: tk.StringVar) -> tuple[str, ...] | None:
+    try:
+        names = json.loads(variable.get())
+    except ValueError:
+        return None
+    return tuple(names) if isinstance(names, list) and names else None
+
+
 def _sheet_row(parent: ttk.Frame, path: tk.StringVar, selected: tk.StringVar) -> None:
     row = ttk.Frame(parent)
     row.pack(fill="x", pady=5)
-    ttk.Label(row, text="Worksheet", width=19).pack(side="left")
-    picker = ttk.Combobox(row, textvariable=selected, state="readonly")
+    ttk.Label(row, text="Worksheets", width=19).pack(side="left")
+    picker = tk.Listbox(row, selectmode="multiple", exportselection=False, height=4)
     picker.pack(side="left", fill="x", expand=True, padx=(0, 8))
+    scrollbar = ttk.Scrollbar(row, orient="vertical", command=picker.yview)
+    scrollbar.pack(side="right", fill="y")
+    picker.configure(yscrollcommand=scrollbar.set)
+    ttk.Label(parent, text="Click each worksheet to include it.", style="Muted.TLabel").pack(
+        anchor="w", pady=(0, 4)
+    )
+    names: tuple[str, ...] = ()
+    syncing = False
+
+    def reflect(*_args: object) -> None:
+        nonlocal syncing
+        if syncing:
+            return
+        syncing = True
+        picker.selection_clear(0, "end")
+        chosen = set(_selected_sheets(selected) or ())
+        for index, name in enumerate(names):
+            if name in chosen:
+                picker.selection_set(index)
+        syncing = False
+
+    def record_selection(_event: object) -> None:
+        if not syncing:
+            selected.set(json.dumps([names[index] for index in picker.curselection()]))
 
     def refresh(*_args: object) -> None:
-        selected.set("")
+        nonlocal names
         try:
             names = list_excel_sheets(Path(path.get()))
         except (SafetyError, OSError, UnicodeError):
             names = ()
-        picker.configure(values=names)
+        picker.delete(0, "end")
+        for name in names:
+            picker.insert("end", name)
         if len(names) == 1:
-            selected.set(names[0])
+            selected.set(json.dumps(names))
+        else:
+            selected.set("[]")
 
+    picker.bind("<<ListboxSelect>>", record_selection)
+    selected.trace_add("write", reflect)
     path.trace_add("write", refresh)
 
 
@@ -281,7 +320,7 @@ class Desktop:
         self._invalidate_inspection()
         try:
             source = Path(self.inspect_source.get())
-            summary = inspect_source(source, self.inspect_sheet.get() or None)
+            summary = inspect_source(source, _selected_sheets(self.inspect_sheet))
             counts: dict[str, int] = {}
             flags = 0
             for column in summary["columns"]:
@@ -313,7 +352,7 @@ class Desktop:
                     ),
                 )
             self.inspected_path = source
-            self.inspected_sheet = self.inspect_sheet.get()
+            self.inspected_sheet = _selected_sheets(self.inspect_sheet)
             self.use_source_button.state(["!disabled"])
             self.make_policy_button.state(["!disabled"])
         except (SafetyError, OSError, UnicodeError) as error:
@@ -331,13 +370,13 @@ class Desktop:
     def _use_inspected_source(self) -> None:
         if self.inspected_path is not None:
             self.source.set(str(self.inspected_path))
-            self.source_sheet.set(self.inspected_sheet or "")
+            self.source_sheet.set(json.dumps(self.inspected_sheet or ()))
             self.notebook.select(self.export_tab)
 
     def _use_inspected_for_policy(self) -> None:
         if self.inspected_path is not None:
             self.policy_source.set(str(self.inspected_path))
-            self.policy_sheet.set(self.inspected_sheet or "")
+            self.policy_sheet.set(json.dumps(self.inspected_sheet or ()))
             self.notebook.select(self.policy_tab)
             self._load_policy_columns()
 
@@ -423,7 +462,7 @@ class Desktop:
         self._invalidate_policy_source()
         try:
             summary = inspect_source(
-                Path(self.policy_source.get()), self.policy_sheet.get() or None
+                Path(self.policy_source.get()), _selected_sheets(self.policy_sheet)
             )
             if any(not NAME.fullmatch(column["column"]) for column in summary["columns"]):
                 raise SafetyError("Policy source headings must use lowercase snake_case.")
@@ -493,7 +532,7 @@ class Desktop:
             drafts, threshold = load_drafts(
                 Path(self.policy_source.get()),
                 Path(self.existing_policy.get()),
-                self.policy_sheet.get() or None,
+                _selected_sheets(self.policy_sheet),
             )
             action_labels = {action: label for label, action in ACTION_FROM_LABEL.items()}
             class_labels = {value: key for key, value in CLASS_LABELS.items()}
@@ -556,7 +595,7 @@ class Desktop:
                     return
                 try:
                     values = local_categories(
-                        Path(self.policy_source.get()), name, self.policy_sheet.get() or None
+                        Path(self.policy_source.get()), name, _selected_sheets(self.policy_sheet)
                     )
                     text_widget.delete("1.0", "end")
                     text_widget.insert("1.0", "\n".join(values))
@@ -669,7 +708,7 @@ class Desktop:
                 Path(self.policy_output.get()),
                 self.policy_drafts,
                 self.policy_threshold.get(),
-                self.policy_sheet.get() or None,
+                _selected_sheets(self.policy_sheet),
             )
             self.source.set(str(source))
             self.source_sheet.set(self.policy_sheet.get())
@@ -767,7 +806,7 @@ class Desktop:
                 Path(self.policy.get()),
                 Path(self.output.get()),
                 Path(self.map_path.get()) if self.map_path.get().strip() else None,
-                self.source_sheet.get() or None,
+                _selected_sheets(self.source_sheet),
             )
             self.review = review
             report = review.validation
@@ -781,7 +820,7 @@ class Desktop:
             )
             details = [
                 f"Source: {review.source_rows:,} rows, {review.source_columns} columns",
-                f"Worksheet: {review.sheet or 'only visible worksheet'}",
+                f"Worksheets: {len(review.sheet or ()) or 1} selected",
                 f"Dropped columns: {review.dropped_columns}",
                 f"Export columns: {len(review.policy.output_columns)}",
                 f"Minimum joint group: {report.minimum_class_size}",
@@ -955,13 +994,13 @@ class Desktop:
         self._invalidate_returned_review()
         try:
             review = inspect_returned(
-                Path(self.result_source.get()), self.result_sheet.get() or None
+                Path(self.result_source.get()), _selected_sheets(self.result_sheet)
             )
             self.returned_review = review
             self.returned_status.configure(
                 text=(
                     f"{review.rows:,} rows · {len(review.result_columns)} result columns "
-                    f"on {review.sheet or 'the only visible worksheet'} to review."
+                    f"across {len(review.sheet or ()) or 1} worksheet(s) to review."
                 )
             )
             for column in review.result_columns:
@@ -1020,7 +1059,7 @@ class Desktop:
                 columns,
                 passphrase,
                 authorised=True,
-                sheet=self.result_sheet.get() or None,
+                sheet=_selected_sheets(self.result_sheet),
             )
             messagebox.showinfo(
                 "SafeSet",

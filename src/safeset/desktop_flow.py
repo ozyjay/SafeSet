@@ -19,7 +19,7 @@ from .workflow import export_candidate
 @dataclass(frozen=True)
 class ExportReview:
     source: Path
-    sheet: str | None
+    sheet: str | tuple[str, ...] | None
     output: Path
     map_path: Path
     policy: Policy
@@ -33,17 +33,17 @@ class ExportReview:
 @dataclass(frozen=True)
 class ReturnedReview:
     path: Path
-    sheet: str | None
+    sheet: str | tuple[str, ...] | None
     rows: int
     result_columns: tuple[str, ...]
 
 
-def inspect_source(source: Path, sheet: str | None = None) -> dict:
+def inspect_source(source: Path, sheet: str | tuple[str, ...] | None = None) -> dict:
     """Return aggregate characteristics only; the UI does not show cell samples."""
     return inspect_table(read_excel(source, sheet))
 
 
-def inspect_returned(path: Path, sheet: str | None = None) -> ReturnedReview:
+def inspect_returned(path: Path, sheet: str | tuple[str, ...] | None = None) -> ReturnedReview:
     """Read returned headings and ID shape without exposing cell values to the UI."""
     table = read_excel(path, sheet)
     if "record_id" not in table.columns or len(table.columns) < 2:
@@ -59,7 +59,11 @@ def inspect_returned(path: Path, sheet: str | None = None) -> ReturnedReview:
 
 
 def prepare_export(
-    source: Path, policy_path: Path, output: Path, map_path: Path | None, sheet: str | None = None
+    source: Path,
+    policy_path: Path,
+    output: Path,
+    map_path: Path | None,
+    sheet: str | tuple[str, ...] | None = None,
 ) -> ExportReview:
     """Prepare and validate a candidate without publishing either artefact."""
     policy = load_policy(policy_path)
@@ -108,7 +112,7 @@ def restore_results(
     passphrase: str,
     *,
     authorised: bool,
-    sheet: str | None = None,
+    sheet: str | tuple[str, ...] | None = None,
 ) -> int:
     """Restore exact IDs after a separate, explicit local authorisation."""
     if not authorised:

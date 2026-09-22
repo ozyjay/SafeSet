@@ -34,8 +34,8 @@ systems are supported for private mapping storage; Windows ACLs are not implemen
 
 For a guided local interface, run `safeset desktop` after installation (or
 `safeset-desktop` after reinstalling this version). **Inspect** shows aggregate
-characteristics only. Select a worksheet after choosing a workbook with several
-visible sheets; SafeSet uses that sheet for inspection, policy authoring and
+characteristics only. Select one or more worksheets after choosing a workbook with several
+visible sheets; SafeSet combines their rows for inspection, policy authoring and
 export. From there, use an existing policy or open **Policy** to
 create a version 2 policy from the Excel workbook headings. Choose an action and classification
 for every column, set its allowed categories or numeric limits, and choose a
@@ -59,8 +59,10 @@ restored Excel workbook filename. SafeSet checks those paths before asking for t
 passphrase and separate restoration authorisation.
 The desktop interface uses Tk locally; it opens no server or network connection.
 The CLI remains available for scripts and terminals.
-For a workbook with several visible sheets, pass `--sheet 'Worksheet name'` to
-`inspect`, `sanitise`, `validate` or `restore`.
+For a workbook with several visible sheets, repeat `--sheet 'Worksheet name'` on
+`inspect`, `sanitise`, `validate` or `restore` to combine sheets. Their headings
+must match in the same order. Duplicate participant keys block export; filter the
+updated sheet to new participants before combining overlapping cohorts.
 For a step-by-step desktop and CLI guide, see [HOWTO.md](HOWTO.md).
 
 Choose private local directories outside any repository and outside cloud-synced

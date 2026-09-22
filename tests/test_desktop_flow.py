@@ -34,7 +34,7 @@ def test_prepare_export_from_selected_sheet(destinations, tmp_path):
     workbook.create_sheet("Notes").append(("Invented instructions",))
     workbook.save(source)
     output, mapping = destinations
-    with pytest.raises(SafetyError, match="Select a worksheet"):
+    with pytest.raises(SafetyError, match="Select one or more worksheets"):
         prepare_export(source, ROOT / "examples/example-policy.yaml", output, mapping)
     review = prepare_export(
         source, ROOT / "examples/example-policy.yaml", output, mapping, "Allocations"
@@ -42,6 +42,48 @@ def test_prepare_export_from_selected_sheet(destinations, tmp_path):
     assert review.validation.passed
     assert review.sheet == "Allocations"
     assert not output.exists() and not mapping.exists()
+
+
+def test_overlapping_participants_across_sheets_block_export(destinations, tmp_path):
+    source = tmp_path / "overlap.xlsx"
+    workbook = load_workbook(ROOT / "examples/synthetic_students.xlsx")
+    workbook.active.title = "Earlier"
+    workbook.copy_worksheet(workbook.active).title = "Updated"
+    workbook.save(source)
+    output, mapping = destinations
+    with pytest.raises(SafetyError, match="non-empty and unique"):
+        prepare_export(
+            source,
+            ROOT / "examples/example-policy.yaml",
+            output,
+            mapping,
+            ("Earlier", "Updated"),
+        )
+    assert not output.exists() and not mapping.exists()
+
+
+def test_combined_worksheets_export_once(destinations, tmp_path):
+    source = tmp_path / "cohorts.xlsx"
+    workbook = load_workbook(ROOT / "examples/synthetic_students.xlsx")
+    earlier = workbook.active
+    earlier.title = "Earlier"
+    updated = workbook.copy_worksheet(earlier)
+    updated.title = "Updated"
+    earlier.delete_rows(4, 2)
+    updated.delete_rows(2, 2)
+    workbook.save(source)
+    output, mapping = destinations
+    review = prepare_export(
+        source,
+        ROOT / "examples/example-policy.yaml",
+        output,
+        mapping,
+        ("Earlier", "Updated"),
+    )
+    assert review.validation.passed
+    assert review.source_rows == 4
+    approve_export(review, PASSPHRASE, approved=True)
+    assert len(read_excel(output).rows) == 4
 
 
 def test_failed_review_cannot_export(destinations, tmp_path):
