@@ -11,6 +11,7 @@ from typing import Annotated
 import typer
 
 from .classification import inspect_table
+from .diagnostics import log_path, record, record_reason
 from .errors import SafetyError
 from .ingestion import excel_bytes, read_excel, require_excel_path
 from .mapping import read_mapping
@@ -29,16 +30,29 @@ app = typer.Typer(
 
 
 def guarded(function: Callable) -> Callable:
+    stage = {
+        "inspect_command": "cli.inspect",
+        "sanitise_command": "cli.sanitise",
+        "validate_command": "cli.validate",
+        "restore_command": "cli.restore",
+    }[function.__name__]
+
     @wraps(function)
     def wrapper(*args, **kwargs):
+        record(stage, "start")
         try:
-            return function(*args, **kwargs)
+            result = function(*args, **kwargs)
         except SafetyError as error:
+            record(stage, "rejected")
+            record_reason(stage, error)
             typer.echo(f"Error: {error}", err=True)
             raise typer.Exit(1) from None
         except (OSError, UnicodeError):
+            record(stage, "io_error")
             typer.echo("Error: Local file operation failed; no sensitive details shown.", err=True)
             raise typer.Exit(1) from None
+        record(stage, "success")
+        return result
 
     return wrapper
 
@@ -69,13 +83,23 @@ def desktop_command() -> None:
     main()
 
 
+@app.command("log-path")
+def log_path_command() -> None:
+    """Show the local diagnostic log location without reading its contents."""
+    if not record("cli.log_path", "start"):
+        typer.echo("Notice: diagnostic log is unavailable.", err=True)
+    typer.echo(str(log_path()))
+
+
 @app.command("inspect")
 @guarded
 def inspect_command(
     input_path: Path, sheet: Annotated[list[str] | None, typer.Option("--sheet")] = None
 ) -> None:
     """Inspect headings and aggregate local characteristics, without cell samples."""
-    report(inspect_table(read_excel(input_path, tuple(sheet) if sheet else None)))
+    table = read_excel(input_path, tuple(sheet) if sheet else None)
+    record("cli.inspect", "source_read")
+    report(inspect_table(table))
 
 
 @app.command("sanitise")
@@ -93,10 +117,15 @@ def sanitise_command(
     if not create_map:
         raise SafetyError("Use --create-map to explicitly authorise encrypted mapping creation.")
     parsed = load_policy(policy)
-    candidate = sanitise(read_excel(input_path, tuple(sheet) if sheet else None), parsed)
+    record("cli.sanitise", "policy_loaded")
+    table = read_excel(input_path, tuple(sheet) if sheet else None)
+    record("cli.sanitise", "source_read")
+    candidate = sanitise(table, parsed)
+    record("cli.sanitise", "candidate_ready")
     validation = validate(candidate.table, parsed)
     report(validation.summary())
     validation.require_pass()
+    record("cli.sanitise", "validation_passed")
     destination = map_path or default_map_path()
     # A map location is operational metadata, shown only after review; JSON escapes controls.
     report(
@@ -110,6 +139,7 @@ def sanitise_command(
         "Approve this export for its intended recipient?", default=False
     ):
         raise SafetyError("Export declined; no artefacts created.")
+    record("cli.sanitise", "approval_received")
     export_candidate(
         candidate,
         parsed,
@@ -120,6 +150,7 @@ def sanitise_command(
         create_map=True,
         source_path=input_path,
     )
+    record("cli.sanitise", "published")
     typer.echo("Export and encrypted mapping created. Keep the mapping local and separate.")
 
 
@@ -131,11 +162,14 @@ def validate_command(
     sheet: Annotated[list[str] | None, typer.Option("--sheet")] = None,
 ) -> None:
     """Check a candidate dataset; failure returns a non-zero status."""
-    validation = validate(
-        read_excel(input_path, tuple(sheet) if sheet else None), load_policy(policy)
-    )
+    table = read_excel(input_path, tuple(sheet) if sheet else None)
+    record("cli.validate", "source_read")
+    parsed = load_policy(policy)
+    record("cli.validate", "policy_loaded")
+    validation = validate(table, parsed)
     report(validation.summary())
     validation.require_pass()
+    record("cli.validate", "validation_passed")
 
 
 @app.command("restore")
@@ -151,10 +185,13 @@ def restore_command(
     """Restore exact source keys locally into a sensitive Excel workbook."""
     if not authorise:
         raise SafetyError("Use --authorise to explicitly authorise local re-identification.")
+    record("cli.restore", "approval_received")
     require_excel_path(output)
     destination = output_destination(output, input_path, map_path)
     analysed = read_excel(input_path, tuple(sheet) if sheet else None)
+    record("cli.restore", "source_read")
     mapping = read_mapping(map_path, secret(), input_path, output)
+    record("cli.restore", "map_unlocked")
     restored = restore(analysed, mapping, tuple(result_column or ()))
     report(
         {
@@ -164,4 +201,5 @@ def restore_command(
         }
     )
     publish(destination, excel_bytes(restored))
+    record("cli.restore", "published")
     typer.echo("Restoration complete. Do not upload restored data.")

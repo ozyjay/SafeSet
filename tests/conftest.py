@@ -10,6 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 PASSPHRASE = "synthetic-test-only-passphrase"
 
 
+@pytest.fixture(autouse=True)
+def private_diagnostic_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "safeset.diagnostics.log_path", lambda: tmp_path / "diagnostics" / "safeset.log"
+    )
+
+
 @pytest.fixture
 def policy():
     return load_policy(ROOT / "examples/example-policy.yaml")

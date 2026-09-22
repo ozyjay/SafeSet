@@ -14,6 +14,7 @@ from .desktop_flow import (
     prepare_export,
     restore_results,
 )
+from .diagnostics import record, record_reason
 from .errors import SafetyError
 from .ingestion import list_excel_sheets
 from .policy import NAME
@@ -250,7 +251,10 @@ class Desktop:
             wraplength=620,
         ).pack(anchor="w", pady=(16, 0))
 
-    def _error(self, error: Exception) -> None:
+    def _error(self, error: Exception, stage: str) -> None:
+        record(stage, "rejected" if isinstance(error, SafetyError) else "io_error")
+        if isinstance(error, SafetyError):
+            record_reason(stage, error)
         message = (
             str(error)
             if isinstance(error, SafetyError)
@@ -317,6 +321,7 @@ class Desktop:
         self.inspect_grid.pack(side="left", fill="both", expand=True)
 
     def _inspect(self) -> None:
+        record("desktop.inspect", "start")
         self._invalidate_inspection()
         try:
             source = Path(self.inspect_source.get())
@@ -355,8 +360,9 @@ class Desktop:
             self.inspected_sheet = _selected_sheets(self.inspect_sheet)
             self.use_source_button.state(["!disabled"])
             self.make_policy_button.state(["!disabled"])
+            record("desktop.inspect", "success")
         except (SafetyError, OSError, UnicodeError) as error:
-            self._error(error)
+            self._error(error, "desktop.inspect")
 
     def _invalidate_inspection(self, *_args: object) -> None:
         self.inspected_path = None
@@ -459,6 +465,7 @@ class Desktop:
             self.policy_status.configure(text="Source changed. Load its columns again.")
 
     def _load_policy_columns(self) -> None:
+        record("desktop.policy.columns", "start")
         self._invalidate_policy_source()
         try:
             summary = inspect_source(
@@ -515,10 +522,12 @@ class Desktop:
                     "write", lambda *_args, button=details: button.configure(text="Settings…")
                 )
                 ttk.Separator(self.policy_rows).pack(fill="x")
+            record("desktop.policy.columns", "success")
         except (SafetyError, OSError, UnicodeError) as error:
-            self._error(error)
+            self._error(error, "desktop.policy.columns")
 
     def _load_existing_policy(self) -> None:
+        record("desktop.policy.choices", "start")
         if not self.existing_policy.get().strip():
             messagebox.showerror(
                 "SafeSet", "Choose an existing policy YAML file.", parent=self.root
@@ -547,8 +556,9 @@ class Desktop:
             self.policy_status.configure(
                 text="Existing choices loaded. Review each field and save to a new policy file."
             )
+            record("desktop.policy.choices", "success")
         except (SafetyError, OSError, UnicodeError) as error:
-            self._error(error)
+            self._error(error, "desktop.policy.choices")
 
     def _edit_policy_settings(self, name: str) -> None:
         action_label = self.policy_controls[name][0].get()
@@ -656,6 +666,7 @@ class Desktop:
         dialog.wait_window()
 
     def _save_policy(self) -> None:
+        record("desktop.policy.save", "start")
         if not self.policy_drafts:
             messagebox.showerror("SafeSet", "Load source columns first.", parent=self.root)
             return
@@ -719,8 +730,9 @@ class Desktop:
                 "Policy saved. Prepare the export to run the data checks.",
                 parent=self.root,
             )
+            record("desktop.policy.save", "success")
         except (SafetyError, OSError, UnicodeError) as error:
-            self._error(error)
+            self._error(error, "desktop.policy.save")
 
     def _build_export(self) -> None:
         actions = ttk.Frame(self.export_tab)
@@ -798,6 +810,7 @@ class Desktop:
         self.approve_button.state(["disabled"])
 
     def _prepare(self) -> None:
+        record("desktop.export.prepare", "start")
         self.review = None
         self.approve_button.state(["disabled"])
         try:
@@ -810,6 +823,11 @@ class Desktop:
             )
             self.review = review
             report = review.validation
+            record("desktop.export.prepare", "candidate_ready")
+            if report.passed:
+                record("desktop.export.prepare", "validation_passed")
+            else:
+                record("desktop.export.prepare", "rejected")
             verdict = (
                 "Validation passed · Review before approving"
                 if report.passed
@@ -850,12 +868,13 @@ class Desktop:
         except (SafetyError, OSError, UnicodeError) as error:
             self.export_status.configure(text="Preparation failed", style="Blocked.TLabel")
             self.review_text.configure(text="Preparation failed. No artefacts created.")
-            self._error(error)
+            self._error(error, "desktop.export.prepare")
 
     def _approve(self) -> None:
         review = self.review
         if review is None or not review.validation.passed:
             return
+        record("desktop.export.approve", "start")
         if not messagebox.askyesno(
             "Approve export",
             "Create the minimised Excel workbook and a separate encrypted identity map?\n\n"
@@ -864,10 +883,13 @@ class Desktop:
             parent=self.root,
             default="no",
         ):
+            record("desktop.export.approve", "declined")
             return
         passphrase = _passphrase(self.root, confirm=True)
         if passphrase is None:
+            record("desktop.export.approve", "declined")
             return
+        record("desktop.export.approve", "approval_received")
         try:
             approve_export(review, passphrase, approved=True)
             self.review = None
@@ -887,6 +909,7 @@ class Desktop:
                 "Keep the encrypted map local and separate.",
                 parent=self.root,
             )
+            record("desktop.export.approve", "published")
         except (SafetyError, OSError, UnicodeError) as error:
             self.review = None
             self.approve_button.state(["disabled"])
@@ -898,7 +921,7 @@ class Desktop:
                     "Check these destinations before preparing a new review."
                 )
             )
-            self._error(error)
+            self._error(error, "desktop.export.approve")
 
     def _build_restore(self) -> None:
         canvas = tk.Canvas(self.restore_tab, background=BACKGROUND, highlightthickness=0)
@@ -991,6 +1014,7 @@ class Desktop:
             self.returned_choices.clear()
 
     def _inspect_returned(self) -> None:
+        record("desktop.restore.review", "start")
         self._invalidate_returned_review()
         try:
             review = inspect_returned(
@@ -1009,10 +1033,12 @@ class Desktop:
                 ttk.Checkbutton(self.returned_choices_frame, text=column, variable=selected).pack(
                     anchor="w", pady=2
                 )
+            record("desktop.restore.review", "success")
         except (SafetyError, OSError, UnicodeError) as error:
-            self._error(error)
+            self._error(error, "desktop.restore.review")
 
     def _restore(self) -> None:
+        record("desktop.restore.publish", "start")
         review = self.returned_review
         if review is None:
             messagebox.showerror(
@@ -1038,7 +1064,7 @@ class Desktop:
             output_destination(output, analysed, mapping)
             check_map_read(mapping, analysed, output)
         except (SafetyError, OSError, UnicodeError) as error:
-            self._error(error)
+            self._error(error, "desktop.restore.publish")
             return
         if not messagebox.askyesno(
             "Authorise restoration",
@@ -1047,10 +1073,13 @@ class Desktop:
             parent=self.root,
             default="no",
         ):
+            record("desktop.restore.publish", "declined")
             return
         passphrase = _passphrase(self.root, confirm=False)
         if passphrase is None:
+            record("desktop.restore.publish", "declined")
             return
+        record("desktop.restore.publish", "approval_received")
         try:
             rows = restore_results(
                 analysed,
@@ -1066,19 +1095,23 @@ class Desktop:
                 f"Restored {rows:,} rows locally. Keep this plaintext file private.",
                 parent=self.root,
             )
+            record("desktop.restore.publish", "published")
         except (SafetyError, OSError, UnicodeError) as error:
-            self._error(error)
+            self._error(error, "desktop.restore.publish")
 
 
 def main() -> None:
+    record("desktop.app", "start")
     try:
         root = tk.Tk()
     except tk.TclError:
+        record("desktop.app", "io_error")
         raise SystemExit(
             "SafeSet desktop requires a working local display and Tk installation."
         ) from None
     Desktop(root)
     root.mainloop()
+    record("desktop.app", "closed")
 
 
 if __name__ == "__main__":

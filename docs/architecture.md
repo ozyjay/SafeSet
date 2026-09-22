@@ -26,6 +26,11 @@ The desktop restoration flow reads returned headings and checks ID format before
 asking for the passphrase. The user explicitly approves every non-ID returned
 column; restoration still requires exact schema and mapping coverage. Its output
 picker selects a new filename rather than an existing file.
+`diagnostics` writes allowlisted stage and reason codes to a private local log
+outside repositories. It never accepts free-form event text. On POSIX, the log
+directory requires owner-only mode 0700 and the file mode 0600; symlinks and
+hard-linked log files are rejected. Logging is best effort and does not change
+validation, approval or publication outcomes. The log is truncated at 1 MiB.
 
 Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
 50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per

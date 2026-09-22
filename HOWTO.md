@@ -31,6 +31,11 @@ desktop interface, run:
 safeset desktop
 ```
 
+For local debugging, `safeset log-path` prints the diagnostic log location.
+SafeSet writes only fixed workflow and failure codes there; the private log is
+created on first use outside the repository. It contains no source values,
+headings, filenames, paths, secrets or exception text.
+
 ## 2. Prepare the source and policy
 
 The source must be a regular `.xlsx` workbook. Select one or more worksheets in

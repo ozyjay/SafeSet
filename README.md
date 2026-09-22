@@ -30,6 +30,22 @@ python3 -m pytest
 Dependency installation needs package access; core commands work offline. POSIX
 systems are supported for private mapping storage; Windows ACLs are not implemented.
 
+## Diagnostic log
+
+SafeSet records local workflow stages and fixed failure codes at
+`~/.local/state/safeset/diagnostics.log`. The private directory and file are
+created on first use with permissions 0700 and 0600. The log contains no cell
+values, headings, filenames, paths, passphrases or exception text. Older events
+are discarded when it reaches 1 MiB. To find and inspect it in `pwsh`:
+
+```pwsh
+$LogPath = (safeset log-path).Trim()
+Get-Content $LogPath -Tail 80
+```
+
+If private logging is unavailable, `safeset log-path` reports that condition.
+Core data operations continue without writing a log.
+
 ## Try the synthetic round trip
 
 For a guided local interface, run `safeset desktop` after installation (or

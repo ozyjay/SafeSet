@@ -17,7 +17,7 @@ real identities or credentials.
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
 | Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; no persistent codebook exists |
 | Exact numeric disclosure | Version 2 requires bounds, precision and all-attribute group checks | Exact values remain visible and may be distinctive, even when category labels are coded |
-| Sensitive logging | Fixed error messages, aggregate findings, no cell samples | Inspect displays escaped headings, which may themselves contain sensitive text |
+| Sensitive logging | Private local log accepts only fixed stage and reason codes; no values, headings, paths or exception text | Event timestamps reveal when operations were attempted; inspect output still displays escaped headings |
 | Schema drift | Missing/extra columns and duplicate headings rejected | Same heading can acquire a different meaning |
 | Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, formula/link/hidden-content checks | No formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
