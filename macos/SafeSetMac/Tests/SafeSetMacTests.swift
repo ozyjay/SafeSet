@@ -20,6 +20,9 @@ final class SafeSetMacTests: XCTestCase {
         var field = FieldDraft(id: "Synthetic ID")
         model.fields = [field]
         XCTAssertFalse(model.canPrepareProtection)
+        field.action = "drop"
+        model.fields = [field]
+        XCTAssertTrue(model.canPrepareProtection)
         field.action = "pseudonymise"
         field.classification = "direct_identifier"
         model.fields = [field]

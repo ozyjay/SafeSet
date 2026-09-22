@@ -13,7 +13,8 @@ baseline unless repeated in this iteration.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **194 passed** (including six new bridge tests).
+- `.venv/bin/python -m pytest`: **195 passed** (including six bridge tests and
+  the removed-field authoring check).
 - `ruff check .`: passed.
 - `swift test --disable-sandbox --package-path macos/SafeSetMac`: **3 passed**.
 - Xcode Release build for Apple Silicon: passed.

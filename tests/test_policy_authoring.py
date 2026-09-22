@@ -12,6 +12,7 @@ from safeset.policy_authoring import (
     local_categories,
     parse_number,
     parse_pairs,
+    policy_payload,
     save_policy,
 )
 from safeset.transform import sanitise
@@ -47,6 +48,17 @@ def test_policy_builder_saves_private_strict_policy(tmp_path):
     ).passed
     with pytest.raises(SafetyError, match="overwriting"):
         save_policy(ROOT / "examples/synthetic_students.xlsx", destination, example_drafts(), "2")
+
+
+def test_removed_field_needs_no_classification_choice():
+    drafts = example_drafts()
+    drafts["student_name"].classification = ""
+    payload = policy_payload(drafts, "2")
+    assert payload["columns"]["student_name"] == {
+        "action": "drop",
+        "classification": "unknown",
+    }
+    assert payload["columns"]["email"]["classification"] == "direct_identifier"
 
 
 def test_policy_builder_uses_literal_source_headings(tmp_path):

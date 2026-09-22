@@ -160,7 +160,9 @@ struct CategorySheet: Identifiable {
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
 
     var canPrepareProtection: Bool {
-        !fields.isEmpty && fields.allSatisfy { !$0.action.isEmpty && !$0.classification.isEmpty }
+        !fields.isEmpty && fields.allSatisfy {
+            !$0.action.isEmpty && ($0.action == "drop" || !$0.classification.isEmpty)
+        }
     }
 
     var canApproveRestoration: Bool {
@@ -250,7 +252,8 @@ struct CategorySheet: Identifiable {
 
     func prepareProtection() {
         guard canPrepareProtection else {
-            alert = "Choose an action and classification for every field."; return
+            alert = "Choose an action for every field and classify fields you keep or replace."
+            return
         }
         let output = protectedOutput.isEmpty
             ? (source as NSString).deletingPathExtension + "-protected.xlsx" : protectedOutput
@@ -465,9 +468,11 @@ struct FieldCard: View {
                     Text("Choose…").tag("")
                     ForEach(actionOptions, id: \.1) { item in Text(item.0).tag(item.1) }
                 }
-                Picker("Classification", selection: $field.classification) {
-                    Text("Choose…").tag("")
-                    ForEach(classOptions, id: \.1) { item in Text(item.0).tag(item.1) }
+                if field.action != "drop" {
+                    Picker("Classification", selection: $field.classification) {
+                        Text("Choose…").tag("")
+                        ForEach(classOptions, id: \.1) { item in Text(item.0).tag(item.1) }
+                    }
                 }
             }
             if field.action == "keep" || field.action == "code" {
@@ -592,7 +597,7 @@ struct ProtectView: View {
                 }
                 if !model.fields.isEmpty {
                     Text("Review every field").font(.title2.bold())
-                    Text("Suggestions are advisory. Each action and classification requires your decision.")
+                    Text("Choose an action for every field. Classify fields you keep or replace; removed fields need no classification.")
                         .foregroundStyle(.secondary)
                     ForEach($model.fields) { field in
                         FieldCard(field: field) { model.categories(for: $0) }

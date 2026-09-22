@@ -29,6 +29,11 @@ Classifications: `direct_identifier`, `pseudonymous_identifier`, `quasi_identifi
 unknown fields can only be dropped. The output `record_id` is always classified as
 pseudonymous; existing source pseudonyms are not reused.
 
+The desktop form does not ask for a classification when an action is `drop`.
+When it creates a policy from an unclassified removed field, it writes
+`classification: unknown` to retain the strict YAML schema. Existing policies
+that classify dropped fields remain valid.
+
 | Action | Required configuration | Permitted classification |
 | --- | --- | --- |
 | `drop` | `action`, `classification` | Any recognised classification |
