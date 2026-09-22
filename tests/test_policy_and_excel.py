@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import date, datetime, time
 from io import BytesIO
 from xml.etree import ElementTree
 from zipfile import ZipFile
@@ -97,6 +98,29 @@ def test_source_formula_uses_saved_result_but_returned_formula_is_rejected(tmp_p
     table = read_excel(path, allow_cached_formulas=True)
     assert table.rows == ({"key": "SYNTH-001", "amount": "3"},)
     assert table.formula_cells == 1
+    with pytest.raises(SafetyError, match="unsupported cell type"):
+        read_excel(path)
+
+
+def test_source_dates_are_text_for_review_but_returned_dates_are_rejected(tmp_path):
+    workbook = Workbook()
+    workbook.active.append(("key", "date", "datetime", "time"))
+    workbook.active.append(
+        ("SYNTH-001", date(2030, 4, 5), datetime(2030, 4, 5, 9, 30), time(9, 30))
+    )
+    path = tmp_path / "dates.xlsx"
+    workbook.save(path)
+
+    table = read_excel(path, allow_source_dates=True)
+    assert table.rows == (
+        {
+            "key": "SYNTH-001",
+            "date": "2030-04-05T00:00:00",
+            "datetime": "2030-04-05T09:30:00",
+            "time": "09:30:00",
+        },
+    )
+    assert table.date_cells == 3
     with pytest.raises(SafetyError, match="unsupported cell type"):
         read_excel(path)
 

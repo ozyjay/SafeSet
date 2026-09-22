@@ -351,6 +351,13 @@ class Desktop:
                         "Formula results may be stale. Recalculate and save locally.",
                     )
                 )
+            if summary["date_cells"]:
+                lines.extend(
+                    (
+                        f"{summary['date_cells']} Excel date/time cells read as text",
+                        "Review whether these dates are needed; minimise them in the policy.",
+                    )
+                )
             self.inspect_result.configure(text="\n".join(lines))
             self.inspect_grid.delete(*self.inspect_grid.get_children())
             for column in summary["columns"]:
@@ -860,12 +867,19 @@ class Desktop:
             ]
             if review.formula_cells:
                 details.append(f"Saved formula results used: {review.formula_cells}")
+            if review.date_cells:
+                details.append(f"Excel date/time cells read as text: {review.date_cells}")
             details += [f"Error: {error}" for error in report.errors]
             details += [f"Warning: {warning}" for warning in report.warnings]
             if review.formula_cells:
                 details.append(
                     "Warning: Formula results may be stale. Recalculate and save the "
                     "source workbook locally before approving this export."
+                )
+            if review.date_cells:
+                details.append(
+                    "Warning: Review whether exact dates or times are needed; "
+                    "minimise them in the policy."
                 )
             details.append("Policy decisions:")
             details += [

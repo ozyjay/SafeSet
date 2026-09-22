@@ -29,6 +29,7 @@ class ExportReview:
     source_columns: int
     dropped_columns: int
     formula_cells: int
+    date_cells: int
 
 
 @dataclass(frozen=True)
@@ -41,7 +42,9 @@ class ReturnedReview:
 
 def inspect_source(source: Path, sheet: str | tuple[str, ...] | None = None) -> dict:
     """Return aggregate characteristics only; the UI does not show cell samples."""
-    return inspect_table(read_excel(source, sheet, allow_cached_formulas=True))
+    return inspect_table(
+        read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
+    )
 
 
 def inspect_returned(path: Path, sheet: str | tuple[str, ...] | None = None) -> ReturnedReview:
@@ -68,7 +71,7 @@ def prepare_export(
 ) -> ExportReview:
     """Prepare and validate a candidate without publishing either artefact."""
     policy = load_policy(policy_path)
-    table = read_excel(source, sheet, allow_cached_formulas=True)
+    table = read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
     candidate = sanitise(table, policy)
     validation = validate(candidate.table, policy)
     require_excel_path(output)
@@ -86,6 +89,7 @@ def prepare_export(
         len(table.columns),
         sum(rule.action == "drop" for rule in policy.columns.values()),
         table.formula_cells,
+        table.date_cells,
     )
 
 

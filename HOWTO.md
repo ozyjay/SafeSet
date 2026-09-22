@@ -176,6 +176,10 @@ it.
   export, then review the formula count shown in the desktop. Formulas without a
   saved result, formulas in headings, and formulas in returned analysis files are
   rejected. SafeSet cannot verify that a saved result is current.
+- **Source dates and times:** Excel date/time cells are read as text for inspection.
+  Review whether the field is needed and minimise it in the policy. Exact dates
+  cannot be kept as categorical labels; returned analysis files still reject
+  Excel date/time cells.
 - **Source and policy headings differ:** update the policy for every current
   source heading, or select the correct source and policy pair. Unknown columns
   cannot pass through silently.

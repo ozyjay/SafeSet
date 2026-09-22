@@ -7,7 +7,9 @@ analysis but can still disclose information. **Free text** is unconstrained pros
 **unknown** fields are unclassified. Unknown fields and free text cannot be retained.
 Direct identifiers must be dropped except the single source key used in the map.
 
-Inspection is advisory: column-name heuristics, inferred types, cardinality,
+Source Excel date/time cells are read as ISO text so they can be inspected and
+explicitly dropped or transformed under the policy. Exact date-shaped labels
+remain ineligible for categorical retention. Inspection is advisory: column-name heuristics, inferred types, cardinality,
 small-category counts, date/precise-number flags, identifier shapes and text
 heuristics guide local review. It prints no sample values. These heuristics are
 incomplete; absence of a finding is not permission to keep a column.

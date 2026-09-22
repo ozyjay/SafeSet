@@ -15,6 +15,7 @@ TEXT = re.compile(r"(^|_)(notes?|comments?|description|feedback|text)(_|$)", re.
 QUASI = re.compile(r"campus|subject|course|year|gpa|postcode|birth|date|gender", re.I)
 EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 DATE = re.compile(r"\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b")
+TIME = re.compile(r"\b\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?\b")
 LONG_DIGITS = re.compile(r"(?:\d[ ()+.-]*){7,}")
 PLAIN_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?\Z")
 
@@ -36,7 +37,12 @@ def formula_or_control(value: str) -> bool:
 
 
 def identifier_shaped(value: str) -> bool:
-    return bool(EMAIL.search(value) or DATE.search(value) or LONG_DIGITS.fullmatch(value))
+    return bool(
+        EMAIL.search(value)
+        or DATE.search(value)
+        or TIME.search(value)
+        or LONG_DIGITS.fullmatch(value)
+    )
 
 
 def free_text_shaped(value: str) -> bool:
@@ -111,6 +117,7 @@ def inspect_table(table: Table) -> dict:
     return {
         "rows": len(table.rows),
         "formula_cells": table.formula_cells,
+        "date_cells": table.date_cells,
         "columns": columns,
         "recommendation": "Classify every field explicitly; drop identifiers and free text; "
         "review necessity, rare groups and numerical precision locally.",

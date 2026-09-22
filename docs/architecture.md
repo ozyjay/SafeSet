@@ -43,8 +43,11 @@ inspection, sanitisation or restoration. Source data formulas use only scalar
 results saved in the workbook; SafeSet does not calculate formulas or verify that
 saved results are current. Missing or unsupported saved results and formulas in
 headings fail closed. The inspection and export review show the number of saved
-formula results used, and export review warns that they may be stale. Candidate
-validation and returned analysis files still reject formulas. Links, hidden rows
+formula results used, and export review warns that they may be stale. Source
+Excel date/time cells are converted to ISO text for inspection and policy
+review; they are counted in the review. Exact date-shaped values cannot pass the
+categorical policy checks. Candidate validation and returned analysis files still
+reject formula cells and returned Excel date/time cells. Links, hidden rows
 or columns and merged cells in selected data ranges are rejected. Where a selected sheet
 contains structured Excel Tables, only their defined ranges are ingested;
 matching tables are appended in sheet position order. A declared totals row is

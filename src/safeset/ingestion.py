@@ -25,6 +25,7 @@ class Table:
     columns: tuple[str, ...]
     rows: tuple[dict[str, str], ...]
     formula_cells: int = 0
+    date_cells: int = 0
 
 
 def read_bounded(path: Path, limit: int = MAX_BYTES) -> bytes:
@@ -63,10 +64,14 @@ def _check_archive(data: bytes) -> None:
         raise SafetyError("Input is not a supported Excel workbook.") from None
 
 
-def _cell_text(cell) -> str:
+def _cell_text(cell, *, allow_dates: bool = False) -> str:
     value = cell.value
     if value is None:
         return ""
+    if allow_dates and cell.data_type in {"d", "n"} and isinstance(
+        value, (date, datetime, time)
+    ):
+        return value.isoformat()
     if cell.data_type not in {"s", "n", "inlineStr"} or isinstance(
         value, (bool, date, datetime, time)
     ):
@@ -112,6 +117,7 @@ def _read_region(
     *,
     last_data_row: int | None = None,
     cached_worksheet=None,
+    allow_source_dates: bool = False,
 ) -> Table:
     min_col, min_row, max_col, max_row = bounds
     if (
@@ -155,6 +161,7 @@ def _read_region(
         raise SafetyError("Excel workbook contains unsupported cell features.")
     rows = []
     formula_cells = 0
+    date_cells = 0
     data_end = last_data_row if last_data_row is not None else max_row
     for cells in (
         worksheet.iter_rows(
@@ -171,25 +178,27 @@ def _read_region(
         values = []
         for cell in cells:
             if cell.data_type == "f" and cached_worksheet is not None:
-                cached = cached_worksheet[cell.coordinate]
-                if cached.value is None:
+                value_cell = cached_worksheet[cell.coordinate]
+                if value_cell.value is None:
                     raise SafetyError(
                         "Excel formula has no saved result. Recalculate and save locally."
                     )
-                values.append(_cell_text(cached))
                 formula_cells += 1
             else:
-                values.append(_cell_text(cell))
+                value_cell = cell
+            values.append(_cell_text(value_cell, allow_dates=allow_source_dates))
+            if allow_source_dates and isinstance(value_cell.value, (date, datetime, time)):
+                date_cells += 1
         values = tuple(values)
         if all(value == "" for value in values) or any(
             len(value) > MAX_FIELD or "\x00" in value for value in values
         ):
             raise SafetyError("Excel row shape or field size is invalid.")
         rows.append(dict(zip(header, values, strict=True)))
-    return Table(header, tuple(rows), formula_cells)
+    return Table(header, tuple(rows), formula_cells, date_cells)
 
 
-def _read_worksheet(worksheet, cached_worksheet=None) -> Table:
+def _read_worksheet(worksheet, cached_worksheet=None, *, allow_source_dates: bool = False) -> Table:
     if worksheet.tables:
         if len(worksheet.tables) > MAX_TABLES:
             raise SafetyError("Excel worksheet exceeds the supported table count.")
@@ -216,6 +225,7 @@ def _read_worksheet(worksheet, cached_worksheet=None) -> Table:
                 bounds,
                 last_data_row=bounds[3] - (structured.totalsRowCount or 0),
                 cached_worksheet=cached_worksheet,
+                allow_source_dates=allow_source_dates,
             )
             if (
                 structured.tableColumns
@@ -232,6 +242,7 @@ def _read_worksheet(worksheet, cached_worksheet=None) -> Table:
             header,
             tuple(row for table in tables for row in table.rows),
             sum(table.formula_cells for table in tables),
+            sum(table.date_cells for table in tables),
         )
     occupied = tuple(
         cell
@@ -247,7 +258,10 @@ def _read_worksheet(worksheet, cached_worksheet=None) -> Table:
     if last_column > MAX_COLUMNS:
         raise SafetyError("Excel worksheet exceeds the supported column limit.")
     return _read_region(
-        worksheet, (1, 1, last_column, last_row), cached_worksheet=cached_worksheet
+        worksheet,
+        (1, 1, last_column, last_row),
+        cached_worksheet=cached_worksheet,
+        allow_source_dates=allow_source_dates,
     )
 
 
@@ -256,6 +270,7 @@ def read_excel(
     sheet: str | tuple[str, ...] | None = None,
     *,
     allow_cached_formulas: bool = False,
+    allow_source_dates: bool = False,
 ) -> Table:
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Only .xlsx Excel workbooks are supported.")
@@ -289,7 +304,9 @@ def read_excel(
             raise SafetyError("Selected worksheet is missing, hidden or repeated.")
         tables = [
             _read_worksheet(
-                workbook[name], cached_workbook[name] if cached_workbook is not None else None
+                workbook[name],
+                cached_workbook[name] if cached_workbook is not None else None,
+                allow_source_dates=allow_source_dates,
             )
             for name in selected
         ]
@@ -302,6 +319,7 @@ def read_excel(
             header,
             tuple(row for table in tables for row in table.rows),
             sum(table.formula_cells for table in tables),
+            sum(table.date_cells for table in tables),
         )
     except SafetyError:
         raise

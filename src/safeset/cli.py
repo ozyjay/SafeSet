@@ -97,7 +97,12 @@ def inspect_command(
     input_path: Path, sheet: Annotated[list[str] | None, typer.Option("--sheet")] = None
 ) -> None:
     """Inspect headings and aggregate local characteristics, without cell samples."""
-    table = read_excel(input_path, tuple(sheet) if sheet else None, allow_cached_formulas=True)
+    table = read_excel(
+        input_path,
+        tuple(sheet) if sheet else None,
+        allow_cached_formulas=True,
+        allow_source_dates=True,
+    )
     record("cli.inspect", "source_read")
     report(inspect_table(table))
 
@@ -118,12 +123,22 @@ def sanitise_command(
         raise SafetyError("Use --create-map to explicitly authorise encrypted mapping creation.")
     parsed = load_policy(policy)
     record("cli.sanitise", "policy_loaded")
-    table = read_excel(input_path, tuple(sheet) if sheet else None, allow_cached_formulas=True)
+    table = read_excel(
+        input_path,
+        tuple(sheet) if sheet else None,
+        allow_cached_formulas=True,
+        allow_source_dates=True,
+    )
     record("cli.sanitise", "source_read")
     if table.formula_cells:
         typer.echo(
             f"Notice: {table.formula_cells} saved formula results were used. "
             "Recalculate and save the source workbook locally before export."
+        )
+    if table.date_cells:
+        typer.echo(
+            f"Notice: {table.date_cells} Excel date/time cells were read as text. "
+            "Review their necessity and minimise them in the policy."
         )
     candidate = sanitise(table, parsed)
     record("cli.sanitise", "candidate_ready")
