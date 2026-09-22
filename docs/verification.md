@@ -4,7 +4,7 @@ Verified on macOS ARM64 using the active pyenv Python 3.12.13.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **155 passed**.
+- `.venv/bin/python -m pytest`: **156 passed**.
 - `ruff check .` and `ruff format --check .`: passed.
 - `python -m pip check`: no broken requirements.
 - `.venv/bin/python -m build`: built a source distribution and wheel with isolated
@@ -30,7 +30,8 @@ tampering/truncation, minimal map contents and source-value absence in output/lo
 A round trip runs with Python socket creation blocked. A separate real POSIX
 pseudo-terminal test performs both secret prompts and confirms no passphrase echo.
 Diagnostic tests check private log permissions, rejection of linked or
-world-readable destinations, and the absence of source values and paths.
+world-readable destinations, the absence of source values and paths, and fixed
+reason-code coverage for ingestion errors.
 Workbook tests distinguish populated size limits from distant blank formatting
 and accept filters and charts on plain sheets.
 

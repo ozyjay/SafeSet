@@ -1,3 +1,4 @@
+import ast
 import stat
 
 from typer.testing import CliRunner
@@ -38,6 +39,22 @@ def test_only_allowlisted_reason_code_is_written():
     assert "cli.inspect sheet_selection" in content
     assert "cli.inspect column_limit" in content
     assert "secret-synthetic-cell" not in content
+
+
+def test_ingestion_errors_have_safe_diagnostic_codes():
+    tree = ast.parse((ROOT / "src/safeset/ingestion.py").read_text())
+    messages = {
+        node.exc.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Raise)
+        and isinstance(node.exc, ast.Call)
+        and isinstance(node.exc.func, ast.Name)
+        and node.exc.func.id == "SafetyError"
+        and node.exc.args
+        and isinstance(node.exc.args[0], ast.Constant)
+        and isinstance(node.exc.args[0].value, str)
+    }
+    assert messages <= diagnostics.REASON_CODES.keys()
 
 
 def test_insecure_or_linked_log_is_never_written(tmp_path):
