@@ -4,7 +4,7 @@ SafeSet is an offline desktop and CLI tool for creating a protected Excel workin
 
 ## Primary desktop workflow
 
-1. Run `safeset desktop` and choose **Protect a workbook**.
+1. Open `SafeSet.app` on macOS and choose **Protect a workbook**. The installed CLI command `safeset desktop` also opens the app.
 2. Choose the original `.xlsx` workbook. SafeSet selects its only visible worksheet automatically; if there are several, select one explicitly. Inspection runs locally and shows counts and field hints, not cell samples.
 3. Give **every** field an action and classification. Use **Remove**, **Replace with anonymous ID** for exactly one source key, **Obfuscate values**, **Keep**, **Group into ranges** or **Keep exact number**. Review category allowlists and numeric settings explicitly. Heuristic hints do not make decisions for you.
 4. Review the mandatory validation status, field counts and destinations. Approve the protection and enter a confirmed passphrase. SafeSet writes a new protected workbook and a separate encrypted version 2 restoration bundle in private local storage by default. It never overwrites an existing file.
@@ -24,11 +24,12 @@ Use the active pyenv Python 3.12+ from `pwsh`:
 ```pwsh
 python3 -m venv .venv
 ./.venv/bin/Activate.ps1
-python3 -m pip install -e '.[dev]'
-safeset desktop
+python3 -m pip install -e '.[dev,mac-app]'
+& ./scripts/build-macos-app.ps1
+& ./scripts/smoke-macos-app.ps1
 ```
 
-Core runtime operations need no network. Installation may access package repositories. The desktop uses Tk. POSIX private bundle storage is supported; Windows ACL protection has not been implemented.
+Core runtime operations need no network. Installation and building may access package repositories. The macOS desktop uses SwiftUI with a bundled Python engine and needs no separate Python installation when run from `dist/SafeSet.app`. The local ZIP is ad-hoc signed for development; [macOS app build and release instructions](docs/macos-app.md) explain Developer ID signing and notarisation. POSIX private bundle storage is supported; Windows ACL protection has not been implemented.
 
 ## CLI and synthetic example
 

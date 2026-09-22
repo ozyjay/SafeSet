@@ -1,141 +1,16 @@
 """Safety checks for the desktop controller without requiring a display server."""
 
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 from openpyxl import load_workbook
 from openpyxl.worksheet.table import Table as ExcelTable
 
-from safeset.desktop_advanced import ACTION_LABELS, Desktop
 from safeset.desktop_flow import approve_export, inspect_returned, prepare_export, restore_results
 from safeset.errors import SafetyError
 from safeset.ingestion import Table, excel_bytes, read_excel
 
 from .conftest import PASSPHRASE, ROOT
-
-
-@pytest.mark.parametrize(
-    "action,enabled",
-    [
-        (None, False),
-        ("drop", False),
-        ("pseudonymise", False),
-        ("keep", True),
-        ("code", True),
-        ("bin", True),
-        ("keep_numeric", True),
-    ],
-)
-def test_policy_settings_button_follows_action(action, enabled):
-    class Selection:
-        def get(self):
-            return ACTION_LABELS[action] if action else ""
-
-    class Button:
-        def configure(self, **kwargs):
-            self.text = kwargs["text"]
-
-        def state(self, flags):
-            self.flags = flags
-
-    desktop = Desktop.__new__(Desktop)
-    button = Button()
-    desktop.policy_controls = {"Invented Field": (Selection(), None)}
-    desktop.policy_details_buttons = {"Invented Field": button}
-    desktop._sync_policy_settings_button("Invented Field")
-    assert button.text == "Settings…"
-    assert button.flags == (["!disabled"] if enabled else ["disabled"])
-
-
-def test_wheel_scrolls_nearest_view_and_falls_through_at_its_edge():
-    class Widget:
-        def __init__(self, master=None, position=(0.0, 1.0)):
-            self.master = master
-            self.position = position
-            self.moves = []
-
-        def yview(self):
-            return self.position
-
-        def yview_scroll(self, steps, unit):
-            self.moves.append((steps, unit))
-
-    desktop = Desktop.__new__(Desktop)
-    outer = Widget(position=(0.2, 0.8))
-    inner = Widget(master=outer, position=(0.1, 0.6))
-    control = Widget(master=inner)
-    desktop.scrollable_canvases = {outer, inner}
-    assert desktop._scroll_under_pointer(SimpleNamespace(widget=control, delta=-1)) == "break"
-    assert inner.moves == [(1, "units")]
-    inner.position = (0.4, 1.0)
-    assert desktop._scroll_under_pointer(SimpleNamespace(widget=control, delta=-120)) == "break"
-    assert outer.moves == [(1, "units")]
-    assert desktop._scroll_under_pointer(SimpleNamespace(widget=control, num=4)) == "break"
-    assert inner.moves[-1] == (-1, "units")
-    assert desktop._scroll_under_pointer(SimpleNamespace(widget=Widget(), delta=-120)) is None
-
-
-def test_completed_export_fills_map_fields_and_keeps_success_visible(monkeypatch, tmp_path):
-    class Variable:
-        def __init__(self, on_set=None):
-            self.value = ""
-            self.on_set = on_set
-
-        def set(self, value):
-            self.value = value
-            if self.on_set:
-                self.on_set()
-
-        def get(self):
-            return self.value
-
-    class Display:
-        def configure(self, **kwargs):
-            self.options = kwargs
-
-        def state(self, flags):
-            self.flags = flags
-
-    desktop = Desktop.__new__(Desktop)
-    desktop.root = object()
-    desktop.review = SimpleNamespace(
-        validation=SimpleNamespace(passed=True),
-        map_path=tmp_path / "synthetic-map.enc",
-        output=tmp_path / "synthetic-export.xlsx",
-        source=tmp_path / "synthetic-source.xlsx",
-        sheet=None,
-    )
-    desktop.map_path = Variable(desktop._invalidate_review)
-    desktop.result_map = Variable()
-    desktop.restore_original_source = Variable()
-    desktop.restore_original_sheet = Variable()
-    desktop.restore_policy = Variable()
-    desktop.policy = Variable()
-    desktop.policy.set(str(tmp_path / "synthetic-policy.yaml"))
-    desktop.approve_button = Display()
-    desktop.export_status = Display()
-    desktop.review_text = Display()
-    monkeypatch.setattr("safeset.desktop_advanced.record", lambda *_args: None)
-    monkeypatch.setattr(
-        "safeset.desktop_advanced.messagebox.askyesno", lambda *_args, **_kwargs: True
-    )
-    monkeypatch.setattr(
-        "safeset.desktop_advanced.messagebox.showinfo", lambda *_args, **_kwargs: None
-    )
-    monkeypatch.setattr(
-        "safeset.desktop_advanced._passphrase", lambda *_args, **_kwargs: PASSPHRASE
-    )
-    monkeypatch.setattr("safeset.desktop_advanced.approve_export", lambda *_args, **_kwargs: None)
-
-    desktop._approve()
-
-    assert desktop.map_path.value == str(tmp_path / "synthetic-map.enc")
-    assert desktop.result_map.value == desktop.map_path.value
-    assert desktop.restore_original_source.value == str(tmp_path / "synthetic-source.xlsx")
-    assert desktop.restore_policy.value == str(tmp_path / "synthetic-policy.yaml")
-    assert desktop.export_status.options["text"] == "Export complete"
-    assert desktop.approve_button.flags == ["disabled"]
 
 
 def test_review_does_not_publish_and_requires_approval(destinations):
@@ -268,16 +143,19 @@ def test_desktop_flow_restores_only_coded_labels_on_request(destinations):
     review = prepare_export(source, policy, output, mapping)
     approve_export(review, PASSPHRASE, approved=True)
     restored = output.parent.parent / "private/decoded.xlsx"
-    assert restore_results(
-        output,
-        mapping,
-        restored,
-        ("campus", "subject", "gpa"),
-        PASSPHRASE,
-        authorised=True,
-        coded_source=source,
-        coded_policy=policy,
-    ) == 4
+    assert (
+        restore_results(
+            output,
+            mapping,
+            restored,
+            ("campus", "subject", "gpa"),
+            PASSPHRASE,
+            authorised=True,
+            coded_source=source,
+            coded_policy=policy,
+        )
+        == 4
+    )
     original = {row["student_number"]: row for row in read_excel(source).rows}
     for row in read_excel(restored).rows:
         assert row["campus"] == original[row["student_number"]]["campus"]

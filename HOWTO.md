@@ -2,18 +2,20 @@
 
 SafeSet runs locally. A passing validation report reduces some disclosure risks but does not prove anonymity or decide whether a protected copy may be shared. Keep source workbooks, bundles and reconstructed workbooks private, outside repositories and synchronised folders.
 
-## Install
+## Build and open the macOS app
 
 Use the active pyenv Python 3.12+ in `pwsh`:
 
 ```pwsh
 python3 -m venv .venv
 ./.venv/bin/Activate.ps1
-python3 -m pip install -e .
-safeset desktop
+python3 -m pip install -e '.[dev,mac-app]'
+& ./scripts/build-macos-app.ps1
+& ./scripts/smoke-macos-app.ps1
+open ./dist/SafeSet.app
 ```
 
-Installation may need network access. Inspection, protection, validation and restoration do not.
+Installation may need network access. Inspection, protection, validation and restoration do not. The `.app` bundles Python and its dependencies, so end users need no Python setup. The local ZIP is for development; direct distribution requires Developer ID signing and notarisation. See [macOS app instructions](docs/macos-app.md).
 
 ## Protect a workbook
 

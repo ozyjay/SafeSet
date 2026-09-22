@@ -1,5 +1,22 @@
 # Threat model
 
+## macOS app boundary
+
+The SwiftUI process may display headings and explicitly requested category labels
+locally. It does not receive source rows, decrypted bundles or identity maps. The
+bundled Python helper reads bounded local JSON-line requests and replies with
+allowlisted review metadata or fixed error codes. It has no listener or network
+client. A passphrase travels through the local child-process pipe and is never
+placed in an argument, environment variable, file or protocol response. Python
+and Swift cannot guarantee erasure from process memory. An attacker controlling
+the same account or either process is outside this boundary. A stale review token
+blocks approval; untrusted workbooks are rechecked by the Python domain layer.
+
+The ad-hoc signed local app is for development, not a trusted public release.
+Direct distribution needs Developer ID signing and notarisation. Packaging native
+Python libraries adds a nested-code signing surface that must be verified on the
+release host and on a clean target Mac.
+
 ## Version 2 restoration bundle
 
 The protected working copy is untrusted after analysis. A version 2 encrypted

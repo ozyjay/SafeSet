@@ -1,10 +1,18 @@
 # Implementation plan
 
+## Standalone Mac desktop
+
+The SwiftUI interface now replaces Tk for macOS. A bundled Python helper preserves
+the current domain rules and CLI. The first build targets Apple Silicon and macOS
+14 or newer. The local app and ZIP are development artefacts. Developer ID
+credentials, notarisation and macOS 14 runtime testing remain release gates;
+Intel and Mac App Store distribution are deferred.
+
 ## Current protected-workbook iteration
 
 The version 2 encrypted restoration bundle and source-bound reconstruction path
-are implemented alongside the existing version 1 map path. The normal Tk entry
-point offers Home, Protect and Restore. Advanced tools retain the earlier policy
+are implemented alongside the existing version 1 map path. The SwiftUI app
+offers Home, Protect and Restore. Advanced tools retain the earlier policy
 editor and selected-result join. The CLI has explicit `protect` and `reconstruct`
 commands. Source-derived protected fields are immutable; approved new short
 categorical result fields can be imported into a new sensitive workbook. Deferred

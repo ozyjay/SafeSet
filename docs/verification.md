@@ -13,8 +13,13 @@ baseline unless repeated in this iteration.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **197 passed** in the current iteration.
-- `ruff check .`: passed in the current iteration.
+- `.venv/bin/python -m pytest`: **194 passed** (including six new bridge tests).
+- `ruff check .`: passed.
+- `swift test --disable-sandbox --package-path macos/SafeSetMac`: **3 passed**.
+- Xcode Release build for Apple Silicon: passed.
+- Relocated `SafeSet.app` bundled-helper synthetic protect/reconstruct smoke: passed.
+- `codesign --verify --strict dist/SafeSet.app`: passed for the local ad-hoc signature.
+- `dist/SafeSet-local.zip`: created. App binary declares macOS 14.0 minimum.
 - `python -m pip check`: no broken requirements.
 - `.venv/bin/python -m build`: built a source distribution and wheel with isolated
   Hatchling 1.32.4.
@@ -60,11 +65,20 @@ declined export, failed-validation non-publication, expanded-output size rejecti
 missing restore authorisation, hidden-input fallback refusal and export-publication
 failure retaining an encrypted map. Passphrases in fixtures are synthetic test
 strings only; they must never be reused operationally.
-The desktop controller, returned-heading review and policy authoring are tested without a
-display. This execution environment
-could not open a Tk window, so visual layout and interaction remain unverified.
+The desktop controller, returned-heading review and policy authoring are tested
+without a display. Swift protocol tests exercise approval, stale and malformed
+requests, wrong credentials, mismatched sources, invalid returned IDs, unexpected
+fields, no-clobber publication, redacted responses and blocked network creation.
+The SwiftUI Home and Protect screens were opened on this host. A packaged helper
+was copied to a separate directory and completed a synthetic protect and
+reconstruct round trip with development Python removed from its environment.
 
 ## Not established
+
+Developer ID signing, notarisation, DMG creation and a macOS 14 runtime test were
+not completed. The current host's disk-image service returned a device error;
+no signing credentials are installed. The deployment target is configured but
+not yet verified on a macOS 14 machine.
 
 No independent security/cryptographic audit, formal anonymity proof, legal assessment,
 dependency vulnerability audit, production dataset validation, external AI-service

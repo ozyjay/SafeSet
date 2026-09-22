@@ -12,6 +12,7 @@ dependencies = ["typer>=0.16,<1", "PyYAML>=6.0.2,<7", "cryptography>=44,<51", "o
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "ruff>=0.11,<1", "build>=1.2,<2"]
+mac-app = ["pyinstaller>=6.20,<7"]
 
 [project.scripts]
 safeset = "safeset.cli:app"

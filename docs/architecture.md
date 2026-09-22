@@ -1,5 +1,22 @@
 # Architecture and decisions
 
+## Standalone macOS desktop
+
+The macOS 14+ Apple Silicon app uses SwiftUI for presentation and packages the
+same Python domain modules as a one-directory executable helper. A bounded,
+versioned JSON-line protocol runs solely over a child process's stdin/stdout.
+The app launches the helper from its own bundle; it opens no port or server.
+Requests contain local paths, explicit field decisions and transient passphrases.
+Responses contain only aggregate inspection, local category values after an
+explicit request, fixed error codes and review metadata. Source rows, maps,
+bundle payloads and passphrases never enter protocol responses or logs.
+
+The helper stores one pending review in memory under a random opaque token. A new
+operation invalidates that review; approval consumes the token before publication.
+Protection and reconstruction still recheck their inputs and use the existing
+no-clobber storage boundary. The GUI controls navigation, not safety decisions.
+The Tk interface has been removed; Python CLI commands remain available.
+
 ## Protected working-copy round trip (bundle version 2)
 
 The primary workflow is source workbook → validated protected working copy and
@@ -29,7 +46,7 @@ The export and restore operations need no runtime network access.
 
 ## Existing version 1 map path and shared foundations
 
-The CLI and optional Tk desktop interface delegate to typed Python domain modules.
+The CLI and SwiftUI desktop helper delegate to typed Python domain modules.
 No domain module uses a network client, telemetry or remote classification.
 Installation may download dependencies; runtime does not need network access.
 
