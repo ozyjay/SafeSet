@@ -33,8 +33,10 @@ safeset desktop
 
 ## 2. Prepare the source and policy
 
-The source must be a regular `.xlsx` workbook with one visible sheet and one header
-row. Store identifiers as text in Excel to preserve leading zeros. SafeSet reads
+The source must be a regular `.xlsx` workbook. Select the worksheet in the desktop
+interface, or pass `--sheet 'Worksheet name'` to CLI commands when the workbook
+has several visible sheets. Each selected sheet needs one header row. Store
+identifiers as text in Excel to preserve leading zeros. SafeSet reads
 text cells exactly and converts numeric cells to decimal text. The
 current limits are 10 MiB, 50,000 rows, 128 columns and 4,096 characters per
 field. Keep the source file private; `inspect` displays headings and aggregate
@@ -43,6 +45,10 @@ characteristics, but no cell samples. Headings may themselves be sensitive.
 ```pwsh
 safeset inspect examples/synthetic_students.xlsx
 ```
+
+The selected worksheet is used for policy authoring, export and restoration.
+Other worksheets are not exported. For a workbook with one visible worksheet,
+selection is automatic.
 
 Create a policy for the intended analysis. You can use the desktop **Policy** tab
 to load the source headings, choose an action and classification for every column,
@@ -168,4 +174,3 @@ it.
 
 See the [README](README.md), [data safety model](docs/data-safety-model.md) and
 [threat model](docs/threat-model.md) for the checks and their limits.
-

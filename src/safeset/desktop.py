@@ -14,6 +14,7 @@ from .desktop_flow import (
     restore_results,
 )
 from .errors import SafetyError
+from .ingestion import list_excel_sheets
 from .policy import NAME
 from .policy_authoring import (
     RuleDraft,
@@ -83,6 +84,26 @@ def _path_row(
             variable.set(selected)
 
     ttk.Button(row, text="Choose…", command=choose).pack(side="right")
+
+
+def _sheet_row(parent: ttk.Frame, path: tk.StringVar, selected: tk.StringVar) -> None:
+    row = ttk.Frame(parent)
+    row.pack(fill="x", pady=5)
+    ttk.Label(row, text="Worksheet", width=19).pack(side="left")
+    picker = ttk.Combobox(row, textvariable=selected, state="readonly")
+    picker.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+    def refresh(*_args: object) -> None:
+        selected.set("")
+        try:
+            names = list_excel_sheets(Path(path.get()))
+        except (SafetyError, OSError, UnicodeError):
+            names = ()
+        picker.configure(values=names)
+        if len(names) == 1:
+            selected.set(names[0])
+
+    path.trace_add("write", refresh)
 
 
 def _passphrase(parent: tk.Tk, *, confirm: bool) -> str | None:
@@ -211,6 +232,9 @@ class Desktop:
         self.inspect_source = tk.StringVar()
         self.inspect_source.trace_add("write", self._invalidate_inspection)
         _path_row(tab, "Source Excel workbook", self.inspect_source)
+        self.inspect_sheet = tk.StringVar()
+        self.inspect_sheet.trace_add("write", self._invalidate_inspection)
+        _sheet_row(tab, self.inspect_source, self.inspect_sheet)
         controls = ttk.Frame(tab)
         controls.pack(anchor="w", pady=(12, 16))
         ttk.Button(
@@ -257,7 +281,7 @@ class Desktop:
         self._invalidate_inspection()
         try:
             source = Path(self.inspect_source.get())
-            summary = inspect_source(source)
+            summary = inspect_source(source, self.inspect_sheet.get() or None)
             counts: dict[str, int] = {}
             flags = 0
             for column in summary["columns"]:
@@ -289,6 +313,7 @@ class Desktop:
                     ),
                 )
             self.inspected_path = source
+            self.inspected_sheet = self.inspect_sheet.get()
             self.use_source_button.state(["!disabled"])
             self.make_policy_button.state(["!disabled"])
         except (SafetyError, OSError, UnicodeError) as error:
@@ -296,6 +321,7 @@ class Desktop:
 
     def _invalidate_inspection(self, *_args: object) -> None:
         self.inspected_path = None
+        self.inspected_sheet = None
         if hasattr(self, "use_source_button"):
             self.use_source_button.state(["disabled"])
             self.make_policy_button.state(["disabled"])
@@ -305,11 +331,13 @@ class Desktop:
     def _use_inspected_source(self) -> None:
         if self.inspected_path is not None:
             self.source.set(str(self.inspected_path))
+            self.source_sheet.set(self.inspected_sheet or "")
             self.notebook.select(self.export_tab)
 
     def _use_inspected_for_policy(self) -> None:
         if self.inspected_path is not None:
             self.policy_source.set(str(self.inspected_path))
+            self.policy_sheet.set(self.inspected_sheet or "")
             self.notebook.select(self.policy_tab)
             self._load_policy_columns()
 
@@ -339,6 +367,9 @@ class Desktop:
         self.policy_source = tk.StringVar()
         self.policy_source.trace_add("write", self._invalidate_policy_source)
         _path_row(body, "Source Excel workbook", self.policy_source)
+        self.policy_sheet = tk.StringVar()
+        self.policy_sheet.trace_add("write", self._invalidate_policy_source)
+        _sheet_row(body, self.policy_source, self.policy_sheet)
         ttk.Button(body, text="Load source columns", command=self._load_policy_columns).pack(
             anchor="w", pady=(9, 8)
         )
@@ -391,7 +422,9 @@ class Desktop:
     def _load_policy_columns(self) -> None:
         self._invalidate_policy_source()
         try:
-            summary = inspect_source(Path(self.policy_source.get()))
+            summary = inspect_source(
+                Path(self.policy_source.get()), self.policy_sheet.get() or None
+            )
             if any(not NAME.fullmatch(column["column"]) for column in summary["columns"]):
                 raise SafetyError("Policy source headings must use lowercase snake_case.")
             self.policy_status.configure(
@@ -458,7 +491,9 @@ class Desktop:
             return
         try:
             drafts, threshold = load_drafts(
-                Path(self.policy_source.get()), Path(self.existing_policy.get())
+                Path(self.policy_source.get()),
+                Path(self.existing_policy.get()),
+                self.policy_sheet.get() or None,
             )
             action_labels = {action: label for label, action in ACTION_FROM_LABEL.items()}
             class_labels = {value: key for key, value in CLASS_LABELS.items()}
@@ -520,7 +555,9 @@ class Desktop:
                 ):
                     return
                 try:
-                    values = local_categories(Path(self.policy_source.get()), name)
+                    values = local_categories(
+                        Path(self.policy_source.get()), name, self.policy_sheet.get() or None
+                    )
                     text_widget.delete("1.0", "end")
                     text_widget.insert("1.0", "\n".join(values))
                 except (SafetyError, OSError, UnicodeError) as error:
@@ -632,8 +669,10 @@ class Desktop:
                 Path(self.policy_output.get()),
                 self.policy_drafts,
                 self.policy_threshold.get(),
+                self.policy_sheet.get() or None,
             )
             self.source.set(str(source))
+            self.source_sheet.set(self.policy_sheet.get())
             self.policy.set(str(path))
             self.notebook.select(self.export_tab)
             messagebox.showinfo(
@@ -664,6 +703,7 @@ class Desktop:
             style="Muted.TLabel",
         ).pack(anchor="w", pady=(5, 15))
         self.source = tk.StringVar()
+        self.source_sheet = tk.StringVar()
         self.policy = tk.StringVar()
         self.output = tk.StringVar()
         self.map_path = tk.StringVar()
@@ -675,6 +715,9 @@ class Desktop:
         ):
             _path_row(tab, label, variable, save=save, kind=kind)
             variable.trace_add("write", self._invalidate_review)
+            if variable is self.source:
+                self.source_sheet.trace_add("write", self._invalidate_review)
+                _sheet_row(tab, self.source, self.source_sheet)
         ttk.Label(
             tab,
             text=(
@@ -724,6 +767,7 @@ class Desktop:
                 Path(self.policy.get()),
                 Path(self.output.get()),
                 Path(self.map_path.get()) if self.map_path.get().strip() else None,
+                self.source_sheet.get() or None,
             )
             self.review = review
             report = review.validation
@@ -737,6 +781,7 @@ class Desktop:
             )
             details = [
                 f"Source: {review.source_rows:,} rows, {review.source_columns} columns",
+                f"Worksheet: {review.sheet or 'only visible worksheet'}",
                 f"Dropped columns: {review.dropped_columns}",
                 f"Export columns: {len(review.policy.output_columns)}",
                 f"Minimum joint group: {report.minimum_class_size}",
@@ -835,9 +880,12 @@ class Desktop:
         ).pack(anchor="w", pady=(5, 15))
         self.result_source = tk.StringVar()
         self.result_source.trace_add("write", self._invalidate_returned_review)
+        self.result_sheet = tk.StringVar()
+        self.result_sheet.trace_add("write", self._invalidate_returned_review)
         self.result_map = tk.StringVar()
         self.result_output = tk.StringVar()
         _path_row(tab, "Analysed Excel workbook", self.result_source)
+        _sheet_row(tab, self.result_source, self.result_sheet)
         ttk.Button(tab, text="Read result columns", command=self._inspect_returned).pack(
             anchor="w", pady=(10, 8)
         )
@@ -906,11 +954,14 @@ class Desktop:
     def _inspect_returned(self) -> None:
         self._invalidate_returned_review()
         try:
-            review = inspect_returned(Path(self.result_source.get()))
+            review = inspect_returned(
+                Path(self.result_source.get()), self.result_sheet.get() or None
+            )
             self.returned_review = review
             self.returned_status.configure(
                 text=(
-                    f"{review.rows:,} rows · {len(review.result_columns)} result columns to review."
+                    f"{review.rows:,} rows · {len(review.result_columns)} result columns "
+                    f"on {review.sheet or 'the only visible worksheet'} to review."
                 )
             )
             for column in review.result_columns:
@@ -969,6 +1020,7 @@ class Desktop:
                 columns,
                 passphrase,
                 authorised=True,
+                sheet=self.result_sheet.get() or None,
             )
             messagebox.showinfo(
                 "SafeSet",

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 from safeset.desktop_flow import approve_export, inspect_returned, prepare_export, restore_results
 from safeset.errors import SafetyError
@@ -23,6 +24,23 @@ def test_review_does_not_publish_and_requires_approval(destinations):
     assert not output.exists() and not mapping.exists()
     with pytest.raises(SafetyError, match="approval"):
         approve_export(review, PASSPHRASE, approved=False)
+    assert not output.exists() and not mapping.exists()
+
+
+def test_prepare_export_from_selected_sheet(destinations, tmp_path):
+    source = tmp_path / "multiple.xlsx"
+    workbook = load_workbook(ROOT / "examples/synthetic_students.xlsx")
+    workbook.active.title = "Allocations"
+    workbook.create_sheet("Notes").append(("Invented instructions",))
+    workbook.save(source)
+    output, mapping = destinations
+    with pytest.raises(SafetyError, match="Select a worksheet"):
+        prepare_export(source, ROOT / "examples/example-policy.yaml", output, mapping)
+    review = prepare_export(
+        source, ROOT / "examples/example-policy.yaml", output, mapping, "Allocations"
+    )
+    assert review.validation.passed
+    assert review.sheet == "Allocations"
     assert not output.exists() and not mapping.exists()
 
 
@@ -57,6 +75,38 @@ def test_desktop_flow_synthetic_round_trip(destinations):
         restore_results(output, mapping, restored, columns, PASSPHRASE, authorised=False)
     assert not restored.exists()
     assert restore_results(output, mapping, restored, columns, PASSPHRASE, authorised=True) == 4
+    assert read_excel(restored).rows[0]["student_number"] == "SYNTH-001"
+
+
+def test_restore_from_selected_result_sheet(destinations):
+    output, mapping = destinations
+    review = prepare_export(
+        ROOT / "examples/synthetic_students.xlsx",
+        ROOT / "examples/example-policy.yaml",
+        output,
+        mapping,
+    )
+    approve_export(review, PASSPHRASE, approved=True)
+    workbook = load_workbook(output)
+    workbook.active.title = "Results"
+    workbook.create_sheet("Instructions").append(("Invented help",))
+    analysed = output.parent / "analysed.xlsx"
+    workbook.save(analysed)
+    returned = inspect_returned(analysed, "Results")
+    assert returned.rows == 4
+    restored = output.parent.parent / "private/restored.xlsx"
+    assert (
+        restore_results(
+            analysed,
+            mapping,
+            restored,
+            returned.result_columns,
+            PASSPHRASE,
+            authorised=True,
+            sheet="Results",
+        )
+        == 4
+    )
     assert read_excel(restored).rows[0]["student_number"] == "SYNTH-001"
 
 

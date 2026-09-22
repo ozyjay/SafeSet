@@ -5,7 +5,14 @@ import yaml
 from openpyxl import Workbook
 
 from safeset.errors import SafetyError
-from safeset.ingestion import MAX_FIELD, Table, excel_bytes, read_bounded, read_excel
+from safeset.ingestion import (
+    MAX_FIELD,
+    Table,
+    excel_bytes,
+    list_excel_sheets,
+    read_bounded,
+    read_excel,
+)
 from safeset.policy import load_policy, parse_policy
 from safeset.transform import sanitise
 
@@ -52,6 +59,27 @@ def test_excel_only_and_literal_text_round_trip(tmp_path):
     assert read_excel(path).rows == ({"key": "000123", "value": "=1+2"},)
     with pytest.raises(SafetyError, match="Only .xlsx"):
         read_excel(tmp_path / "old.csv")
+
+
+def test_selected_worksheet_only(tmp_path):
+    workbook = Workbook()
+    workbook.active.title = "Instructions"
+    workbook.active.append(("not_data",))
+    workbook.active.append(("=1+2",))
+    data = workbook.create_sheet("Allocations")
+    data.append(("key", "value"))
+    data.append(("000123", "Synthetic"))
+    hidden = workbook.create_sheet("Hidden")
+    hidden.sheet_state = "hidden"
+    path = tmp_path / "multiple.xlsx"
+    workbook.save(path)
+
+    assert list_excel_sheets(path) == ("Instructions", "Allocations")
+    with pytest.raises(SafetyError, match="Select a worksheet"):
+        read_excel(path)
+    assert read_excel(path, "Allocations").rows == ({"key": "000123", "value": "Synthetic"},)
+    with pytest.raises(SafetyError, match="missing or hidden"):
+        read_excel(path, "Hidden")
 
 
 @pytest.mark.parametrize(

@@ -2,6 +2,7 @@ import getpass
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 from typer.testing import CliRunner
 
 from safeset.cli import app, secret
@@ -25,6 +26,21 @@ def test_default_map_outside_checkout_and_not_export():
     assert not path.is_relative_to(ROOT)
     assert path.parent == Path.home() / ".local/share/safeset/maps"
     assert default_map_path() != path
+
+
+def test_cli_inspect_requires_sheet_for_multi_sheet_workbook(tmp_path):
+    path = tmp_path / "multiple.xlsx"
+    workbook = load_workbook(ROOT / "examples/synthetic_students.xlsx")
+    workbook.active.title = "Allocations"
+    workbook.create_sheet("Instructions").append(("Invented help",))
+    workbook.save(path)
+    runner = CliRunner()
+    missing = runner.invoke(app, ["inspect", str(path)])
+    assert missing.exit_code != 0
+    assert "Select a worksheet" in missing.output
+    selected = runner.invoke(app, ["inspect", str(path), "--sheet", "Allocations"])
+    assert selected.exit_code == 0
+    assert '"rows": 4' in selected.output
 
 
 def test_repository_and_symlink_destination_rejected(tmp_path):

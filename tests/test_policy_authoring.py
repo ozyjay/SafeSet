@@ -1,6 +1,7 @@
 import stat
 
 import pytest
+from openpyxl import load_workbook
 
 from safeset.errors import SafetyError
 from safeset.ingestion import read_excel
@@ -55,6 +56,18 @@ def test_existing_policy_can_be_loaded_and_saved_as_new_file(tmp_path):
     assert drafts["gpa"].bounds == (0, 7)
     saved = save_policy(source, tmp_path / "revised.yaml", drafts, str(threshold))
     assert load_policy(saved).columns["gpa"].action == "keep_numeric"
+
+
+def test_policy_authoring_uses_selected_worksheet(tmp_path):
+    source = tmp_path / "multiple.xlsx"
+    workbook = load_workbook(ROOT / "examples/synthetic_students.xlsx")
+    workbook.active.title = "Allocations"
+    workbook.create_sheet("Instructions").append(("Invented help",))
+    workbook.save(source)
+    drafts, threshold = load_drafts(source, ROOT / "examples/example-policy.yaml", "Allocations")
+    assert local_categories(source, "campus", "Allocations") == ("Mars", "Moon")
+    saved = save_policy(source, tmp_path / "selected.yaml", drafts, str(threshold), "Allocations")
+    assert load_policy(saved).columns["campus"].action == "code"
 
 
 @pytest.mark.parametrize("threshold", ["", "1", "two", "2.0"])

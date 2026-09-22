@@ -71,9 +71,11 @@ def desktop_command() -> None:
 
 @app.command("inspect")
 @guarded
-def inspect_command(input_path: Path) -> None:
+def inspect_command(
+    input_path: Path, sheet: Annotated[str | None, typer.Option("--sheet")] = None
+) -> None:
     """Inspect headings and aggregate local characteristics, without cell samples."""
-    report(inspect_table(read_excel(input_path)))
+    report(inspect_table(read_excel(input_path, sheet)))
 
 
 @app.command("sanitise")
@@ -85,12 +87,13 @@ def sanitise_command(
     create_map: Annotated[bool, typer.Option("--create-map")] = False,
     map_path: Annotated[Path | None, typer.Option("--map")] = None,
     approve_export: Annotated[bool, typer.Option("--approve-export")] = False,
+    sheet: Annotated[str | None, typer.Option("--sheet")] = None,
 ) -> None:
     """Review, validate and explicitly approve a minimised export with a separate map."""
     if not create_map:
         raise SafetyError("Use --create-map to explicitly authorise encrypted mapping creation.")
     parsed = load_policy(policy)
-    candidate = sanitise(read_excel(input_path), parsed)
+    candidate = sanitise(read_excel(input_path, sheet), parsed)
     validation = validate(candidate.table, parsed)
     report(validation.summary())
     validation.require_pass()
@@ -122,9 +125,13 @@ def sanitise_command(
 
 @app.command("validate")
 @guarded
-def validate_command(input_path: Path, policy: Annotated[Path, typer.Option()]) -> None:
+def validate_command(
+    input_path: Path,
+    policy: Annotated[Path, typer.Option()],
+    sheet: Annotated[str | None, typer.Option("--sheet")] = None,
+) -> None:
     """Check a candidate dataset; failure returns a non-zero status."""
-    validation = validate(read_excel(input_path), load_policy(policy))
+    validation = validate(read_excel(input_path, sheet), load_policy(policy))
     report(validation.summary())
     validation.require_pass()
 
@@ -137,13 +144,14 @@ def restore_command(
     output: Annotated[Path, typer.Option()],
     authorise: Annotated[bool, typer.Option("--authorise")] = False,
     result_column: Annotated[list[str] | None, typer.Option("--result-column")] = None,
+    sheet: Annotated[str | None, typer.Option("--sheet")] = None,
 ) -> None:
     """Restore exact source keys locally into a sensitive Excel workbook."""
     if not authorise:
         raise SafetyError("Use --authorise to explicitly authorise local re-identification.")
     require_excel_path(output)
     destination = output_destination(output, input_path, map_path)
-    analysed = read_excel(input_path)
+    analysed = read_excel(input_path, sheet)
     mapping = read_mapping(map_path, secret(), input_path, output)
     restored = restore(analysed, mapping, tuple(result_column or ()))
     report(

@@ -75,31 +75,59 @@ def _cell_text(cell) -> str:
     raise SafetyError("Excel workbook contains an unsupported cell type.")
 
 
-def read_excel(path: Path) -> Table:
+def list_excel_sheets(path: Path) -> tuple[str, ...]:
+    """List visible worksheet names without reading cell values into the UI."""
+    if path.suffix.lower() != ".xlsx":
+        raise SafetyError("Only .xlsx Excel workbooks are supported.")
+    data = read_bounded(path)
+    _check_archive(data)
+    try:
+        workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=False)
+        if workbook._external_links:
+            raise SafetyError("Excel workbook contains external links.")
+        names = tuple(
+            sheet.title for sheet in workbook.worksheets if sheet.sheet_state == "visible"
+        )
+        if not names:
+            raise SafetyError("Excel workbook has no visible worksheet.")
+        return names
+    except SafetyError:
+        raise
+    except Exception:
+        raise SafetyError("Input is not a supported Excel workbook.") from None
+
+
+def read_excel(path: Path, sheet: str | None = None) -> Table:
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Only .xlsx Excel workbooks are supported.")
     data = read_bounded(path)
     _check_archive(data)
     try:
         workbook = load_workbook(io.BytesIO(data), read_only=False, data_only=False)
-        if len(workbook.sheetnames) != 1 or workbook._external_links:
-            raise SafetyError("Excel workbook must contain one sheet and no external links.")
-        sheet = workbook.active
+        if workbook._external_links:
+            raise SafetyError("Excel workbook contains external links.")
+        visible = tuple(ws.title for ws in workbook.worksheets if ws.sheet_state == "visible")
+        if sheet is None:
+            if len(visible) != 1:
+                raise SafetyError("Select a worksheet from the Excel workbook.")
+            sheet = visible[0]
+        if sheet not in visible:
+            raise SafetyError("Selected worksheet is missing or hidden.")
+        worksheet = workbook[sheet]
         if (
-            sheet.sheet_state != "visible"
-            or sheet.max_row < 1
-            or sheet.max_row > MAX_ROWS + 1
-            or sheet.max_column > MAX_COLUMNS
-            or sheet.merged_cells.ranges
-            or sheet.tables
-            or sheet.auto_filter.ref
-            or sheet._charts
-            or sheet._images
-            or any(d.hidden for d in sheet.row_dimensions.values())
-            or any(d.hidden for d in sheet.column_dimensions.values())
+            worksheet.max_row < 1
+            or worksheet.max_row > MAX_ROWS + 1
+            or worksheet.max_column > MAX_COLUMNS
+            or worksheet.merged_cells.ranges
+            or worksheet.tables
+            or worksheet.auto_filter.ref
+            or worksheet._charts
+            or worksheet._images
+            or any(d.hidden for d in worksheet.row_dimensions.values())
+            or any(d.hidden for d in worksheet.column_dimensions.values())
         ):
             raise SafetyError("Excel workbook has unsupported sheet structure or dimensions.")
-        header = tuple(_cell_text(cell) for cell in sheet[1])
+        header = tuple(_cell_text(cell) for cell in worksheet[1])
         if (
             not header
             or len(set(header)) != len(header)
@@ -113,7 +141,7 @@ def read_excel(path: Path) -> Table:
         ):
             raise SafetyError("Excel headings are missing, duplicated or malformed.")
         rows = []
-        for cells in sheet.iter_rows(min_row=2, max_col=len(header)):
+        for cells in worksheet.iter_rows(min_row=2, max_col=len(header)):
             if any(cell.hyperlink or cell.comment for cell in cells):
                 raise SafetyError("Excel workbook contains unsupported cell features.")
             values = tuple(_cell_text(cell) for cell in cells)
@@ -122,7 +150,7 @@ def read_excel(path: Path) -> Table:
             ):
                 raise SafetyError("Excel row shape or field size is invalid.")
             rows.append(dict(zip(header, values, strict=True)))
-        if any(cell.hyperlink or cell.comment for cell in sheet[1]):
+        if any(cell.hyperlink or cell.comment for cell in worksheet[1]):
             raise SafetyError("Excel workbook contains unsupported cell features.")
         return Table(header, tuple(rows))
     except SafetyError:

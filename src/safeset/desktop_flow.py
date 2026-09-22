@@ -19,6 +19,7 @@ from .workflow import export_candidate
 @dataclass(frozen=True)
 class ExportReview:
     source: Path
+    sheet: str | None
     output: Path
     map_path: Path
     policy: Policy
@@ -32,18 +33,19 @@ class ExportReview:
 @dataclass(frozen=True)
 class ReturnedReview:
     path: Path
+    sheet: str | None
     rows: int
     result_columns: tuple[str, ...]
 
 
-def inspect_source(source: Path) -> dict:
+def inspect_source(source: Path, sheet: str | None = None) -> dict:
     """Return aggregate characteristics only; the UI does not show cell samples."""
-    return inspect_table(read_excel(source))
+    return inspect_table(read_excel(source, sheet))
 
 
-def inspect_returned(path: Path) -> ReturnedReview:
+def inspect_returned(path: Path, sheet: str | None = None) -> ReturnedReview:
     """Read returned headings and ID shape without exposing cell values to the UI."""
-    table = read_excel(path)
+    table = read_excel(path, sheet)
     if "record_id" not in table.columns or len(table.columns) < 2:
         raise SafetyError("Returned Excel workbook needs record_id and at least one result column.")
     if any(not NAME.fullmatch(name) for name in table.columns if name != "record_id"):
@@ -52,16 +54,16 @@ def inspect_returned(path: Path) -> ReturnedReview:
     if not ids or any(not valid_id(value) for value in ids) or len(set(ids)) != len(ids):
         raise SafetyError("Returned IDs are malformed or duplicated.")
     return ReturnedReview(
-        path, len(table.rows), tuple(c for c in table.columns if c != "record_id")
+        path, sheet, len(table.rows), tuple(c for c in table.columns if c != "record_id")
     )
 
 
 def prepare_export(
-    source: Path, policy_path: Path, output: Path, map_path: Path | None
+    source: Path, policy_path: Path, output: Path, map_path: Path | None, sheet: str | None = None
 ) -> ExportReview:
     """Prepare and validate a candidate without publishing either artefact."""
     policy = load_policy(policy_path)
-    table = read_excel(source)
+    table = read_excel(source, sheet)
     candidate = sanitise(table, policy)
     validation = validate(candidate.table, policy)
     require_excel_path(output)
@@ -69,6 +71,7 @@ def prepare_export(
     mapping = map_destination(map_path or default_map_path(), destination, source)
     return ExportReview(
         source,
+        sheet,
         destination,
         mapping,
         policy,
@@ -105,13 +108,14 @@ def restore_results(
     passphrase: str,
     *,
     authorised: bool,
+    sheet: str | None = None,
 ) -> int:
     """Restore exact IDs after a separate, explicit local authorisation."""
     if not authorised:
         raise SafetyError("Explicit restoration authorisation is required.")
     require_excel_path(output)
     destination = output_destination(output, analysed_path, map_path)
-    analysed = read_excel(analysed_path)
+    analysed = read_excel(analysed_path, sheet)
     mapping = read_mapping(map_path, passphrase, analysed_path, output)
     restored = restore(analysed, mapping, result_columns)
     publish(destination, excel_bytes(restored))

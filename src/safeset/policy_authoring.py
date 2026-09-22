@@ -23,9 +23,9 @@ class RuleDraft:
     max_decimal_places: int | None = None
 
 
-def local_categories(source: Path, column: str) -> tuple[str, ...]:
+def local_categories(source: Path, column: str, sheet: str | None = None) -> tuple[str, ...]:
     """Return reviewed local labels only for bounded categorical domains."""
-    table = read_excel(source)
+    table = read_excel(source, sheet)
     if column not in table.columns:
         raise SafetyError("Source headings changed; load the Excel workbook headings again.")
     values = set(row[column] for row in table.rows)
@@ -34,9 +34,11 @@ def local_categories(source: Path, column: str) -> tuple[str, ...]:
     return tuple(sorted(values))
 
 
-def load_drafts(source: Path, policy_path: Path) -> tuple[dict[str, RuleDraft], int]:
+def load_drafts(
+    source: Path, policy_path: Path, sheet: str | None = None
+) -> tuple[dict[str, RuleDraft], int]:
     """Load an existing strict policy for review and saving under a new filename."""
-    table = read_excel(source)
+    table = read_excel(source, sheet)
     policy = load_policy(policy_path)
     if set(table.columns) != set(policy.columns):
         raise SafetyError("Policy and source headings differ.")
@@ -105,10 +107,14 @@ def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
 
 
 def save_policy(
-    source: Path, destination: Path, drafts: dict[str, RuleDraft], threshold: str
+    source: Path,
+    destination: Path,
+    drafts: dict[str, RuleDraft],
+    threshold: str,
+    sheet: str | None = None,
 ) -> Path:
     """Save a validated policy privately outside repositories, without overwriting."""
-    table = read_excel(source)
+    table = read_excel(source, sheet)
     if set(table.columns) != set(drafts):
         raise SafetyError("Source headings changed; load the Excel workbook headings again.")
     payload = policy_payload(drafts, threshold)
