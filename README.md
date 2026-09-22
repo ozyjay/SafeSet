@@ -65,7 +65,8 @@ choose a policy and a *new* export filename outside a repository. Leave the map
 destination empty for a random filename in SafeSet's private map directory, or
 choose a separate private directory. **Prepare review** shows the validation
 findings, policy decisions and both destinations. A failed check blocks export.
-After approval, both saved paths stay visible and the map path carries into Restore.
+After approval, the saved map path fills the Export map field and carries into Restore.
+Choose a new map destination or clear that field before preparing another export.
 
 In **Restore**, choose the analysed Excel workbook and click **Read result columns**. SafeSet
 shows only its row count and headings; approve every returned non-ID column you
@@ -103,8 +104,10 @@ safeset validate $ExportExcel --policy examples/example-policy.yaml
 safeset restore $ExportExcel --map $MapFile --result-column campus --result-column subject --result-column gpa --output $RestoredExcel --authorise
 ```
 
-The no-change restoration retains coded campus and subject values; it does not
-decode them. SafeSet stores no category codebook. An analysis result such as
+The no-change restoration retains coded campus and subject values. To restore
+their original labels, supply `--original-source` and `--policy` with a new output
+filename, or select the coded-label option in the desktop Restore tab. SafeSet
+reads the original workbook locally and stores no category codebook. An analysis result such as
 `record_id` and `team` columns can be restored with `--result-column team` instead.
 
 Sanitise prints a summary and asks for export approval, then a hidden passphrase

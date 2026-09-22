@@ -201,18 +201,48 @@ def restore_command(
     authorise: Annotated[bool, typer.Option("--authorise")] = False,
     result_column: Annotated[list[str] | None, typer.Option("--result-column")] = None,
     sheet: Annotated[list[str] | None, typer.Option("--sheet")] = None,
+    original_source: Annotated[Path | None, typer.Option("--original-source")] = None,
+    policy_path: Annotated[Path | None, typer.Option("--policy")] = None,
+    source_sheet: Annotated[list[str] | None, typer.Option("--source-sheet")] = None,
 ) -> None:
-    """Restore exact source keys locally into a sensitive Excel workbook."""
+    """Restore source keys and optionally original coded category labels locally."""
     if not authorise:
         raise SafetyError("Use --authorise to explicitly authorise local re-identification.")
+    if (original_source is None) != (policy_path is None) or (
+        source_sheet and original_source is None
+    ):
+        raise SafetyError("Restoring coded labels requires both --original-source and --policy.")
     record("cli.restore", "approval_received")
     require_excel_path(output)
-    destination = output_destination(output, input_path, map_path)
+    if original_source is not None:
+        require_excel_path(original_source)
+    destination = output_destination(
+        output, input_path, map_path, *(p for p in (original_source, policy_path) if p)
+    )
     analysed = read_excel(input_path, tuple(sheet) if sheet else None)
     record("cli.restore", "source_read")
-    mapping = read_mapping(map_path, secret(), input_path, output)
+    mapping = read_mapping(
+        map_path, secret(), input_path, output, *(p for p in (original_source, policy_path) if p)
+    )
     record("cli.restore", "map_unlocked")
-    restored = restore(analysed, mapping, tuple(result_column or ()))
+    original_table = (
+        read_excel(
+            original_source,
+            tuple(source_sheet) if source_sheet else None,
+            allow_cached_formulas=True,
+            allow_source_dates=True,
+        )
+        if original_source is not None
+        else None
+    )
+    parsed_policy = load_policy(policy_path) if policy_path is not None else None
+    restored = restore(
+        analysed,
+        mapping,
+        tuple(result_column or ()),
+        coded_source=original_table,
+        coded_policy=parsed_policy,
+    )
     report(
         {
             "rows": len(restored.rows),

@@ -116,3 +116,49 @@ def test_spaced_headings_round_trip_with_explicit_result_allowlist():
     restored = restore(analysed, mapping, ("Allocation Result",))
     assert restored.columns == ("Student Number", "Allocation Result")
     assert [row["Student Number"] for row in restored.rows] == ["SYNTH-001", "SYNTH-002"]
+
+
+def test_restore_coded_labels_from_original_source(candidate, source, policy):
+    columns = ("campus", "subject", "gpa")
+    restored = restore(
+        candidate.table,
+        candidate.mapping,
+        columns,
+        coded_source=source,
+        coded_policy=policy,
+    )
+    by_key = {row["student_number"]: row for row in source.rows}
+    assert restored.columns == ("student_number", *columns)
+    for row in restored.rows:
+        original = by_key[row["student_number"]]
+        assert row["campus"] == original["campus"]
+        assert row["subject"] == original["subject"]
+        assert row["gpa"] == original["gpa"]
+        assert "student_name" not in row and "email" not in row and "notes" not in row
+
+
+@pytest.mark.parametrize("mode", ["missing_key", "changed_category", "changed_code", "no_code"])
+def test_restore_coded_labels_rejects_mismatches(candidate, source, policy, mode):
+    rows = deepcopy(source.rows)
+    analysed_rows = deepcopy(candidate.table.rows)
+    columns = ("campus", "subject", "gpa")
+    if mode == "missing_key":
+        rows[0]["student_number"] = "SYNTH-MISSING"
+    elif mode == "changed_category":
+        rows[0]["campus"] = "Mars" if rows[0]["campus"] == "Moon" else "Moon"
+    elif mode == "changed_code":
+        analysed_rows[0]["campus"] = new_id()
+    else:
+        columns = ("gpa",)
+        analysed_rows = [
+            {"record_id": row["record_id"], "gpa": row["gpa"]} for row in analysed_rows
+        ]
+    analysed = Table(("record_id", *columns), analysed_rows)
+    with pytest.raises(SafetyError):
+        restore(
+            analysed,
+            candidate.mapping,
+            columns,
+            coded_source=Table(source.columns, rows),
+            coded_policy=policy,
+        )

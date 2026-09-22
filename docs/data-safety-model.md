@@ -39,6 +39,11 @@ ephemeral. Version 2 can retain exact plain decimal values within policy bounds
 and precision. Exact numbers may form rare groups and increase disclosure risk;
 the same per-field and joint checks apply. The validation report warns when either
 action is used.
+During authorised local restoration, original labels for coded fields can be read
+from the original source workbook with exact source-key coverage and matching
+category/code groupings. Dropped fields remain absent. The encrypted map does not
+store a codebook or source snapshot, so this check cannot prove the selected source
+workbook has not changed since export.
 
 No check measures auxiliary-data attacks, within-group sensitive-attribute
 homogeneity, longitudinal linkage or the suitability of a particular AI service.

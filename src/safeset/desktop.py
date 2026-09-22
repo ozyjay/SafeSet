@@ -16,7 +16,8 @@ from .desktop_flow import (
 )
 from .diagnostics import record, record_reason
 from .errors import SafetyError
-from .ingestion import list_excel_sheets
+from .ingestion import list_excel_sheets, require_excel_path
+from .policy import load_policy
 from .policy_authoring import (
     RuleDraft,
     load_drafts,
@@ -202,6 +203,7 @@ class Desktop:
         self.policy_drafts: dict[str, RuleDraft] = {}
         self.policy_controls: dict[str, tuple[tk.StringVar, tk.StringVar]] = {}
         self.policy_details_buttons: dict[str, ttk.Button] = {}
+        self.scrollable_canvases: set[tk.Canvas] = set()
         root.title("SafeSet · local data review")
         width, height = 840, 700
         x = max(0, (root.winfo_screenwidth() - width) // 2)
@@ -247,6 +249,9 @@ class Desktop:
         self._build_policy()
         self._build_export()
         self._build_restore()
+        root.bind("<MouseWheel>", self._scroll_under_pointer, add="+")
+        root.bind("<Button-4>", self._scroll_under_pointer, add="+")
+        root.bind("<Button-5>", self._scroll_under_pointer, add="+")
         ttk.Label(
             shell,
             text=(
@@ -256,6 +261,26 @@ class Desktop:
             style="Muted.TLabel",
             wraplength=620,
         ).grid(row=3, column=0, sticky="ew", pady=(16, 0))
+
+    def _scroll_under_pointer(self, event: tk.Event) -> str | None:
+        button = getattr(event, "num", None)
+        delta = getattr(event, "delta", 0)
+        if button in {4, 5}:
+            direction, steps = (-1 if button == 4 else 1), 1
+        elif delta:
+            direction = -1 if delta > 0 else 1
+            steps = max(1, round(abs(delta) / 120)) if abs(delta) >= 120 else 1
+        else:
+            return None
+        widget = event.widget
+        while widget is not None:
+            if widget in self.scrollable_canvases:
+                first, last = widget.yview()
+                if (direction < 0 and first > 0) or (direction > 0 and last < 1):
+                    widget.yview_scroll(direction * steps, "units")
+                    return "break"
+            widget = widget.master
+        return None
 
     def _error(self, error: Exception, stage: str) -> None:
         record(stage, "rejected" if isinstance(error, SafetyError) else "io_error")
@@ -409,7 +434,10 @@ class Desktop:
     def _build_policy(self) -> None:
         footer = ttk.Frame(self.policy_tab)
         footer.pack(side="bottom", fill="x", pady=(12, 0))
-        canvas = tk.Canvas(self.policy_tab, background=BACKGROUND, highlightthickness=0)
+        canvas = tk.Canvas(
+            self.policy_tab, background=BACKGROUND, highlightthickness=0, yscrollincrement=24
+        )
+        self.scrollable_canvases.add(canvas)
         scrollbar = ttk.Scrollbar(self.policy_tab, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
@@ -764,7 +792,10 @@ class Desktop:
     def _build_export(self) -> None:
         actions = ttk.Frame(self.export_tab)
         actions.pack(side="bottom", fill="x", pady=(12, 0))
-        canvas = tk.Canvas(self.export_tab, background=BACKGROUND, highlightthickness=0)
+        canvas = tk.Canvas(
+            self.export_tab, background=BACKGROUND, highlightthickness=0, yscrollincrement=24
+        )
+        self.scrollable_canvases.add(canvas)
         self.export_canvas = canvas
         scrollbar = ttk.Scrollbar(self.export_tab, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
@@ -933,10 +964,14 @@ class Desktop:
         record("desktop.export.approve", "approval_received")
         try:
             approve_export(review, passphrase, approved=True)
+            self.map_path.set(str(review.map_path))
+            self.result_map.set(str(review.map_path))
+            self.restore_original_source.set(str(review.source))
+            self.restore_original_sheet.set(json.dumps(review.sheet or ()))
+            self.restore_policy.set(self.policy.get())
             self.review = None
             self.approve_button.state(["disabled"])
             self.export_status.configure(text="Export complete", style="Success.TLabel")
-            self.result_map.set(str(review.map_path))
             self.review_text.configure(
                 text=(
                     f"Export Excel workbook: {review.output}\n"
@@ -965,7 +1000,10 @@ class Desktop:
             self._error(error, "desktop.export.approve")
 
     def _build_restore(self) -> None:
-        canvas = tk.Canvas(self.restore_tab, background=BACKGROUND, highlightthickness=0)
+        canvas = tk.Canvas(
+            self.restore_tab, background=BACKGROUND, highlightthickness=0, yscrollincrement=24
+        )
+        self.scrollable_canvases.add(canvas)
         scrollbar = ttk.Scrollbar(self.restore_tab, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
@@ -1009,8 +1047,13 @@ class Desktop:
         choices_box = ttk.Frame(tab)
         choices_box.pack(fill="x", pady=(7, 14))
         self.returned_canvas = tk.Canvas(
-            choices_box, height=100, background=BACKGROUND, highlightthickness=1
+            choices_box,
+            height=100,
+            background=BACKGROUND,
+            highlightthickness=1,
+            yscrollincrement=24,
         )
+        self.scrollable_canvases.add(self.returned_canvas)
         choices_scroll = ttk.Scrollbar(
             choices_box, orient="vertical", command=self.returned_canvas.yview
         )
@@ -1033,6 +1076,27 @@ class Desktop:
         )
         self.returned_choices: dict[str, tk.BooleanVar] = {}
         _path_row(tab, "Encrypted map", self.result_map, kind="enc")
+        self.restore_coded = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            tab,
+            text="Restore original labels for coded columns",
+            variable=self.restore_coded,
+        ).pack(anchor="w", pady=(12, 4))
+        ttk.Label(
+            tab,
+            text=(
+                "Uses the original local workbook and policy. Only approved coded result "
+                "columns are replaced; dropped fields remain absent."
+            ),
+            style="Muted.TLabel",
+            wraplength=540,
+        ).pack(anchor="w")
+        self.restore_original_source = tk.StringVar()
+        self.restore_original_sheet = tk.StringVar()
+        self.restore_policy = tk.StringVar()
+        _path_row(tab, "Original source workbook", self.restore_original_source)
+        _sheet_row(tab, self.restore_original_source, self.restore_original_sheet)
+        _path_row(tab, "Original policy YAML", self.restore_policy, kind="yaml")
         _path_row(tab, "New restored Excel workbook", self.result_output, save=True)
         ttk.Label(
             tab,
@@ -1101,15 +1165,43 @@ class Desktop:
         analysed = Path(self.result_source.get())
         mapping = Path(self.result_map.get())
         output = Path(self.result_output.get())
+        coded_source = None
+        coded_policy = None
+        coded_count = 0
         try:
-            output_destination(output, analysed, mapping)
-            check_map_read(mapping, analysed, output)
+            if self.restore_coded.get():
+                if (
+                    not self.restore_original_source.get().strip()
+                    or not self.restore_policy.get().strip()
+                ):
+                    raise SafetyError(
+                        "Choose the original source workbook and policy to restore codes."
+                    )
+                coded_source = Path(self.restore_original_source.get())
+                coded_policy = Path(self.restore_policy.get())
+                require_excel_path(coded_source)
+                policy = load_policy(coded_policy)
+                coded_count = sum(
+                    name in columns and rule.action == "code"
+                    for name, rule in policy.columns.items()
+                )
+                if not coded_count:
+                    raise SafetyError("No approved coded result columns are available to restore.")
+            context = tuple(p for p in (coded_source, coded_policy) if p)
+            output_destination(output, analysed, mapping, *context)
+            check_map_read(mapping, analysed, output, *context)
         except (SafetyError, OSError, UnicodeError) as error:
             self._error(error, "desktop.restore.publish")
             return
+        coded_notice = (
+            f"Original labels restored for {coded_count} coded column(s).\n\n"
+            if coded_count
+            else ""
+        )
         if not messagebox.askyesno(
             "Authorise restoration",
             f"Restore {review.rows:,} rows with {len(columns)} approved result columns?\n\n"
+            f"{coded_notice}"
             "This creates sensitive plaintext at the new destination you chose.",
             parent=self.root,
             default="no",
@@ -1130,6 +1222,9 @@ class Desktop:
                 passphrase,
                 authorised=True,
                 sheet=_selected_sheets(self.result_sheet),
+                coded_source=coded_source,
+                coded_policy=coded_policy,
+                coded_source_sheet=_selected_sheets(self.restore_original_sheet),
             )
             messagebox.showinfo(
                 "SafeSet",

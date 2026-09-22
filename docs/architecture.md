@@ -26,6 +26,10 @@ The desktop restoration flow reads returned headings and checks ID format before
 asking for the passphrase. The user explicitly approves every non-ID returned
 column; restoration still requires exact schema and mapping coverage. Its output
 picker selects a new filename rather than an existing file.
+Optional coded-label restoration reads the original source workbook and policy
+locally after separate authorisation. It requires exact source-key coverage and
+matching coded-category groupings, replaces only approved `code` result columns,
+and never rejoins dropped fields. No codebook or source snapshot is added to the map.
 `diagnostics` writes allowlisted stage and reason codes to a private local log
 outside repositories. It never accepts free-form event text. On POSIX, the log
 directory requires owner-only mode 0700 and the file mode 0600; symlinks and
@@ -77,8 +81,8 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   This backward-compatible rule applies to both policy versions and existing maps.
 - Exactly one unique, non-empty source identifier is pseudonymised to `record_id`.
   Other direct identifiers and all free text must be dropped. Map only that key,
-  never names, notes or whole source rows. Rejoining other authorised source fields
-  is a separate local operation outside the MVP.
+  never names, notes or whole source rows. Rejoining dropped source fields is a
+  separate local operation outside this workflow.
 - Keep and code actions require explicit finite categorical `allowed_values`.
   Codes are random per distinct observed category, column and run. The category
   codebook exists only in memory and is not added to the encrypted identity map.
@@ -107,6 +111,8 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   `--result-column` for each returned non-ID column. It returns the selected source
   key plus approved result fields, preserving returned row order. Identity-column
   collisions, duplicate/missing/unknown IDs and spreadsheet formulas are rejected.
+  Supplying the original source and policy additionally restores category labels
+  only for approved coded fields; source keys must match the map exactly.
 
 Paths are checked at use time; a hostile process with the same account can race
 these checks. Filesystem transactions, secure deletion and protection from a

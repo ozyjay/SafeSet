@@ -119,14 +119,35 @@ def restore_results(
     *,
     authorised: bool,
     sheet: str | tuple[str, ...] | None = None,
+    coded_source: Path | None = None,
+    coded_policy: Path | None = None,
+    coded_source_sheet: str | tuple[str, ...] | None = None,
 ) -> int:
     """Restore exact IDs after a separate, explicit local authorisation."""
     if not authorised:
         raise SafetyError("Explicit restoration authorisation is required.")
+    if (coded_source is None) != (coded_policy is None):
+        raise SafetyError("Restoring coded labels requires both the original source and policy.")
     require_excel_path(output)
-    destination = output_destination(output, analysed_path, map_path)
+    if coded_source is not None:
+        require_excel_path(coded_source)
+    destination = output_destination(
+        output, analysed_path, map_path, *(p for p in (coded_source, coded_policy) if p)
+    )
     analysed = read_excel(analysed_path, sheet)
-    mapping = read_mapping(map_path, passphrase, analysed_path, output)
-    restored = restore(analysed, mapping, result_columns)
+    mapping = read_mapping(
+        map_path, passphrase, analysed_path, output, *(p for p in (coded_source, coded_policy) if p)
+    )
+    source_table = (
+        read_excel(
+            coded_source, coded_source_sheet, allow_cached_formulas=True, allow_source_dates=True
+        )
+        if coded_source is not None
+        else None
+    )
+    policy = load_policy(coded_policy) if coded_policy is not None else None
+    restored = restore(
+        analysed, mapping, result_columns, coded_source=source_table, coded_policy=policy
+    )
     publish(destination, excel_bytes(restored))
     return len(restored.rows)

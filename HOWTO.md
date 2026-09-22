@@ -70,6 +70,8 @@ filename. A field's Settings button is enabled only when its action needs catego
 bins or numeric limits. Category values appear in the interface only if you explicitly request
 them locally. Keep a policy for real data outside repositories because headings
 and category labels can be sensitive.
+Scroll policy, export and restore views with a mouse wheel or trackpad while the
+pointer is over their content; the scrollbars remain available.
 
 For a hand-written policy, use [the synthetic example](examples/example-policy.yaml)
 as a guide. The policy must list **every** source heading, with no extras. Select
@@ -88,8 +90,9 @@ for the analysis. Set `min_group_size` to at least 2.
 | `keep_numeric` | Retains exact plain decimal values within declared bounds and precision. |
 
 `code` and `keep_numeric` require policy version 2. Coding leaves equality and
-frequency patterns visible. No codebook is saved, so coded category labels cannot
-be decoded later. Exact numeric values may remain distinctive. See the full
+frequency patterns visible. No codebook is saved; original labels can only be
+rejoined locally from the original source workbook and policy during restoration.
+Exact numeric values may remain distinctive. See the full
 [policy format](docs/policy-format.md) before writing a policy manually.
 
 ## 3. Inspect, review and export in the desktop interface
@@ -155,7 +158,9 @@ to restore; every non-ID column must be individually allowlisted.
 In the desktop **Restore** tab, choose the returned Excel workbook and select **Read result
 columns**. Approve each column to restore, choose the encrypted map and a **new**
 private output filename, then enter the map passphrase and separately authorise
-restoration.
+restoration. To restore original labels for coded columns, tick that option and
+select the original source workbook and policy. The desktop fills those paths after
+an export in the same session; review them before authorising restoration.
 
 For a CLI round trip using the unchanged synthetic export as the returned file:
 
@@ -163,13 +168,24 @@ For a CLI round trip using the unchanged synthetic export as the returned file:
 safeset restore $ExportExcel --map $MapFile --result-column campus --result-column subject --result-column gpa --output $RestoredExcel --authorise
 ```
 
+To put original labels back into the coded columns, use a new output filename and
+supply the same local source workbook and policy used for export:
+
+```pwsh
+$DecodedExcel = Join-Path $Private 'decoded.xlsx'
+safeset restore $ExportExcel --map $MapFile --result-column campus --result-column subject --result-column gpa --original-source examples/synthetic_students.xlsx --policy examples/example-policy.yaml --output $DecodedExcel --authorise
+```
+
 For a real analysis result, use one `--result-column` option per approved result
 field, such as `--result-column team`. `--authorise` explicitly authorises local
 re-identification. SafeSet restores only the selected source key and those result
-fields; it does not recover dropped columns or decode category codes. It rejects
+fields. With the original source and policy, it replaces approved coded result fields
+with their original labels. It never recovers dropped columns. It rejects
 missing, duplicate, malformed or unknown IDs, extra columns and unsafe returned
-values. The restored Excel workbook is sensitive plaintext: keep it private and never upload
-it.
+values. It also rejects source-key mismatches and inconsistent category/code groupings
+when restoring labels. The map contains no snapshot of the original source, so
+SafeSet cannot detect every change made to that workbook after export. The restored
+Excel workbook is sensitive plaintext: keep it private and never upload it.
 
 ## When a step fails
 

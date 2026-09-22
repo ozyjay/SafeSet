@@ -120,10 +120,36 @@ def test_cli_round_trip_and_no_value_logging(destinations, monkeypatch):
     )
     assert result2.exit_code == 0, result2.output
     assert read_excel(restored_path).rows[0]["student_number"] == "SYNTH-001"
+    decoded_path = output.parent.parent / "private/decoded.xlsx"
+    decoded = runner.invoke(
+        app,
+        [
+            "restore",
+            str(output),
+            "--map",
+            str(map_path),
+            "--output",
+            str(decoded_path),
+            "--authorise",
+            "--result-column",
+            "campus",
+            "--result-column",
+            "subject",
+            "--result-column",
+            "gpa",
+            "--original-source",
+            str(source_path),
+            "--policy",
+            str(policy_path),
+        ],
+    )
+    assert decoded.exit_code == 0, decoded.output
+    assert read_excel(decoded_path).rows[0]["campus"] == read_excel(source_path).rows[0]["campus"]
     for row in read_excel(source_path).rows:
         for field in ["student_name", "student_number", "email", "notes", "campus", "subject"]:
-            assert row[field] not in result.output + result2.output + inspected.output
-    assert PASSPHRASE not in result.output + result2.output
+            all_output = result.output + result2.output + decoded.output + inspected.output
+            assert row[field] not in all_output
+    assert PASSPHRASE not in result.output + result2.output + decoded.output
 
 
 @pytest.mark.parametrize("approval,create_map", [(False, True), (True, False)])

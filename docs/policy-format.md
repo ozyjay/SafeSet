@@ -34,8 +34,12 @@ Keep labels must be short categories. Use quoted YAML strings for numbers/boolea
 `code` checks source values against the same strict categorical allowlist, then
 replaces each distinct value with a fresh random UUIDv4 code. Matching values in
 one column receive the same code within one export; codes differ across columns
-and runs. No category codebook is saved, so SafeSet cannot decode those labels
-later. The encrypted map still contains only `record_id` to source-key pairs.
+and runs. No category codebook is saved. Authorised local restoration can put the
+original labels back only when the operator supplies the original source workbook
+and policy; it checks exact source-key coverage and category/code grouping. A
+changed source workbook with the same keys and grouping cannot be ruled out because
+the map contains no source snapshot. The encrypted map still contains only
+`record_id` to source-key pairs.
 
 `keep_numeric` preserves the exact numeric value of a plain non-negative decimal
 within inclusive finite bounds. Leading and trailing zeros are normalised (for
