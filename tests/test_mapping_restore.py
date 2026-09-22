@@ -5,8 +5,10 @@ import pytest
 from safeset.errors import SafetyError
 from safeset.ingestion import Table
 from safeset.mapping import decrypt_mapping, encrypt_mapping, validate_mapping
+from safeset.policy import parse_policy
 from safeset.pseudonyms import new_id
 from safeset.restoration import restore
+from safeset.transform import sanitise
 
 from .conftest import PASSPHRASE
 
@@ -75,3 +77,42 @@ def test_mapping_structure_rejects(candidate, mode):
         mapping["version"] = True
     with pytest.raises(SafetyError):
         validate_mapping(mapping)
+
+
+def test_spaced_headings_round_trip_with_explicit_result_allowlist():
+    policy = parse_policy(
+        {
+            "version": 2,
+            "min_group_size": 2,
+            "columns": {
+                "Student Number": {
+                    "action": "pseudonymise",
+                    "classification": "direct_identifier",
+                },
+                "Campus Location": {
+                    "action": "keep",
+                    "classification": "quasi_identifier",
+                    "allowed_values": ["Moon"],
+                },
+            },
+        }
+    )
+    source = Table(
+        ("Student Number", "Campus Location"),
+        (
+            {"Student Number": "SYNTH-001", "Campus Location": "Moon"},
+            {"Student Number": "SYNTH-002", "Campus Location": "Moon"},
+        ),
+    )
+    candidate = sanitise(source, policy)
+    mapping = decrypt_mapping(encrypt_mapping(candidate.mapping, PASSPHRASE), PASSPHRASE)
+    analysed = Table(
+        ("record_id", "Allocation Result"),
+        tuple(
+            {"record_id": row["record_id"], "Allocation Result": "Invented Team"}
+            for row in candidate.table.rows
+        ),
+    )
+    restored = restore(analysed, mapping, ("Allocation Result",))
+    assert restored.columns == ("Student Number", "Allocation Result")
+    assert [row["Student Number"] for row in restored.rows] == ["SYNTH-001", "SYNTH-002"]

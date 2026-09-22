@@ -351,6 +351,40 @@ def test_policy_fail_closed(change):
         parse_policy(raw)
 
 
+@pytest.mark.parametrize("version", [1, 2])
+def test_policy_accepts_literal_excel_headings_and_detects_sensitive_names(version):
+    raw = {
+        "version": version,
+        "min_group_size": 2,
+        "columns": {
+            "Student Number": {"action": "pseudonymise", "classification": "direct_identifier"},
+            "Campus Location": {
+                "action": "keep",
+                "classification": "quasi_identifier",
+                "allowed_values": ["Moon"],
+            },
+            "Student Name": {"action": "drop", "classification": "direct_identifier"},
+        },
+    }
+    policy = parse_policy(raw)
+    assert policy.output_columns == ("record_id", "Campus Location")
+    raw["columns"]["Student Name"] = {
+        "action": "keep",
+        "classification": "analytical_attribute",
+        "allowed_values": ["Invented"],
+    }
+    with pytest.raises(SafetyError):
+        parse_policy(raw)
+
+
+@pytest.mark.parametrize("heading", ["", " Team", "Team ", "Team\nName", "x" * 65, "record_id"])
+def test_policy_rejects_unsafe_or_reserved_headings(heading):
+    raw = yaml.safe_load((ROOT / "examples/example-policy.yaml").read_text())
+    raw["columns"][heading] = raw["columns"].pop("campus")
+    with pytest.raises(SafetyError):
+        parse_policy(raw)
+
+
 @pytest.mark.parametrize(
     "value",
     ["", "NaN", "Infinity", "-1", "7.1", "secret-nonnumeric", "4.123", "4e0", "+4.2"],

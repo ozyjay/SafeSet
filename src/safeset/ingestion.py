@@ -20,6 +20,17 @@ MAX_FIELD = 4096
 MAX_TABLES = 128
 
 
+def valid_heading(name: object) -> bool:
+    """Accept a bounded, unambiguous Excel heading without changing its spelling."""
+    return (
+        isinstance(name, str)
+        and bool(name)
+        and name == name.strip()
+        and len(name) <= 64
+        and not any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
+    )
+
+
 @dataclass(frozen=True)
 class Table:
     columns: tuple[str, ...]
@@ -152,10 +163,7 @@ def _read_region(
         raise SafetyError("Excel headings are missing.")
     if len(set(header)) != len(header):
         raise SafetyError("Excel headings are duplicated.")
-    if any(
-        name != name.strip() or len(name) > 64 or any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
-        for name in header
-    ):
+    if any(not valid_heading(name) for name in header):
         raise SafetyError("Excel headings contain unsupported text.")
     if any(cell.hyperlink or cell.comment for cell in header_cells):
         raise SafetyError("Excel workbook contains unsupported cell features.")

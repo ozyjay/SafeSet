@@ -21,11 +21,14 @@ PLAIN_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?\Z")
 
 
 def inferred_classification(name: str) -> str:
-    if DIRECT.search(name):
+    # Match words in ordinary Excel headings as well as legacy snake_case names.
+    words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
+    words = re.sub(r"\W+", "_", words)
+    if DIRECT.search(words):
         return "direct_identifier"
-    if TEXT.search(name):
+    if TEXT.search(words):
         return "free_text"
-    if QUASI.search(name):
+    if QUASI.search(words):
         return "quasi_identifier"
     return "unknown"
 

@@ -1,6 +1,5 @@
 """Strict versioned policy parsing. No permissive schema defaults."""
 
-import re
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -9,9 +8,8 @@ import yaml
 
 from .classification import inferred_classification, safe_category
 from .errors import SafetyError
-from .ingestion import read_bounded
+from .ingestion import read_bounded, valid_heading
 
-NAME = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
 CLASSES = {
     "direct_identifier",
     "pseudonymous_identifier",
@@ -91,7 +89,7 @@ def parse_policy(raw: object) -> Policy:
     require(isinstance(raw["columns"], dict) and 1 <= len(raw["columns"]) <= 128)
     columns = {}
     for name, config in raw["columns"].items():
-        require(isinstance(name, str) and bool(NAME.fullmatch(name)) and name != "record_id")
+        require(valid_heading(name) and name != "record_id")
         require(isinstance(config, dict))
         action = config.get("action")
         classification = config.get("classification")

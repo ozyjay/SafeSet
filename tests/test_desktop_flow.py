@@ -195,6 +195,19 @@ def test_returned_review_shows_headings_and_counts_only(candidate, tmp_path):
     assert "Invented Team" not in str(review)
 
 
+def test_returned_review_accepts_literal_result_heading(candidate, tmp_path):
+    returned = Table(
+        ("record_id", "Allocation Result"),
+        tuple(
+            {"record_id": row["record_id"], "Allocation Result": "Invented Team"}
+            for row in candidate.table.rows
+        ),
+    )
+    path = tmp_path / "returned.xlsx"
+    path.write_bytes(excel_bytes(returned))
+    assert inspect_returned(path).result_columns == ("Allocation Result",)
+
+
 def test_returned_review_rejects_bad_ids_before_passphrase(candidate, tmp_path):
     returned = Table(
         ("record_id", "team"),

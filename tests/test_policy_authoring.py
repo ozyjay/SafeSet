@@ -4,7 +4,7 @@ import pytest
 from openpyxl import load_workbook
 
 from safeset.errors import SafetyError
-from safeset.ingestion import read_excel
+from safeset.ingestion import Table, excel_bytes, read_excel
 from safeset.policy import load_policy
 from safeset.policy_authoring import (
     RuleDraft,
@@ -47,6 +47,29 @@ def test_policy_builder_saves_private_strict_policy(tmp_path):
     ).passed
     with pytest.raises(SafetyError, match="overwriting"):
         save_policy(ROOT / "examples/synthetic_students.xlsx", destination, example_drafts(), "2")
+
+
+def test_policy_builder_uses_literal_source_headings(tmp_path):
+    source = tmp_path / "synthetic.xlsx"
+    source.write_bytes(
+        excel_bytes(
+            Table(
+                ("Student Number", "Campus Location"),
+                (
+                    {"Student Number": "SYNTH-001", "Campus Location": "Moon"},
+                    {"Student Number": "SYNTH-002", "Campus Location": "Moon"},
+                ),
+            )
+        )
+    )
+    drafts = {
+        "Student Number": RuleDraft("pseudonymise", "direct_identifier"),
+        "Campus Location": RuleDraft("keep", "quasi_identifier", ("Moon",)),
+    }
+    saved = save_policy(source, tmp_path / "policy.yaml", drafts, "2")
+    policy = load_policy(saved)
+    assert tuple(policy.columns) == ("Student Number", "Campus Location")
+    assert validate(sanitise(read_excel(source), policy).table, policy).passed
 
 
 def test_existing_policy_can_be_loaded_and_saved_as_new_file(tmp_path):

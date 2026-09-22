@@ -2,9 +2,8 @@
 
 from .classification import formula_or_control
 from .errors import SafetyError
-from .ingestion import Table
+from .ingestion import Table, valid_heading
 from .mapping import validate_mapping
-from .policy import NAME
 from .pseudonyms import valid_id
 
 
@@ -12,7 +11,7 @@ def restore(analysed: Table, mapping: dict, result_columns: tuple[str, ...]) -> 
     validate_mapping(mapping)
     source_key = mapping["source_column"]
     if len(set(result_columns)) != len(result_columns) or any(
-        not NAME.fullmatch(c) or c in {"record_id", source_key} for c in result_columns
+        not valid_heading(c) or c in {"record_id", source_key} for c in result_columns
     ):
         raise SafetyError("Result-column allowlist is invalid or collides with an identity field.")
     expected = {"record_id", *result_columns}

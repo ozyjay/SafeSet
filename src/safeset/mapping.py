@@ -10,8 +10,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
 
 from .errors import SafetyError
-from .ingestion import MAX_FIELD, MAX_ROWS, read_bounded
-from .policy import NAME
+from .ingestion import MAX_FIELD, MAX_ROWS, read_bounded, valid_heading
 from .pseudonyms import valid_id
 from .storage import check_map_read
 
@@ -26,7 +25,7 @@ def validate_mapping(mapping: object) -> dict:
         and type(mapping["version"]) is int
         and mapping["version"] == 1
         and isinstance(mapping["source_column"], str)
-        and bool(NAME.fullmatch(mapping["source_column"]))
+        and valid_heading(mapping["source_column"])
         and mapping["source_column"] != "record_id"
         and isinstance(mapping["records"], dict)
         and 1 <= len(mapping["records"]) <= MAX_ROWS

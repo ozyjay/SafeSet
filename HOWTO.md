@@ -147,7 +147,8 @@ non-zero; check `$LASTEXITCODE` before a script continues to later steps.
 Send only an export you have decided is suitable for the intended analysis. Keep
 the map local and separate. Prepare a returned Excel workbook with `record_id` and at
 least one result column, with exactly one row for every exported ID. Result
-headings use lowercase `snake_case`. Remove any returned field you do not intend
+headings are non-empty, at most 64 characters and contain no surrounding whitespace
+or control characters. Remove any returned field you do not intend
 to restore; every non-ID column must be individually allowlisted.
 
 In the desktop **Restore** tab, choose the returned Excel workbook and select **Read result

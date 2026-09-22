@@ -5,9 +5,9 @@ from pathlib import Path
 
 from .classification import inspect_table
 from .errors import SafetyError
-from .ingestion import excel_bytes, read_excel, require_excel_path
+from .ingestion import excel_bytes, read_excel, require_excel_path, valid_heading
 from .mapping import read_mapping
-from .policy import NAME, Policy, load_policy
+from .policy import Policy, load_policy
 from .pseudonyms import valid_id
 from .restoration import restore
 from .storage import default_map_path, map_destination, output_destination, publish
@@ -52,8 +52,8 @@ def inspect_returned(path: Path, sheet: str | tuple[str, ...] | None = None) -> 
     table = read_excel(path, sheet)
     if "record_id" not in table.columns or len(table.columns) < 2:
         raise SafetyError("Returned Excel workbook needs record_id and at least one result column.")
-    if any(not NAME.fullmatch(name) for name in table.columns if name != "record_id"):
-        raise SafetyError("Result headings must use lowercase snake_case, such as team.")
+    if any(not valid_heading(name) for name in table.columns if name != "record_id"):
+        raise SafetyError("Result headings contain unsupported text.")
     ids = [row["record_id"] for row in table.rows]
     if not ids or any(not valid_id(value) for value in ids) or len(set(ids)) != len(ids):
         raise SafetyError("Returned IDs are malformed or duplicated.")

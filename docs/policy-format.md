@@ -5,10 +5,16 @@ unknown keys and types fail. Top-level keys are exactly `version`, `columns` and
 `min_group_size`. The version must be integer 1 or 2; minimum group size an integer
 >=2. Version 1 policies retain their original meaning. Version 2 adds `code` and
 `keep_numeric`; those actions are rejected under version 1. The example uses version 2.
-Column names are ASCII snake_case, at most 64 characters. `record_id` is reserved.
+Column names use the source workbook's literal headings. They must be non-empty,
+unique, at most 64 characters, have no leading or trailing whitespace, and contain
+no control characters. Spaces, punctuation, mixed case and Unicode are supported.
+`record_id` is reserved as an exact heading and cannot be a source column.
 Source headings must match the policy exactly (order may differ). For structured
 Excel Tables, the visible header cells must also match the table's header metadata
 exactly.
+This relaxation applies to policy versions 1 and 2; existing policies and mappings
+retain their meaning and require no migration. Returned result headings obey the
+same bounds and still require an explicit allowlist before restoration.
 
 Classifications: `direct_identifier`, `pseudonymous_identifier`, `quasi_identifier`,
 `analytical_attribute`, `free_text`, `unknown`. Pseudonymous source fields and
@@ -41,7 +47,8 @@ values, participate in per-field and joint group checks. A passing check is not
 an anonymity or recipient-suitability decision.
 
 A heading detected as a direct identifier cannot be kept even if classified as an
-analytical attribute. A heading detected as free text must be dropped. Heuristics
+analytical attribute. A heading detected as free text must be dropped. For these
+checks, punctuation and spaces are treated as word separators. Heuristics
 are a backstop, not a universal list. Domain authors must classify unfamiliar
 sensitive fields conservatively.
 

@@ -17,7 +17,6 @@ from .desktop_flow import (
 from .diagnostics import record, record_reason
 from .errors import SafetyError
 from .ingestion import list_excel_sheets
-from .policy import NAME
 from .policy_authoring import (
     RuleDraft,
     load_drafts,
@@ -489,8 +488,8 @@ class Desktop:
             summary = inspect_source(
                 Path(self.policy_source.get()), _selected_sheets(self.policy_sheet)
             )
-            if any(not NAME.fullmatch(column["column"]) for column in summary["columns"]):
-                raise SafetyError("Policy source headings must use lowercase snake_case.")
+            if any(column["column"] == "record_id" for column in summary["columns"]):
+                raise SafetyError("Source heading record_id is reserved.")
             self.policy_status.configure(
                 text=(
                     f"{summary['rows']:,} rows · {len(summary['columns'])} columns. "
