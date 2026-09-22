@@ -3,6 +3,10 @@
 SafeSet is a local data-minimisation and controlled pseudonymisation tool for
 student-allocation analysis. It does not establish anonymity or legal compliance.
 Use Australian English and the active pyenv `python3` (Python 3.12+).
+Use PowerShell (`pwsh`) for terminal scripts, commands and response examples.
+Write shell examples as `pwsh` code blocks with PowerShell syntax. On this
+macOS/POSIX project, invoke virtual-environment tools with paths such as
+`& ./.venv/bin/python`; keep platform-specific paths explicit.
 
 ## Safety invariants
 
@@ -37,7 +41,8 @@ behaviour changes. Review generated code against the threat model. Keep domain
 logic independent of CLI presentation. Transformations must be deterministic and
 testable except random IDs and encryption salts. Prefer small, reviewable changes.
 
-Run `.venv/bin/python -m pytest` and `.venv/bin/ruff check .` after relevant changes.
+Run `& ./.venv/bin/python -m pytest` and `& ./.venv/bin/ruff check .` from
+`pwsh` after relevant changes.
 Reusable instructions are in `.github/skills/*/SKILL.md`; Codex agents can read
 them directly, while compatible VS Code agents can discover the skill folders.
 Select privacy-review, policy-schema, cli-command, safety-tests or release-review

@@ -18,11 +18,11 @@ decision to share the CSV with any particular service.
 
 ## Set up
 
-Use the active pyenv Python 3.12+:
+In `pwsh`, use the active pyenv Python 3.12+:
 
-```bash
+```pwsh
 python3 -m venv .venv
-source .venv/bin/activate
+./.venv/bin/Activate.ps1
 python3 -m pip install -e '.[dev]'
 python3 -m pytest
 ```
@@ -61,20 +61,21 @@ The CLI remains available for scripts and terminals.
 Choose private local directories outside any repository and outside cloud-synced
 folders. The following creates a disposable synthetic workspace:
 
-```bash
-DEMO_DIR="$(mktemp -d)"
-mkdir -m 700 "$DEMO_DIR/exports" "$DEMO_DIR/maps" "$DEMO_DIR/private"
+```pwsh
+$DemoDir = (mktemp -d).Trim()
+$Exports = Join-Path $DemoDir 'exports'
+$Maps = Join-Path $DemoDir 'maps'
+$Private = Join-Path $DemoDir 'private'
+New-Item -ItemType Directory -Path $Exports, $Maps, $Private | Out-Null
+chmod 700 $DemoDir $Exports $Maps $Private
+$ExportCsv = Join-Path $Exports 'safe.csv'
+$MapFile = Join-Path $Maps 'identities.enc'
+$RestoredCsv = Join-Path $Private 'restored.csv'
 safeset inspect examples/synthetic_students.csv
-safeset sanitise examples/synthetic_students.csv \
-  --policy examples/example-policy.yaml \
-  --output "$DEMO_DIR/exports/safe.csv" \
-  --create-map --map "$DEMO_DIR/maps/identities.enc"
-safeset validate "$DEMO_DIR/exports/safe.csv" --policy examples/example-policy.yaml
+safeset sanitise examples/synthetic_students.csv --policy examples/example-policy.yaml --output $ExportCsv --create-map --map $MapFile
+safeset validate $ExportCsv --policy examples/example-policy.yaml
 # A no-change local result demonstrates restoration. Do not upload the map.
-safeset restore "$DEMO_DIR/exports/safe.csv" \
-  --map "$DEMO_DIR/maps/identities.enc" \
-  --result-column campus --result-column subject --result-column gpa \
-  --output "$DEMO_DIR/private/restored.csv" --authorise
+safeset restore $ExportCsv --map $MapFile --result-column campus --result-column subject --result-column gpa --output $RestoredCsv --authorise
 ```
 
 The no-change restoration retains coded campus and subject values; it does not
@@ -105,7 +106,8 @@ See [architecture](docs/architecture.md), [threat model](docs/threat-model.md),
 [safety model](docs/data-safety-model.md), [policy format](docs/policy-format.md),
 [implementation plan](docs/development-plan.md) and [verification](docs/verification.md).
 
-Run `python3 -m pytest`, `ruff check .`, `ruff format --check .` and
-`python3 -m build` before release. `AGENTS.md` and `.github/skills/` support ongoing
+From `pwsh`, run `& ./.venv/bin/python -m pytest`, `& ./.venv/bin/ruff check .`,
+`& ./.venv/bin/ruff format --check .` and `& ./.venv/bin/python -m build` before
+release. `AGENTS.md` and `.github/skills/` support ongoing
 Codex and compatible VS Code agent work. Never put real source data into this
 checkout, issue reports, agent conversations or test fixtures.
