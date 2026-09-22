@@ -50,9 +50,9 @@ Core data operations continue without writing a log.
 
 For a guided local interface, run `safeset desktop` after installation (or
 `safeset-desktop` after reinstalling this version). **Inspect** shows aggregate
-characteristics only. Select one or more worksheets after choosing a workbook with several
-visible sheets; SafeSet combines their rows for inspection, policy authoring and
-export. From there, use an existing policy or open **Policy** to
+characteristics only. Select one worksheet at a time after choosing a workbook with several
+visible sheets; each can be inspected, given a policy and exported independently.
+From there, use an existing policy or open **Policy** to
 create a version 2 policy from the Excel workbook headings. Choose an action and classification
 for every column, set its allowed categories or numeric limits, and choose a
 minimum group size. Category values are shown only if you explicitly request them

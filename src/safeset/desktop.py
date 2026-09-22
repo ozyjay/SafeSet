@@ -93,19 +93,19 @@ def _selected_sheets(variable: tk.StringVar) -> tuple[str, ...] | None:
         names = json.loads(variable.get())
     except ValueError:
         return None
-    return tuple(names) if isinstance(names, list) and names else None
+    return tuple(names) if isinstance(names, list) and len(names) == 1 else None
 
 
 def _sheet_row(parent: ttk.Frame, path: tk.StringVar, selected: tk.StringVar) -> None:
     row = ttk.Frame(parent)
     row.pack(fill="x", pady=5)
     ttk.Label(row, text="Worksheets", width=19).pack(side="left")
-    picker = tk.Listbox(row, selectmode="multiple", exportselection=False, height=4)
+    picker = tk.Listbox(row, selectmode="browse", exportselection=False, height=4)
     picker.pack(side="left", fill="x", expand=True, padx=(0, 8))
     scrollbar = ttk.Scrollbar(row, orient="vertical", command=picker.yview)
     scrollbar.pack(side="right", fill="y")
     picker.configure(yscrollcommand=scrollbar.set)
-    ttk.Label(parent, text="Click each worksheet to include it.", style="Muted.TLabel").pack(
+    ttk.Label(parent, text="Select one worksheet at a time.", style="Muted.TLabel").pack(
         anchor="w", pady=(0, 4)
     )
     names: tuple[str, ...] = ()
@@ -117,10 +117,11 @@ def _sheet_row(parent: ttk.Frame, path: tk.StringVar, selected: tk.StringVar) ->
             return
         syncing = True
         picker.selection_clear(0, "end")
-        chosen = set(_selected_sheets(selected) or ())
+        chosen = (_selected_sheets(selected) or (None,))[0]
         for index, name in enumerate(names):
-            if name in chosen:
+            if name == chosen:
                 picker.selection_set(index)
+                break
         syncing = False
 
     def record_selection(_event: object) -> None:

@@ -34,11 +34,11 @@ validation, approval or publication outcomes. The log is truncated at 1 MiB.
 
 Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
 50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per
-field. A workbook may contain multiple worksheets; the operator selects one or
-more when several are visible. Selected worksheets must have identical headings
-in the same order. Their rows are appended in the supplied order, with the row limit
-applied to the combined table. Duplicate source keys fail before export; no
-automatic choice is made between overlapping records. Only selected sheets enter
+field. A workbook may contain multiple worksheets. The desktop processes one
+selected worksheet at a time. The CLI can combine explicitly selected worksheets
+when their headings match in the same order. Their rows are appended in the supplied
+order, with the row limit applied to the combined table. Duplicate source keys
+fail before export; no automatic choice is made between overlapping records. Only selected sheets enter
 inspection, sanitisation or restoration. Source data formulas use only scalar
 results saved in the workbook; SafeSet does not calculate formulas or verify that
 saved results are current. Missing or unsupported saved results and formulas in

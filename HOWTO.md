@@ -38,11 +38,11 @@ headings, filenames, paths, secrets or exception text.
 
 ## 2. Prepare the source and policy
 
-The source must be a regular `.xlsx` workbook. Select one or more worksheets in
-the desktop interface, or repeat `--sheet 'Worksheet name'` on CLI commands.
-Each selected sheet needs the same headings in the same order. SafeSet appends
-their rows in workbook order in the desktop interface, or `--sheet` order in the
-CLI. Overlapping participant keys are rejected, so
+The source must be a regular `.xlsx` workbook. Select one worksheet at a time in
+the desktop interface; each can be inspected and exported independently. To combine
+matching worksheets in the CLI, repeat `--sheet 'Worksheet name'`. Combined sheets
+need the same headings in the same order and their rows follow `--sheet` order.
+Overlapping participant keys are rejected, so
 filter an updated sheet to new participants before combining cohorts. Store
 identifiers as text in Excel to preserve leading zeros. SafeSet reads
 text cells exactly and converts numeric cells to decimal text. The
@@ -59,7 +59,7 @@ row is excluded from participant rows.
 safeset inspect examples/synthetic_students.xlsx
 ```
 
-The selected worksheets are used for policy authoring, export and restoration.
+The selected worksheet is used for desktop policy authoring, export or restoration.
 Other worksheets are not exported. For a workbook with one visible worksheet,
 selection is automatic.
 
