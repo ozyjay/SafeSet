@@ -1,5 +1,16 @@
 # Implementation plan
 
+## Current protected-workbook iteration
+
+The version 2 encrypted restoration bundle and source-bound reconstruction path
+are implemented alongside the existing version 1 map path. The normal Tk entry
+point offers Home, Protect and Restore. Advanced tools retain the earlier policy
+editor and selected-result join. The CLI has explicit `protect` and `reconstruct`
+commands. Source-derived protected fields are immutable; approved new short
+categorical result fields can be imported into a new sensitive workbook. Deferred
+work includes deliberately editable source-derived fields, richer result domains,
+bundle discovery across sessions and an independent security review.
+
 ## Milestone 1: bootstrap (before implementation)
 
 Establish package layout, the twelve invariants, architecture, threat model,
@@ -31,8 +42,8 @@ restoration, map rotation/recovery, additional privacy models and large-file
 streaming. Do not add an export override. Resolve any security-sensitive change
 in the architecture and threat model before coding it.
 
-An offline Tk desktop interface now presents the existing inspect, export and
-restore workflow. It does not edit policies or change the validation model.
+The earlier inspect/policy/export/restore interface remains available under
+Advanced tools for existing version 1 workflows.
 
 ## Dataset-owner choices
 

@@ -7,7 +7,7 @@ import pytest
 from openpyxl import load_workbook
 from openpyxl.worksheet.table import Table as ExcelTable
 
-from safeset.desktop import ACTION_LABELS, Desktop
+from safeset.desktop_advanced import ACTION_LABELS, Desktop
 from safeset.desktop_flow import approve_export, inspect_returned, prepare_export, restore_results
 from safeset.errors import SafetyError
 from safeset.ingestion import Table, excel_bytes, read_excel
@@ -116,11 +116,17 @@ def test_completed_export_fills_map_fields_and_keeps_success_visible(monkeypatch
     desktop.approve_button = Display()
     desktop.export_status = Display()
     desktop.review_text = Display()
-    monkeypatch.setattr("safeset.desktop.record", lambda *_args: None)
-    monkeypatch.setattr("safeset.desktop.messagebox.askyesno", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr("safeset.desktop.messagebox.showinfo", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("safeset.desktop._passphrase", lambda *_args, **_kwargs: PASSPHRASE)
-    monkeypatch.setattr("safeset.desktop.approve_export", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("safeset.desktop_advanced.record", lambda *_args: None)
+    monkeypatch.setattr(
+        "safeset.desktop_advanced.messagebox.askyesno", lambda *_args, **_kwargs: True
+    )
+    monkeypatch.setattr(
+        "safeset.desktop_advanced.messagebox.showinfo", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "safeset.desktop_advanced._passphrase", lambda *_args, **_kwargs: PASSPHRASE
+    )
+    monkeypatch.setattr("safeset.desktop_advanced.approve_export", lambda *_args, **_kwargs: None)
 
     desktop._approve()
 

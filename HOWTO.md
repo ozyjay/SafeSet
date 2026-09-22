@@ -1,216 +1,45 @@
 # How to use SafeSet
 
-SafeSet prepares a minimised Excel workbook for analysis and can later join approved results
-back to one source identifier. It runs locally. Passing validation reduces some
-disclosure risks; it does not establish anonymity, legal compliance or whether a
-particular recipient is suitable.
+SafeSet runs locally. A passing validation report reduces some disclosure risks but does not prove anonymity or decide whether a protected copy may be shared. Keep source workbooks, bundles and reconstructed workbooks private, outside repositories and synchronised folders.
 
-Use `pwsh` for the commands below. The storage controls described here are for
-macOS and other POSIX systems; Windows mapping permissions are not implemented.
-Keep real source data, policies, encrypted maps and restored results in private,
-non-synchronised directories outside repositories. Never upload a source Excel workbook,
-identity map or restored Excel workbook to an analysis service.
+## Install
 
-## 1. Install and open the tool
-
-From this checkout, use the active pyenv Python 3.12 or newer:
+Use the active pyenv Python 3.12+ in `pwsh`:
 
 ```pwsh
 python3 -m venv .venv
 ./.venv/bin/Activate.ps1
 python3 -m pip install -e .
-safeset --help
-```
-
-Installation may need package access. Inspection, sanitisation, validation,
-restoration and the desktop interface need no network connection. If SafeSet is
-already installed in the virtual environment, just activate it. To open the local
-desktop interface, run:
-
-```pwsh
 safeset desktop
 ```
 
-For local debugging, `safeset log-path` prints the diagnostic log location.
-SafeSet writes only fixed workflow and failure codes there; the private log is
-created on first use outside the repository. It contains no source values,
-headings, filenames, paths, secrets or exception text.
+Installation may need network access. Inspection, protection, validation and restoration do not.
 
-## 2. Prepare the source and policy
+## Protect a workbook
 
-The source must be a regular `.xlsx` workbook. Select one worksheet at a time in
-the desktop interface; each can be inspected and exported independently. To combine
-matching worksheets in the CLI, repeat `--sheet 'Worksheet name'`. Combined sheets
-need the same headings in the same order and their rows follow `--sheet` order.
-Overlapping participant keys are rejected, so
-filter an updated sheet to new participants before combining cohorts. Store
-identifiers as text in Excel to preserve leading zeros. SafeSet reads
-text cells exactly and converts numeric cells to decimal text. The
-current limits are 10 MiB, 50,000 rows, 128 columns and 4,096 characters per
-field. Keep the source file private; `inspect` displays headings and aggregate
-characteristics, but no cell samples. Headings may themselves be sensitive.
+1. Choose **Protect a workbook**, then the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. Choose a worksheet when several are visible. For multiple matching worksheets, use the advanced interface or CLI.
+2. Inspect the local field summary. It shows names, types and cardinality; no cell samples. Every field needs an explicit action **and** classification. Heuristic hints are advisory.
+3. Choose one direct source identifier for **Replace with anonymous ID**. This creates a fresh cryptographically random `record_id`. Remove other direct identifiers, free text and unnecessary fields. **Keep** and **Obfuscate values** need an explicitly reviewed category allowlist. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds and precision; exact values may disclose information.
+4. Set the minimum group size to at least 2. Review the proposed protection. Failed mandatory validation blocks creation. Passing validation is not approval for a recipient. Choose a new protected workbook destination outside a repository.
+5. Approve creation and enter a confirmed passphrase of at least 16 characters. SafeSet creates the protected copy and encrypted version 2 restoration bundle. The bundle defaults to private local storage; its location can be set in Advanced settings. Existing files are never overwritten. Keep the passphrase separately; there is no recovery backdoor.
 
-If a selected sheet contains structured Excel Tables, SafeSet reads only the
-defined table ranges. It combines multiple tables on that sheet when their
-headings match. Titles and notes outside the tables are ignored. A table totals
-row is excluded from participant rows.
+The protected copy omits removed fields and the original source key. Obfuscated values use fresh random codes per field and export. Equal original categories receive equal codes within that export; equality and frequencies remain visible.
 
-```pwsh
-safeset inspect examples/synthetic_students.xlsx
-```
+## Work with the protected copy
 
-The selected worksheet is used for desktop policy authoring, export or restoration.
-Other worksheets are not exported. For a workbook with one visible worksheet,
-selection is automatic.
+Analyse or modify the protected workbook locally or in an environment you have separately decided is suitable. You can add new result fields, for example `Team`. Keep the original `record_id`, row coverage, original protected headings and their values intact. Current restoration accepts short safe categorical text in new fields. It blocks formula-like values and unsupported spreadsheet content.
 
-Create a policy for the intended analysis. You can use the desktop **Policy** tab
-to load the source headings, choose an action and classification for every column,
-set allowed categories or numeric limits, and save a version 2 policy under a new
-filename. A field's Settings button is enabled only when its action needs categories,
-bins or numeric limits. Category values appear in the interface only if you explicitly request
-them locally. Keep a policy for real data outside repositories because headings
-and category labels can be sensitive.
-Scroll policy, export and restore views with a mouse wheel or trackpad while the
-pointer is over their content; the scrollbars remain available.
+## Restore locally
 
-For a hand-written policy, use [the synthetic example](examples/example-policy.yaml)
-as a guide. The policy must list **every** source heading, with no extras. Select
-exactly one direct identifier to `pseudonymise`; SafeSet replaces it with a fresh
-random `record_id` and saves the original key only in the encrypted map. Drop other
-direct identifiers, free text and unknown fields. Retain only attributes needed
-for the analysis. Set `min_group_size` to at least 2.
+1. Choose **Restore a workbook** and select the modified protected copy, the exact original source workbook and the private bundle. Choose a new restored output filename.
+2. Enter the passphrase to unlock the bundle locally. SafeSet needs its encrypted binding and ID map to validate the returned workbook. It checks the selected source content and order, exact record coverage, schemas and all source-derived protected values. Any mismatch blocks restoration; no identity is guessed.
+3. Review the count, restored source fields and each new result heading. Approve every new field you intend to import. To omit a field, remove it from the returned workbook and repeat review.
+4. Explicitly authorise restoration. SafeSet creates a **new** workbook with all original source fields and the approved new results. The original is never overwritten. This output contains identifiers and is sensitive plaintext.
 
-| Action | Effect |
-| --- | --- |
-| `drop` | Omits the field from the export. |
-| `pseudonymise` | Replaces the one source key with `record_id`. |
-| `keep` | Retains only short categories on an explicit allowlist. |
-| `code` | Replaces allowed categories with fresh random codes for each export. |
-| `bin` | Replaces numbers with labels for declared contiguous intervals. |
-| `keep_numeric` | Retains exact plain decimal values within declared bounds and precision. |
+Editing source-derived protected fields is not yet supported. An altered code, original category, kept value or range label blocks restoration even if the change seems valid. Re-protect the source to start a new round trip after a source edit.
 
-`code` and `keep_numeric` require policy version 2. Coding leaves equality and
-frequency patterns visible. No codebook is saved; original labels can only be
-rejoined locally from the original source workbook and policy during restoration.
-Exact numeric values may remain distinctive. See the full
-[policy format](docs/policy-format.md) before writing a policy manually.
+## Advanced and CLI
 
-## 3. Inspect, review and export in the desktop interface
+**Advanced tools** retain strict YAML policy authoring, detailed technical settings and the earlier version 1 identity-map result join. The CLI offers `protect` and `reconstruct` for the new version 2 round trip, alongside the legacy `inspect`, `sanitise`, `validate` and `restore` commands. A version 1 map cannot be used for full source reconstruction; there is no implicit conversion. See [README.md](README.md) for a synthetic CLI example and [policy format](docs/policy-format.md) for schema details.
 
-1. In **Inspect**, select the source Excel workbook and review the aggregate findings.
-2. In **Policy**, create a policy or use one you have already reviewed.
-3. In **Export**, select the source and policy. Choose a **new** export Excel workbook filename
-   outside repositories. Leave the map destination empty for SafeSet's private
-   default directory, or choose a separate private directory.
-4. Select **Prepare review**. Read the validation summary, policy decisions and
-   both destinations. A failed mandatory check blocks export.
-5. Approve the export for its intended recipient, then enter and confirm a unique
-   map passphrase of at least 16 characters. Keep the passphrase separately from
-   the encrypted map. There is no recovery mechanism if either is lost.
-
-The map and export must be in separate directories. SafeSet does not overwrite
-existing files. The map contains only the selected source key and random ID pairs;
-it does not retain dropped names, notes or a category codebook.
-
-## 4. Try the CLI with invented data
-
-This example creates private disposable directories outside the checkout. The
-included Excel workbook and policy contain invented records. The commands prompt for export
-approval and a hidden map passphrase; the passphrase is never a command argument.
-
-```pwsh
-$DemoDir = (mktemp -d).Trim()
-$Exports = Join-Path $DemoDir 'exports'
-$Maps = Join-Path $DemoDir 'maps'
-$Private = Join-Path $DemoDir 'private'
-New-Item -ItemType Directory -Path $Exports, $Maps, $Private | Out-Null
-chmod 700 $DemoDir $Exports $Maps $Private
-$ExportExcel = Join-Path $Exports 'safe.xlsx'
-$MapFile = Join-Path $Maps 'identities.enc'
-$RestoredExcel = Join-Path $Private 'restored.xlsx'
-
-safeset inspect examples/synthetic_students.xlsx
-safeset sanitise examples/synthetic_students.xlsx --policy examples/example-policy.yaml --output $ExportExcel --create-map --map $MapFile
-safeset validate $ExportExcel --policy examples/example-policy.yaml
-```
-
-`sanitise` shows the validation summary **before** asking for export approval. It
-also shows the map and export destinations. `--create-map` explicitly authorises
-creation of an encrypted identity map. If validation fails or you decline, no
-export is created. For a script that has its own explicit approval step,
-`--approve-export` supplies that approval after validation; it never bypasses a
-failed check. A hidden, interactive passphrase prompt is still required.
-
-`validate` checks an existing candidate Excel workbook against the policy. It is useful for
-rechecking a saved export, but it does not approve the recipient or create a map.
-PowerShell does not stop a script automatically when a native command exits
-non-zero; check `$LASTEXITCODE` before a script continues to later steps.
-
-## 5. Analyse and restore results
-
-Send only an export you have decided is suitable for the intended analysis. Keep
-the map local and separate. Prepare a returned Excel workbook with `record_id` and at
-least one result column, with exactly one row for every exported ID. Result
-headings are non-empty, at most 64 characters and contain no surrounding whitespace
-or control characters. Remove any returned field you do not intend
-to restore; every non-ID column must be individually allowlisted.
-
-In the desktop **Restore** tab, choose the returned Excel workbook and select **Read result
-columns**. Approve each column to restore, choose the encrypted map and a **new**
-private output filename, then enter the map passphrase and separately authorise
-restoration. To restore original labels for coded columns, tick that option and
-select the original source workbook and policy. The desktop fills those paths after
-an export in the same session; review them before authorising restoration.
-
-For a CLI round trip using the unchanged synthetic export as the returned file:
-
-```pwsh
-safeset restore $ExportExcel --map $MapFile --result-column campus --result-column subject --result-column gpa --output $RestoredExcel --authorise
-```
-
-To put original labels back into the coded columns, use a new output filename and
-supply the same local source workbook and policy used for export:
-
-```pwsh
-$DecodedExcel = Join-Path $Private 'decoded.xlsx'
-safeset restore $ExportExcel --map $MapFile --result-column campus --result-column subject --result-column gpa --original-source examples/synthetic_students.xlsx --policy examples/example-policy.yaml --output $DecodedExcel --authorise
-```
-
-For a real analysis result, use one `--result-column` option per approved result
-field, such as `--result-column team`. `--authorise` explicitly authorises local
-re-identification. SafeSet restores only the selected source key and those result
-fields. With the original source and policy, it replaces approved coded result fields
-with their original labels. It never recovers dropped columns. It rejects
-missing, duplicate, malformed or unknown IDs, extra columns and unsafe returned
-values. It also rejects source-key mismatches and inconsistent category/code groupings
-when restoring labels. The map contains no snapshot of the original source, so
-SafeSet cannot detect every change made to that workbook after export. The restored
-Excel workbook is sensitive plaintext: keep it private and never upload it.
-
-## When a step fails
-
-- **Source formulas:** SafeSet reads saved results from formula cells in selected
-  source data. Recalculate and save the workbook locally before inspection or
-  export, then review the formula count shown in the desktop. Formulas without a
-  saved result, formulas in headings, and formulas in returned analysis files are
-  rejected. SafeSet cannot verify that a saved result is current.
-- **Source dates and times:** Excel date/time cells are read as text for inspection.
-  Review whether the field is needed and minimise it in the policy. Exact dates
-  cannot be kept as categorical labels; returned analysis files still reject
-  Excel date/time cells.
-- **Source and policy headings differ:** update the policy for every current
-  source heading, or select the correct source and policy pair. Unknown columns
-  cannot pass through silently.
-- **Validation fails:** review the aggregate findings and minimise or group the
-  retained fields more carefully. Small values or joint groups below
-  `min_group_size` block export. There is no override.
-- **Destination rejected:** choose a new filename in an existing private directory
-  outside repositories. Use separate directories for the map and export. A map
-  directory must be owned by you and have POSIX mode `0700`.
-- **Restoration fails:** check that the returned file contains precisely
-  `record_id` plus the allowlisted columns, and every exported ID exactly once.
-  Check that you selected the corresponding map and passphrase. SafeSet never
-  guesses an identity.
-
-See the [README](README.md), [data safety model](docs/data-safety-model.md) and
-[threat model](docs/threat-model.md) for the checks and their limits.
+The source format is bounded `.xlsx`: 10 MiB compressed, 50,000 rows, 128 columns and 4,096 characters per field. Structured Excel Tables are supported, with only their defined ranges read. Hidden content in a selected data range, external links, unsafe cells and ambiguous worksheet selection fail closed. Source formulas use saved scalar results and may be stale; recalculate and save locally before protection. Exact source identifiers needing leading zeros must be stored as text in Excel.

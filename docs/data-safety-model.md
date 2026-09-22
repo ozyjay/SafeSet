@@ -1,5 +1,15 @@
 # Data safety model
 
+For the protected working-copy workflow, the original source is the authority
+for all source fields during reconstruction. Every protected source-derived field
+must still equal its expected value under the bound policy and random codebook.
+New result columns need explicit heading allowlisting and safe cell text; they are
+added only to the new local sensitive workbook. This check prevents accidental
+source overwrite but cannot establish that an approved result is accurate or that
+the protected workbook is suitable for a recipient. The source-table fingerprint
+binds the selected data and order, so even benign source edits require a new
+protection run.
+
 A **direct identifier** connects a record to a person; a **pseudonymous identifier**
 is the generated random `record_id`. A **quasi-identifier** may identify someone in
 combination with other attributes. An **analytical attribute** serves an approved
@@ -34,16 +44,19 @@ right-exclusive except that the final upper endpoint is included. Labels are
 
 Version 2 can replace allowed categorical values with fresh random codes. This
 hides their labels while preserving equality and frequency patterns within each
-column; it does not remove linkability through those patterns. The codebook is
-ephemeral. Version 2 can retain exact plain decimal values within policy bounds
+column; it does not remove linkability through those patterns. In the legacy
+version 1 map workflow the codebook is ephemeral. The protected working-copy
+workflow encrypts observed codebooks inside the version 2 restoration bundle.
+Version 2 policies can retain exact plain decimal values within policy bounds
 and precision. Exact numbers may form rare groups and increase disclosure risk;
 the same per-field and joint checks apply. The validation report warns when either
 action is used.
-During authorised local restoration, original labels for coded fields can be read
+During legacy authorised local restoration, original labels for coded fields can be read
 from the original source workbook with exact source-key coverage and matching
 category/code groupings. Dropped fields remain absent. The encrypted map does not
 store a codebook or source snapshot, so this check cannot prove the selected source
-workbook has not changed since export.
+workbook has not changed since export. The version 2 bundle instead binds the
+normalised source table and stores observed codebooks for reconstruction.
 
 No check measures auxiliary-data attacks, within-group sensitive-attribute
 homogeneity, longitudinal linkage or the suitability of a particular AI service.

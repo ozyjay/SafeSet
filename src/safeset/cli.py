@@ -10,17 +10,19 @@ from typing import Annotated
 
 import typer
 
+from .bundle import read_bundle
 from .classification import inspect_table
 from .diagnostics import log_path, record, record_reason
 from .errors import SafetyError
 from .ingestion import excel_bytes, read_excel, require_excel_path
 from .mapping import read_mapping
 from .policy import load_policy
+from .reconstruction import reconstruct, review_reconstruction
 from .restoration import restore
 from .storage import default_map_path, output_destination, publish
 from .transform import sanitise
 from .validation import validate
-from .workflow import export_candidate
+from .workflow import export_candidate, protect_candidate
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -35,6 +37,8 @@ def guarded(function: Callable) -> Callable:
         "sanitise_command": "cli.sanitise",
         "validate_command": "cli.validate",
         "restore_command": "cli.restore",
+        "protect_command": "cli.sanitise",
+        "reconstruct_command": "cli.restore",
     }[function.__name__]
 
     @wraps(function)
@@ -61,17 +65,18 @@ def report(summary: dict) -> None:
     typer.echo(json.dumps(summary, indent=2, ensure_ascii=True))
 
 
-def secret(*, confirm: bool = False) -> str:
+def secret(*, confirm: bool = False, bundle: bool = False) -> str:
+    label = "Restoration" if bundle else "Mapping"
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", getpass.GetPassWarning)
-            value = getpass.getpass("Mapping passphrase: ")
-            if confirm and value != getpass.getpass("Confirm mapping passphrase: "):
+            value = getpass.getpass(f"{label} passphrase: ")
+            if confirm and value != getpass.getpass(f"Confirm {label.lower()} passphrase: "):
                 raise SafetyError("Passphrases do not match.")
     except (getpass.GetPassWarning, EOFError):
         raise SafetyError("A terminal with hidden passphrase entry is required.") from None
     if len(value) < 16:
-        raise SafetyError("Mapping passphrase must contain at least 16 characters.")
+        raise SafetyError(f"{label} passphrase must contain at least 16 characters.")
     return value
 
 
@@ -190,6 +195,102 @@ def validate_command(
     report(validation.summary())
     validation.require_pass()
     record("cli.validate", "validation_passed")
+
+
+@app.command("protect")
+@guarded
+def protect_command(
+    input_path: Path,
+    policy: Annotated[Path, typer.Option()],
+    output: Annotated[Path, typer.Option()],
+    create_bundle: Annotated[bool, typer.Option("--create-bundle")] = False,
+    bundle_path: Annotated[Path | None, typer.Option("--bundle")] = None,
+    approve_export: Annotated[bool, typer.Option("--approve-export")] = False,
+    sheet: Annotated[list[str] | None, typer.Option("--sheet")] = None,
+) -> None:
+    """Create a protected working copy and encrypted version 2 restoration bundle."""
+    if not create_bundle:
+        raise SafetyError("Use --create-bundle to authorise private bundle creation.")
+    parsed = load_policy(policy)
+    table = read_excel(
+        input_path,
+        tuple(sheet) if sheet else None,
+        allow_cached_formulas=True,
+        allow_source_dates=True,
+    )
+    candidate = sanitise(table, parsed)
+    validation = validate(candidate.table, parsed)
+    report(validation.summary())
+    validation.require_pass()
+    require_excel_path(output)
+    destination = output_destination(output, input_path, policy)
+    from .storage import map_destination
+
+    private_bundle = map_destination(
+        bundle_path or default_map_path(), destination, input_path, policy
+    )
+    report({"protected_destination": str(destination), "private_bundle": str(private_bundle)})
+    if not approve_export and not typer.confirm(
+        "Approve this protected workbook for its intended use?", default=False
+    ):
+        raise SafetyError("Protection declined; no artefacts created.")
+    protect_candidate(
+        table,
+        candidate,
+        parsed,
+        destination,
+        private_bundle,
+        secret(confirm=True, bundle=True),
+        approved=True,
+        source_path=input_path,
+        sheet=tuple(sheet) if sheet else None,
+    )
+    typer.echo("Protected workbook and private restoration bundle created.")
+
+
+@app.command("reconstruct")
+@guarded
+def reconstruct_command(
+    input_path: Path,
+    original_source: Annotated[Path, typer.Option("--original-source")],
+    bundle_path: Annotated[Path, typer.Option("--bundle")],
+    output: Annotated[Path, typer.Option()],
+    authorise: Annotated[bool, typer.Option("--authorise")] = False,
+    result_column: Annotated[list[str] | None, typer.Option("--result-column")] = None,
+    sheet: Annotated[list[str] | None, typer.Option("--sheet")] = None,
+    source_sheet: Annotated[list[str] | None, typer.Option("--source-sheet")] = None,
+) -> None:
+    """Reconstruct a new local workbook from the bound source and approved results."""
+    require_excel_path(output)
+    destination = output_destination(output, input_path, original_source, bundle_path)
+    bundle = read_bundle(bundle_path, secret(bundle=True), input_path, original_source, output)
+    source = read_excel(
+        original_source,
+        tuple(source_sheet) if source_sheet else None,
+        allow_cached_formulas=True,
+        allow_source_dates=True,
+    )
+    returned = read_excel(input_path, tuple(sheet) if sheet else None)
+    new_columns = review_reconstruction(source, returned, bundle)
+    approved = tuple(result_column or ())
+    if len(set(approved)) != len(approved) or set(approved) != set(new_columns):
+        raise SafetyError("Every new result field needs explicit --result-column approval.")
+    report(
+        {
+            "records": len(returned.rows),
+            "new_result_columns": len(new_columns),
+            "restored_source_columns": len(source.columns),
+            "output": str(destination),
+            "notice": "Reconstruction produces sensitive local plaintext.",
+        }
+    )
+    if not authorise and not typer.confirm(
+        "Authorise local re-identification and new workbook creation?", default=False
+    ):
+        raise SafetyError("Restoration declined; no artefact created.")
+    restored = reconstruct(source, returned, bundle, approved)
+    publish(destination, excel_bytes(restored))
+    typer.echo("Reconstruction complete. Keep the restored workbook private.")
 
 
 @app.command("restore")

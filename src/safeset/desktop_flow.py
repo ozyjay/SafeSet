@@ -3,17 +3,20 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from .bundle import read_bundle
 from .classification import inspect_table
 from .errors import SafetyError
 from .ingestion import excel_bytes, read_excel, require_excel_path, valid_heading
 from .mapping import read_mapping
-from .policy import Policy, load_policy
+from .policy import Policy, load_policy, parse_policy
+from .policy_authoring import RuleDraft, policy_payload
 from .pseudonyms import valid_id
+from .reconstruction import reconstruct, review_reconstruction
 from .restoration import restore
 from .storage import default_map_path, map_destination, output_destination, publish
 from .transform import Candidate, sanitise
 from .validation import ValidationReport, validate
-from .workflow import export_candidate
+from .workflow import export_candidate, protect_candidate
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,139 @@ class ReturnedReview:
     sheet: str | tuple[str, ...] | None
     rows: int
     result_columns: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ProtectionReview:
+    source: Path
+    sheet: str | tuple[str, ...] | None
+    output: Path
+    bundle_path: Path
+    source_table: object
+    policy: Policy
+    candidate: Candidate
+    validation: ValidationReport
+    source_rows: int
+    removed_fields: int
+    obfuscated_fields: int
+    retained_fields: int
+
+
+@dataclass(frozen=True)
+class ReconstructionReview:
+    source_path: Path
+    returned_path: Path
+    bundle_path: Path
+    output: Path
+    source_table: object
+    returned_table: object
+    bundle: dict
+    new_columns: tuple[str, ...]
+    source_sheet: str | tuple[str, ...] | None
+    returned_sheet: str | tuple[str, ...] | None
+
+
+def prepare_protection(
+    source: Path,
+    drafts: dict[str, RuleDraft],
+    threshold: str,
+    output: Path,
+    bundle_path: Path | None = None,
+    sheet: str | tuple[str, ...] | None = None,
+) -> ProtectionReview:
+    table = read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
+    if set(table.columns) != set(drafts):
+        raise SafetyError("Every source field needs an explicit protection decision.")
+    policy = parse_policy(policy_payload(drafts, threshold))
+    candidate = sanitise(table, policy)
+    validation = validate(candidate.table, policy)
+    require_excel_path(output)
+    destination = output_destination(output, source)
+    bundle_destination = map_destination(bundle_path or default_map_path(), destination, source)
+    return ProtectionReview(
+        source,
+        sheet,
+        destination,
+        bundle_destination,
+        table,
+        policy,
+        candidate,
+        validation,
+        len(table.rows),
+        sum(rule.action == "drop" for rule in policy.columns.values()),
+        sum(rule.action == "code" for rule in policy.columns.values()),
+        sum(rule.action in {"keep", "keep_numeric", "bin"} for rule in policy.columns.values()),
+    )
+
+
+def approve_protection(review: ProtectionReview, passphrase: str, *, approved: bool) -> None:
+    review.validation.require_pass()
+    protect_candidate(
+        review.source_table,
+        review.candidate,
+        review.policy,
+        review.output,
+        review.bundle_path,
+        passphrase,
+        approved=approved,
+        source_path=review.source,
+        sheet=review.sheet,
+    )
+
+
+def prepare_reconstruction(
+    returned_path: Path,
+    source_path: Path,
+    bundle_path: Path,
+    output: Path,
+    passphrase: str,
+    *,
+    returned_sheet: str | tuple[str, ...] | None = None,
+    source_sheet: str | tuple[str, ...] | None = None,
+) -> ReconstructionReview:
+    require_excel_path(output)
+    destination = output_destination(output, returned_path, source_path, bundle_path)
+    bundle = read_bundle(bundle_path, passphrase, returned_path, source_path, output)
+    source = read_excel(
+        source_path, source_sheet, allow_cached_formulas=True, allow_source_dates=True
+    )
+    returned = read_excel(returned_path, returned_sheet)
+    new_columns = review_reconstruction(source, returned, bundle)
+    return ReconstructionReview(
+        source_path,
+        returned_path,
+        bundle_path,
+        destination,
+        source,
+        returned,
+        bundle,
+        new_columns,
+        source_sheet,
+        returned_sheet,
+    )
+
+
+def approve_reconstruction(
+    review: ReconstructionReview,
+    approved_results: tuple[str, ...],
+    *,
+    authorised: bool,
+) -> int:
+    if not authorised:
+        raise SafetyError("Explicit restoration authorisation is required.")
+    # Re-read both untrusted workbooks before publication so review cannot go stale.
+    current_source = read_excel(
+        review.source_path, review.source_sheet, allow_cached_formulas=True, allow_source_dates=True
+    )
+    current_returned = read_excel(review.returned_path, review.returned_sheet)
+    if current_source != review.source_table or current_returned != review.returned_table:
+        raise SafetyError("A workbook changed after restoration review.")
+    restored = reconstruct(current_source, current_returned, review.bundle, approved_results)
+    destination = output_destination(
+        review.output, review.returned_path, review.source_path, review.bundle_path
+    )
+    publish(destination, excel_bytes(restored))
+    return len(restored.rows)
 
 
 def inspect_source(source: Path, sheet: str | tuple[str, ...] | None = None) -> dict:

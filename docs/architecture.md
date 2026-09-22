@@ -1,5 +1,34 @@
 # Architecture and decisions
 
+## Protected working-copy round trip (bundle version 2)
+
+The primary workflow is source workbook → validated protected working copy and
+separate encrypted restoration bundle → user analysis → new reconstructed workbook.
+The original source remains authoritative for every source field, including fields
+omitted from the protected copy. The modified copy is untrusted. Reconstruction
+imports only individually approved new result columns; changes to any source-derived
+protected field, including coded categories, are blocked. Editable source-derived
+fields are deferred until a separate, explicit policy and review model exists.
+
+The version 2 bundle is a distinct authenticated envelope. Its encrypted payload
+holds an export identifier, canonical source-table SHA-256 binding, selected source
+key heading, exact random ID-to-key map, source/protected schemas, strict policy
+rules and observed reversible category codebooks. It holds no source rows or
+dropped identifier values other than the selected key. The original source must
+be supplied for reconstruction and its selected table must match the binding
+exactly. Bundle version 1 identity maps remain readable only by the legacy
+result-join path; reconstruction rejects them without reinterpretation.
+
+`bundle` owns schema validation and encryption. `reconstruction` verifies source,
+bundle and returned copy, then produces a new string table. `desktop_flow`
+prepares aggregate reviews and enforces approval and no-clobber publication.
+Source, protected copy, private bundle and reconstructed output cross separate
+trust boundaries. The bundle stays outside export directories and repositories;
+the reconstructed output is sensitive plaintext and never overwrites the source.
+The export and restore operations need no runtime network access.
+
+## Existing version 1 map path and shared foundations
+
 The CLI and optional Tk desktop interface delegate to typed Python domain modules.
 No domain module uses a network client, telemetry or remote classification.
 Installation may download dependencies; runtime does not need network access.
@@ -67,7 +96,7 @@ still fail closed.
 Candidate exports must fit the same 10 MiB byte limit before publication.
 These bounds serve a modest local dataset workflow; this is not a streaming engine.
 
-## Decisions
+## Version 1 map decisions and shared safeguards
 
 - Python 3.12+, Typer, PyYAML, cryptography, openpyxl and pytest. Workbook
   values are read without dataframe type inference; numeric cells become plain

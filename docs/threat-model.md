@@ -1,5 +1,21 @@
 # Threat model
 
+## Version 2 restoration bundle
+
+The protected working copy is untrusted after analysis. A version 2 encrypted
+bundle binds a canonical representation of the selected source table, exact random
+record IDs, policy decisions, schemas and observed category codebooks. A changed
+source, wrong bundle, changed protected source-derived value, extra unapproved
+column or incomplete ID set blocks reconstruction. The source digest is inside
+authenticated ciphertext; it is a compatibility check, not proof of origin or
+protection against a compromised local account. New result values are accepted
+only for explicitly approved headings and safe spreadsheet text. The reconstructed
+workbook contains the original identifying fields and must remain local and
+private. Category codes still expose equality and frequency. Bundle loss or
+passphrase loss prevents restoration. The bundle never contains a copy of source
+rows or dropped personal fields; the selected source key and codebook labels are
+necessary reversible secrets. Legacy version 1 maps cannot be used for this flow.
+
 This is a conservative local tool, not an anonymity or compliance guarantee.
 Protect source identities, identity maps, passphrases and restored data. The
 operator, policy author, OS and installed dependencies are trusted. The external
@@ -15,14 +31,14 @@ real identities or credentials.
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
-| Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; no persistent codebook exists |
+| Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; the encrypted version 2 bundle stores observed codebooks |
 | Exact numeric disclosure | Version 2 requires bounds, precision and all-attribute group checks | Exact values remain visible and may be distinctive, even when category labels are coded |
 | Sensitive logging | Private local log accepts only fixed stage and reason codes; no values, headings, paths or exception text | Event timestamps reveal when operations were attempted; inspect output still displays escaped headings |
 | Schema drift | Missing/extra columns and duplicate headings rejected; literal headings matched exactly and bounded; Excel Table headers checked against metadata | Same heading can acquire a different meaning; similarly spelled headings remain distinct |
 | Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, cached-result checks for source formulas, source date/time conversion, formula and date/time rejection in returned files, link/hidden-content checks | Saved source formula results can be stale or inconsistent with the formula; exact source dates remain sensitive even when represented as text; no formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
 | Incorrect restoration | Authenticated map schema, exact ID coverage, no fuzzy joins | Cannot verify whether external analysis assigned the right result to an ID |
-| Incorrect coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
+| Incorrect legacy coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The version 1 map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |
 | Policy authoring exposure | Field choices are explicit; distinct category values appear only after a local review action; saved policies use private no-clobber storage outside repositories | A policy can contain sensitive headings and category labels; an incorrect classification may retain inappropriate data |
 

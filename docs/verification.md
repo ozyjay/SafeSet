@@ -1,11 +1,20 @@
 # Verification
 
-Verified on macOS ARM64 using the active pyenv Python 3.12.13.
+The protected working-copy suite in `tests/test_reconstruction.py` uses only
+synthetic records. It exercises version 2 bundle encryption and authentication,
+source binding, full-source reconstruction, new-field approval, malformed,
+missing, duplicate and unknown IDs, altered protected values, schema collisions,
+legacy envelope rejection and no-clobber output publication. The original CLI
+and version 1 map tests remain in place.
+
+The current change was checked on macOS ARM64 using the active pyenv Python
+3.12.13. The detailed package and dependency checks below describe the earlier
+baseline unless repeated in this iteration.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **156 passed**.
-- `ruff check .` and `ruff format --check .`: passed.
+- `.venv/bin/python -m pytest`: **197 passed** in the current iteration.
+- `ruff check .`: passed in the current iteration.
 - `python -m pip check`: no broken requirements.
 - `.venv/bin/python -m build`: built a source distribution and wheel with isolated
   Hatchling 1.32.4.

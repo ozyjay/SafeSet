@@ -1,5 +1,13 @@
 # Policy versions 1 and 2
 
+The guided protected-workbook desktop constructs a strict version 2 policy in
+memory from explicit field decisions. Saving YAML is optional. This iteration
+does not add a policy action or change the YAML schema. Source-derived protected
+fields are immutable during version 2 bundle reconstruction; newly added result
+fields need separate explicit approval and are not policy source columns. The
+version 2 *restoration bundle* is distinct from policy version 2 and legacy
+version 1 identity maps.
+
 See `examples/example-policy.yaml`. YAML mappings reject duplicate keys and aliases;
 unknown keys and types fail. Top-level keys are exactly `version`, `columns` and
 `min_group_size`. The version must be integer 1 or 2; minimum group size an integer
@@ -34,7 +42,8 @@ Keep labels must be short categories. Use quoted YAML strings for numbers/boolea
 `code` checks source values against the same strict categorical allowlist, then
 replaces each distinct value with a fresh random UUIDv4 code. Matching values in
 one column receive the same code within one export; codes differ across columns
-and runs. No category codebook is saved. Authorised local restoration can put the
+and runs. The legacy version 1 map has no category codebook. The new version 2
+restoration bundle encrypts only observed category codes. Authorised legacy local restoration can put the
 original labels back only when the operator supplies the original source workbook
 and policy; it checks exact source-key coverage and category/code grouping. A
 changed source workbook with the same keys and grouping cannot be ruled out because
