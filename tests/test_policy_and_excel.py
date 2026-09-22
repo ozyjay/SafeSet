@@ -3,6 +3,7 @@ from copy import deepcopy
 import pytest
 import yaml
 from openpyxl import Workbook
+from openpyxl.worksheet.table import Table as ExcelTable
 
 from safeset.errors import SafetyError
 from safeset.ingestion import (
@@ -106,6 +107,69 @@ def test_selected_worksheets_append_rows_and_require_matching_headings(tmp_path,
     workbook.save(path)
     with pytest.raises(SafetyError, match="identical headings"):
         read_excel(path, ("Earlier", "New"))
+
+
+def test_structured_tables_use_only_their_ranges(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet["A1"] = "=1+2"  # Unselected note outside either table.
+    sheet["B3"], sheet["C3"] = "key", "team"
+    sheet["B4"], sheet["C4"] = "SYNTH-001", "Robot A"
+    sheet.add_table(ExcelTable(displayName="EarlierTable", ref="B3:C4"))
+    sheet["E3"], sheet["F3"] = "key", "team"
+    sheet["E4"], sheet["F4"] = "SYNTH-002", "Robot B"
+    sheet.add_table(ExcelTable(displayName="NewTable", ref="E3:F4"))
+    path = tmp_path / "tables.xlsx"
+    workbook.save(path)
+    assert read_excel(path).rows == (
+        {"key": "SYNTH-001", "team": "Robot A"},
+        {"key": "SYNTH-002", "team": "Robot B"},
+    )
+    sheet["F4"] = "=1+2"
+    workbook.save(path)
+    with pytest.raises(SafetyError, match="unsupported cell type"):
+        read_excel(path)
+
+
+def test_structured_table_rejects_mismatched_headings_and_hidden_rows(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(("key", "team", None, "key", "allocation"))
+    sheet.append(("SYNTH-001", "Robot A", None, "SYNTH-002", "Robot B"))
+    sheet.add_table(ExcelTable(displayName="EarlierTable", ref="A1:B2"))
+    sheet.add_table(ExcelTable(displayName="NewTable", ref="D1:E2"))
+    path = tmp_path / "tables.xlsx"
+    workbook.save(path)
+    with pytest.raises(SafetyError, match="identical headings"):
+        read_excel(path)
+    sheet["E1"] = "team"
+    sheet.row_dimensions[2].hidden = True
+    workbook.save(path)
+    with pytest.raises(SafetyError, match="hidden rows"):
+        read_excel(path)
+
+
+def test_structured_table_skips_totals_row(tmp_path):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(("key", "amount"))
+    sheet.append(("SYNTH-001", "1"))
+    sheet.append(("SYNTH-002", "2"))
+    sheet.append(("Total", "=SUM(B2:B3)"))
+    sheet.add_table(
+        ExcelTable(
+            displayName="Amounts",
+            ref="A1:B4",
+            totalsRowCount=1,
+            totalsRowShown=True,
+        )
+    )
+    path = tmp_path / "totals.xlsx"
+    workbook.save(path)
+    assert read_excel(path).rows == (
+        {"key": "SYNTH-001", "amount": "1"},
+        {"key": "SYNTH-002", "amount": "2"},
+    )
 
 
 @pytest.mark.parametrize(

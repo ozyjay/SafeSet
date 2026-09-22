@@ -63,6 +63,8 @@ For a workbook with several visible sheets, repeat `--sheet 'Worksheet name'` on
 `inspect`, `sanitise`, `validate` or `restore` to combine sheets. Their headings
 must match in the same order. Duplicate participant keys block export; filter the
 updated sheet to new participants before combining overlapping cohorts.
+Structured Excel Tables are supported. SafeSet reads their defined ranges and
+ignores titles or notes outside them; matching tables on a selected sheet are combined.
 For a step-by-step desktop and CLI guide, see [HOWTO.md](HOWTO.md).
 
 Choose private local directories outside any repository and outside cloud-synced

@@ -4,7 +4,7 @@ Verified on macOS ARM64 using the active pyenv Python 3.12.13.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **144 passed**.
+- `.venv/bin/python -m pytest`: **148 passed**.
 - `ruff check .` and `ruff format --check .`: passed.
 - `python -m pip check`: no broken requirements.
 - `.venv/bin/python -m build`: built a source distribution and wheel with isolated
@@ -23,9 +23,9 @@ bounded dependency ranges, not a fully locked deployment environment.
 
 Synthetic source → policy → candidate → approved Excel workbook plus encrypted map → exact
 restoration, including shuffled returned rows and leading-zero source keys. Tests
-cover multiple selected worksheets, schema mismatches and duplicate source keys.
-Tests
-exercise real Fernet/Argon2id encryption, fresh IDs/salts, incorrect credentials,
+cover multiple selected worksheets, structured tables, schema mismatches and
+duplicate source keys. Tests exercise real Fernet/Argon2id encryption, fresh
+IDs/salts, incorrect credentials,
 tampering/truncation, minimal map contents and source-value absence in output/logs.
 A round trip runs with Python socket creation blocked. A separate real POSIX
 pseudo-terminal test performs both secret prompts and confirms no passphrase echo.

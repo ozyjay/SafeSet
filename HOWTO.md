@@ -45,6 +45,11 @@ current limits are 10 MiB, 50,000 rows, 128 columns and 4,096 characters per
 field. Keep the source file private; `inspect` displays headings and aggregate
 characteristics, but no cell samples. Headings may themselves be sensitive.
 
+If a selected sheet contains structured Excel Tables, SafeSet reads only the
+defined table ranges. It combines multiple tables on that sheet when their
+headings match. Titles and notes outside the tables are ignored. A table totals
+row is excluded from participant rows.
+
 ```pwsh
 safeset inspect examples/synthetic_students.xlsx
 ```

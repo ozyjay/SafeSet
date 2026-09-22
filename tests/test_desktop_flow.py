@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from openpyxl import load_workbook
+from openpyxl.worksheet.table import Table as ExcelTable
 
 from safeset.desktop_flow import approve_export, inspect_returned, prepare_export, restore_results
 from safeset.errors import SafetyError
@@ -84,6 +85,21 @@ def test_combined_worksheets_export_once(destinations, tmp_path):
     assert review.source_rows == 4
     approve_export(review, PASSPHRASE, approved=True)
     assert len(read_excel(output).rows) == 4
+
+
+def test_structured_table_can_be_sanitised(destinations, tmp_path):
+    source = tmp_path / "structured.xlsx"
+    workbook = load_workbook(ROOT / "examples/synthetic_students.xlsx")
+    workbook.active.move_range("A1:G5", rows=2, cols=1)
+    workbook.active["A1"] = "Invented private note outside the table"
+    workbook.active.add_table(ExcelTable(displayName="Participants", ref="B3:H7"))
+    workbook.save(source)
+    output, mapping = destinations
+    review = prepare_export(source, ROOT / "examples/example-policy.yaml", output, mapping)
+    assert review.validation.passed
+    approve_export(review, PASSPHRASE, approved=True)
+    assert len(read_excel(output).rows) == 4
+    assert "Invented private note" not in str(read_excel(output).rows)
 
 
 def test_failed_review_cannot_export(destinations, tmp_path):

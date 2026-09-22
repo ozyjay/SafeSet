@@ -35,8 +35,11 @@ in the same order. Their rows are appended in the supplied order, with the row l
 applied to the combined table. Duplicate source keys fail before export; no
 automatic choice is made between overlapping records. Only selected sheets enter
 inspection, sanitisation or restoration. Formulas, links, hidden rows or columns
-and merged cells on selected sheets are rejected. External workbook links are rejected.
-Policies are limited to 256 KiB and encrypted maps to 32 MiB.
+and merged cells in selected data ranges are rejected. Where a selected sheet
+contains structured Excel Tables, only their defined ranges are ingested;
+matching tables are appended in sheet position order. A declared totals row is
+excluded. Cells outside tables do not enter inspection or export. External
+workbook links are rejected. Policies are limited to 256 KiB and encrypted maps to 32 MiB.
 Candidate exports must fit the same 10 MiB byte limit before publication.
 These bounds serve a modest local dataset workflow; this is not a streaming engine.
 

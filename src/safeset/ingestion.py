@@ -8,6 +8,7 @@ from datetime import date, datetime, time
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.utils.cell import column_index_from_string, range_boundaries
 
 from .errors import SafetyError
 
@@ -16,6 +17,7 @@ MAX_UNCOMPRESSED = 50 * 1024 * 1024
 MAX_ROWS = 50_000
 MAX_COLUMNS = 128
 MAX_FIELD = 4096
+MAX_TABLES = 128
 
 
 @dataclass(frozen=True)
@@ -97,21 +99,47 @@ def list_excel_sheets(path: Path) -> tuple[str, ...]:
         raise SafetyError("Input is not a supported Excel workbook.") from None
 
 
-def _read_worksheet(worksheet) -> Table:
+def _overlaps(left: tuple[int, int, int, int], right: tuple[int, int, int, int]) -> bool:
+    a1, b1, a2, b2 = left
+    c1, d1, c2, d2 = right
+    return a1 <= c2 and c1 <= a2 and b1 <= d2 and d1 <= b2
+
+
+def _read_region(
+    worksheet,
+    bounds: tuple[int, int, int, int],
+    *,
+    last_data_row: int | None = None,
+) -> Table:
+    min_col, min_row, max_col, max_row = bounds
     if (
-        worksheet.max_row < 1
-        or worksheet.max_row > MAX_ROWS + 1
-        or worksheet.max_column > MAX_COLUMNS
-        or worksheet.merged_cells.ranges
-        or worksheet.tables
-        or worksheet.auto_filter.ref
-        or worksheet._charts
-        or worksheet._images
-        or any(d.hidden for d in worksheet.row_dimensions.values())
-        or any(d.hidden for d in worksheet.column_dimensions.values())
+        min_col < 1
+        or min_row < 1
+        or max_col < min_col
+        or max_row < min_row
+        or max_col - min_col + 1 > MAX_COLUMNS
+        or (last_data_row if last_data_row is not None else max_row) - min_row > MAX_ROWS
     ):
-        raise SafetyError("Excel workbook has unsupported sheet structure or dimensions.")
-    header = tuple(_cell_text(cell) for cell in worksheet[1])
+        raise SafetyError("Excel table has unsupported dimensions.")
+    if any(
+        _overlaps(bounds, range_boundaries(str(merged))) for merged in worksheet.merged_cells.ranges
+    ):
+        raise SafetyError("Excel data range contains merged cells.")
+    if any(
+        dimension.hidden and min_row <= index <= max_row
+        for index, dimension in worksheet.row_dimensions.items()
+    ):
+        raise SafetyError("Excel data range contains hidden rows.")
+    for key, dimension in worksheet.column_dimensions.items():
+        index = column_index_from_string(key)
+        first = dimension.min or index
+        last = dimension.max or index
+        if dimension.hidden and first <= max_col and min_col <= last:
+            raise SafetyError("Excel data range contains hidden columns.")
+    header_cells = next(
+        worksheet.iter_rows(min_row=min_row, max_row=min_row, min_col=min_col, max_col=max_col)
+    )
+    header = tuple(_cell_text(cell) for cell in header_cells)
     if (
         not header
         or len(set(header)) != len(header)
@@ -124,10 +152,20 @@ def _read_worksheet(worksheet) -> Table:
         )
     ):
         raise SafetyError("Excel headings are missing, duplicated or malformed.")
-    if any(cell.hyperlink or cell.comment for cell in worksheet[1]):
+    if any(cell.hyperlink or cell.comment for cell in header_cells):
         raise SafetyError("Excel workbook contains unsupported cell features.")
     rows = []
-    for cells in worksheet.iter_rows(min_row=2, max_col=len(header)):
+    data_end = last_data_row if last_data_row is not None else max_row
+    for cells in (
+        worksheet.iter_rows(
+            min_row=min_row + 1,
+            max_row=data_end,
+            min_col=min_col,
+            max_col=max_col,
+        )
+        if data_end > min_row
+        else ()
+    ):
         if any(cell.hyperlink or cell.comment for cell in cells):
             raise SafetyError("Excel workbook contains unsupported cell features.")
         values = tuple(_cell_text(cell) for cell in cells)
@@ -137,6 +175,55 @@ def _read_worksheet(worksheet) -> Table:
             raise SafetyError("Excel row shape or field size is invalid.")
         rows.append(dict(zip(header, values, strict=True)))
     return Table(header, tuple(rows))
+
+
+def _read_worksheet(worksheet) -> Table:
+    if worksheet.tables:
+        if len(worksheet.tables) > MAX_TABLES:
+            raise SafetyError("Excel worksheet exceeds the supported table count.")
+        ranges = []
+        for structured in worksheet.tables.values():
+            if (
+                structured.headerRowCount != 1
+                or structured.connectionId is not None
+                or structured.tableType not in {None, "worksheet"}
+            ):
+                raise SafetyError("Excel table has unsupported structure.")
+            bounds = range_boundaries(structured.ref)
+            if any(_overlaps(bounds, earlier) for earlier, _ in ranges):
+                raise SafetyError("Excel tables overlap.")
+            totals = structured.totalsRowCount or 0
+            if totals not in {0, 1} or (structured.totalsRowShown and not totals):
+                raise SafetyError("Excel table has unsupported totals metadata.")
+            ranges.append((bounds, structured))
+        ranges.sort(key=lambda item: (item[0][1], item[0][0]))
+        tables = []
+        for bounds, structured in ranges:
+            data = _read_region(
+                worksheet, bounds, last_data_row=bounds[3] - (structured.totalsRowCount or 0)
+            )
+            if (
+                structured.tableColumns
+                and tuple(column.name for column in structured.tableColumns) != data.columns
+            ):
+                raise SafetyError("Excel table headings differ from its metadata.")
+            tables.append(data)
+        header = tables[0].columns
+        if any(table.columns != header for table in tables[1:]):
+            raise SafetyError("Excel tables must have identical headings in the same order.")
+        if sum(len(table.rows) for table in tables) > MAX_ROWS:
+            raise SafetyError("Excel tables exceed the combined row limit.")
+        return Table(header, tuple(row for table in tables for row in table.rows))
+    if (
+        worksheet.max_row < 1
+        or worksheet.max_row > MAX_ROWS + 1
+        or worksheet.max_column > MAX_COLUMNS
+        or worksheet.auto_filter.ref
+        or worksheet._charts
+        or worksheet._images
+    ):
+        raise SafetyError("Excel workbook has unsupported sheet structure or dimensions.")
+    return _read_region(worksheet, (1, 1, worksheet.max_column, worksheet.max_row))
 
 
 def read_excel(path: Path, sheet: str | tuple[str, ...] | None = None) -> Table:

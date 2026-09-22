@@ -11,7 +11,7 @@ real identities or credentials.
 | --- | --- | --- |
 | Accidental Git commit | Broad ignores; maps/outputs rejected in detected repositories | Git can force-add files; copies and unknown repositories evade detection |
 | Accidental source upload | Local workflow, no runtime networking; candidate held in memory | Cannot control manual uploads or editor/cloud backups |
-| Hidden/unexpected columns | Explicit worksheet selection, matching selected-sheet headings, exact output schema, no passthrough | Incorrectly authored policy can still select inappropriate attributes or the wrong worksheets |
+| Hidden/unexpected columns | Explicit worksheet selection, structured table bounds where present, matching headings, exact output schema, no passthrough | Incorrectly authored policy can still select inappropriate attributes or the wrong worksheets or tables |
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
