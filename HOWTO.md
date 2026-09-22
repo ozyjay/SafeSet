@@ -66,7 +66,8 @@ selection is automatic.
 Create a policy for the intended analysis. You can use the desktop **Policy** tab
 to load the source headings, choose an action and classification for every column,
 set allowed categories or numeric limits, and save a version 2 policy under a new
-filename. Category values appear in the interface only if you explicitly request
+filename. A field's Settings button is enabled only when its action needs categories,
+bins or numeric limits. Category values appear in the interface only if you explicitly request
 them locally. Keep a policy for real data outside repositories because headings
 and category labels can be sensitive.
 

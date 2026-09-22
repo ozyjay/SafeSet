@@ -6,11 +6,45 @@ import pytest
 from openpyxl import load_workbook
 from openpyxl.worksheet.table import Table as ExcelTable
 
+from safeset.desktop import ACTION_LABELS, Desktop
 from safeset.desktop_flow import approve_export, inspect_returned, prepare_export, restore_results
 from safeset.errors import SafetyError
 from safeset.ingestion import Table, excel_bytes, read_excel
 
 from .conftest import PASSPHRASE, ROOT
+
+
+@pytest.mark.parametrize(
+    "action,enabled",
+    [
+        (None, False),
+        ("drop", False),
+        ("pseudonymise", False),
+        ("keep", True),
+        ("code", True),
+        ("bin", True),
+        ("keep_numeric", True),
+    ],
+)
+def test_policy_settings_button_follows_action(action, enabled):
+    class Selection:
+        def get(self):
+            return ACTION_LABELS[action] if action else ""
+
+    class Button:
+        def configure(self, **kwargs):
+            self.text = kwargs["text"]
+
+        def state(self, flags):
+            self.flags = flags
+
+    desktop = Desktop.__new__(Desktop)
+    button = Button()
+    desktop.policy_controls = {"Invented Field": (Selection(), None)}
+    desktop.policy_details_buttons = {"Invented Field": button}
+    desktop._sync_policy_settings_button("Invented Field")
+    assert button.text == "Settings…"
+    assert button.flags == (["!disabled"] if enabled else ["disabled"])
 
 
 def test_review_does_not_publish_and_requires_approval(destinations):

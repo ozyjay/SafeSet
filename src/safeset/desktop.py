@@ -53,6 +53,7 @@ CLASS_LABELS = {
     "Existing pseudonym": "pseudonymous_identifier",
 }
 ACTION_FROM_LABEL = {label: action for action, label in ACTION_LABELS.items()}
+SETTINGS_ACTIONS = {"keep", "code", "bin", "keep_numeric"}
 
 
 def _path_row(
@@ -224,14 +225,16 @@ class Desktop:
 
         shell = ttk.Frame(root, padding=(30, 24))
         shell.pack(fill="both", expand=True)
-        ttk.Label(shell, text="SafeSet", style="Heading.TLabel").pack(anchor="w")
+        shell.columnconfigure(0, weight=1)
+        shell.rowconfigure(2, weight=1)
+        ttk.Label(shell, text="SafeSet", style="Heading.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             shell,
             text="Review locally  ·  minimise deliberately  ·  approve each export",
             style="Muted.TLabel",
-        ).pack(anchor="w", pady=(4, 15))
+        ).grid(row=1, column=0, sticky="w", pady=(4, 15))
         self.notebook = ttk.Notebook(shell)
-        self.notebook.pack(fill="both", expand=True)
+        self.notebook.grid(row=2, column=0, sticky="nsew")
         self.inspect_tab = ttk.Frame(self.notebook, padding=20)
         self.policy_tab = ttk.Frame(self.notebook, padding=20)
         self.export_tab = ttk.Frame(self.notebook, padding=20)
@@ -252,7 +255,7 @@ class Desktop:
             ),
             style="Muted.TLabel",
             wraplength=620,
-        ).pack(anchor="w", pady=(16, 0))
+        ).grid(row=3, column=0, sticky="ew", pady=(16, 0))
 
     def _error(self, error: Exception, stage: str) -> None:
         record(stage, "rejected" if isinstance(error, SafetyError) else "io_error")
@@ -481,6 +484,12 @@ class Desktop:
                 child.destroy()
             self.policy_status.configure(text="Source changed. Load its columns again.")
 
+    def _sync_policy_settings_button(self, name: str) -> None:
+        action = ACTION_FROM_LABEL.get(self.policy_controls[name][0].get())
+        button = self.policy_details_buttons[name]
+        button.configure(text="Settings…")
+        button.state(["!disabled"] if action in SETTINGS_ACTIONS else ["disabled"])
+
     def _load_policy_columns(self) -> None:
         record("desktop.policy.columns", "start")
         self._invalidate_policy_source()
@@ -513,6 +522,7 @@ class Desktop:
                     command=lambda field=name: self._edit_policy_settings(field),
                 )
                 details.pack(side="right")
+                details.state(["disabled"])
                 self.policy_details_buttons[name] = details
                 lower = ttk.Frame(row)
                 lower.pack(fill="x", pady=(6, 0))
@@ -536,7 +546,7 @@ class Desktop:
                 ).pack(side="left")
                 self.policy_controls[name] = (action, classification)
                 action.trace_add(
-                    "write", lambda *_args, button=details: button.configure(text="Settings…")
+                    "write", lambda *_args, field=name: self._sync_policy_settings_button(field)
                 )
                 ttk.Separator(self.policy_rows).pack(fill="x")
             record("desktop.policy.columns", "success")
@@ -567,7 +577,7 @@ class Desktop:
                 action, classification = self.policy_controls[name]
                 action.set(action_labels[draft.action])
                 classification.set(class_labels[draft.classification])
-                if draft.action in {"keep", "code", "bin", "keep_numeric"}:
+                if draft.action in SETTINGS_ACTIONS:
                     self.policy_details_buttons[name].configure(text="Settings ✓")
             self.policy_threshold.set(str(threshold))
             self.policy_status.configure(
