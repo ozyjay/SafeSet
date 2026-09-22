@@ -202,7 +202,10 @@ class Desktop:
         self.policy_controls: dict[str, tuple[tk.StringVar, tk.StringVar]] = {}
         self.policy_details_buttons: dict[str, ttk.Button] = {}
         root.title("SafeSet · local data review")
-        root.geometry("840x700")
+        width, height = 840, 700
+        x = max(0, (root.winfo_screenwidth() - width) // 2)
+        y = max(0, (root.winfo_screenheight() - height) // 2)
+        root.geometry(f"{width}x{height}+{x}+{y}")
         root.minsize(700, 620)
         root.configure(background=BACKGROUND)
         style = ttk.Style(root)
