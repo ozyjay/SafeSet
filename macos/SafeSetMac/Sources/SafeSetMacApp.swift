@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 let actionOptions: [(String, String)] = [
     ("Remove", "drop"), ("Replace with random record ID", "pseudonymise"),
@@ -754,23 +755,34 @@ struct ConsolidatedField: Identifiable {
     }
 }
 
-private func chooseOpen() -> URL? {
+private func chooseOpen(extension suffix: String, completion: @escaping (URL?) -> Void) {
     let panel = NSOpenPanel()
-    panel.allowedContentTypes = [.init(filenameExtension: "xlsx")!]
+    if let contentType = UTType(filenameExtension: suffix) {
+        panel.allowedContentTypes = [contentType]
+    }
     panel.canChooseDirectories = false
-    return panel.runModal() == .OK ? panel.url : nil
+    panel.canChooseFiles = true
+    panel.allowsMultipleSelection = false
+    present(panel, completion: completion)
 }
 
-private func chooseAnyFile() -> URL? {
-    let panel = NSOpenPanel()
-    panel.canChooseDirectories = false
-    return panel.runModal() == .OK ? panel.url : nil
-}
-
-private func chooseSave(extension suffix: String) -> URL? {
+private func chooseSave(extension suffix: String, completion: @escaping (URL?) -> Void) {
     let panel = NSSavePanel()
-    panel.allowedContentTypes = [.init(filenameExtension: suffix)!]
-    return panel.runModal() == .OK ? panel.url : nil
+    if let contentType = UTType(filenameExtension: suffix) {
+        panel.allowedContentTypes = [contentType]
+    }
+    present(panel, completion: completion)
+}
+
+private func present(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void) {
+    let finish: (NSApplication.ModalResponse) -> Void = { response in
+        completion(response == .OK ? panel.url : nil)
+    }
+    if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+        panel.beginSheetModal(for: window, completionHandler: finish)
+    } else {
+        panel.begin(completionHandler: finish)
+    }
 }
 
 struct PathRow: View {
@@ -787,9 +799,15 @@ struct PathRow: View {
                 .textFieldStyle(.roundedBorder)
                 .disabled(!save)
             Button("Choose…") {
-                if let url = save ? chooseSave(extension: fileExtension) : chooseAnyFile() {
+                let selected: (URL?) -> Void = { url in
+                    guard let url else { return }
                     path = url.path
                     onChoose?(url)
+                }
+                if save {
+                    chooseSave(extension: fileExtension, completion: selected)
+                } else {
+                    chooseOpen(extension: fileExtension, completion: selected)
                 }
             }
         }
@@ -1545,7 +1563,8 @@ struct AdvancedView: View {
                             Button("Load policy choices") { model.loadPolicy() }
                             Button("Review and edit fields") { model.page = .protect }
                             Button("Save revised policy…") {
-                                if let url = chooseSave(extension: "yaml") {
+                                chooseSave(extension: "yaml") { url in
+                                    guard let url else { return }
                                     model.savePolicy(url.path)
                                 }
                             }
