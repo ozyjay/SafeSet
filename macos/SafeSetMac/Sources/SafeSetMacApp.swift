@@ -80,6 +80,23 @@ final class BackendBridge: @unchecked Sendable {
         let message: String
         switch code {
         case "safety_rejected": message = "SafeSet rejected this operation. Review the files and decisions."
+        case "policy_configuration": message = "One or more field decisions are incomplete or incompatible. Check the identifier, classifications, approved categories and numeric settings on every selected worksheet."
+        case "field_decisions": message = "Every field on every selected worksheet needs an explicit protection decision."
+        case "source_key_invalid": message = "A selected worksheet contains a blank or unsafe source identifier. Source identifiers must be non-empty text."
+        case "reserved_heading": message = "A selected worksheet already uses record_id or entity_id, which are reserved output headings."
+        case "empty_worksheet": message = "A selected worksheet has no data rows."
+        case "category_domain": message = "A source category is outside the reviewed value list. Review the category values again."
+        case "numeric_domain": message = "A numeric value does not fit the reviewed bounds, precision or ranges."
+        case "formula_result": message = "A source formula has no saved value. Recalculate and save the workbook locally, then try again."
+        case "hidden_data": message = "A selected data range contains hidden rows or columns. Unhide them or select a clean table."
+        case "merged_data": message = "A selected data range contains merged cells, which SafeSet cannot process safely."
+        case "active_content": message = "The workbook contains unsupported active or externally linked content."
+        case "cell_features": message = "A selected data range contains unsupported comments or hyperlinks."
+        case "cell_type": message = "A selected worksheet contains an unsupported cell type."
+        case "destination_exists": message = "The selected output or bundle already exists. Choose a new filename."
+        case "output_directory": message = "The selected output directory does not exist."
+        case "repository_destination": message = "Operational data cannot be written inside a source-code repository."
+        case "destination_separation": message = "The protected workbook and private bundle must use separate directories."
         case "local_io_failure": message = "A local file operation failed."
         case "response_limit": message = "The local review is too large to display."
         default: message = "The local request was invalid."
@@ -164,17 +181,57 @@ struct CategorySheet: Identifiable {
     private var bridge: BackendBridge?
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
 
+    func decisionProblem(_ configured: [FieldDraft]) -> String? {
+        if configured.isEmpty { return "Inspect every selected worksheet before review." }
+        if configured.filter({ $0.action == "pseudonymise" }).count != 1 {
+            return "Each selected worksheet must replace exactly one direct identifier."
+        }
+        for field in configured {
+            if field.action.isEmpty {
+                return "Choose an action for every field in every selected worksheet."
+            }
+            if field.action != "drop" && field.classification.isEmpty {
+                return "Classify every field that is kept, transformed or replaced."
+            }
+            if field.action == "pseudonymise" && field.classification != "direct_identifier" {
+                return "The replaced source identifier must be classified as a direct identifier."
+            }
+            if ["keep", "code", "bin", "keep_numeric"].contains(field.action)
+                && !["quasi_identifier", "analytical_attribute"].contains(field.classification) {
+                return "Retained and transformed fields must be quasi-identifiers or analytical attributes."
+            }
+            if ["keep", "code"].contains(field.action) && field.allowedValues.isEmpty {
+                return "Review and approve the source-value list for every kept or obfuscated field."
+            }
+            if field.action == "bin" {
+                let validPairs = field.binsText.split(separator: "\n").filter { line in
+                    let parts = line.split(separator: ",", omittingEmptySubsequences: false)
+                    return parts.count == 2
+                        && Double(parts[0].trimmingCharacters(in: .whitespaces)) != nil
+                        && Double(parts[1].trimmingCharacters(in: .whitespaces)) != nil
+                }
+                if validPairs.count < 2 {
+                    return "Enter at least two valid lower,upper ranges for every grouped field."
+                }
+            }
+            if field.action == "keep_numeric" {
+                guard let lower = Double(field.lower), let upper = Double(field.upper),
+                      lower >= 0, lower < upper,
+                      let places = Int(field.places), (0...6).contains(places) else {
+                    return "Enter valid bounds and decimal precision for every exact numeric field."
+                }
+            }
+        }
+        return nil
+    }
+
     var canPrepareProtection: Bool {
         if selectedSourceSheets.isEmpty {
-            return !fields.isEmpty && fields.allSatisfy {
-                !$0.action.isEmpty && ($0.action == "drop" || !$0.classification.isEmpty)
-            }
+            return decisionProblem(fields) == nil
         }
         return selectedSourceSheets.allSatisfy { sheet in
             let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
-            return !configured.isEmpty && configured.allSatisfy {
-                !$0.action.isEmpty && ($0.action == "drop" || !$0.classification.isEmpty)
-            }
+            return decisionProblem(configured) == nil
         }
     }
 
@@ -295,13 +352,14 @@ struct CategorySheet: Identifiable {
     }
 
     func prepareProtection() {
-        guard canPrepareProtection else {
-            alert = "Choose an action for every field and classify fields you keep or replace."
-            return
+        fieldsBySheet[sourceSheet] = fields
+        for sheet in selectedSourceSheets.sorted() {
+            let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
+            if let problem = decisionProblem(configured) { alert = problem; return }
         }
+        guard canPrepareProtection else { alert = "Complete every selected worksheet."; return }
         let output = protectedOutput.isEmpty
             ? (source as NSString).deletingPathExtension + "-protected.xlsx" : protectedOutput
-        fieldsBySheet[sourceSheet] = fields
         let relational = selectedSourceSheets.count > 1
         var payload: [String: Any]
         if relational {

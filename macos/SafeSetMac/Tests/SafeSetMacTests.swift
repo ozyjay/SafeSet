@@ -22,7 +22,7 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertFalse(model.canPrepareProtection)
         field.action = "drop"
         model.fields = [field]
-        XCTAssertTrue(model.canPrepareProtection)
+        XCTAssertFalse(model.canPrepareProtection)
         field.action = "pseudonymise"
         field.classification = "direct_identifier"
         model.fields = [field]

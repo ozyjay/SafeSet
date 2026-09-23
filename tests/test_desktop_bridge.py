@@ -6,6 +6,7 @@ import socket
 import pytest
 
 from safeset.desktop_bridge import Bridge
+from safeset.errors import SafetyError
 from safeset.ingestion import Table, excel_bytes, read_excel
 from safeset.policy_authoring import load_drafts
 
@@ -53,6 +54,27 @@ def test_protocol_rejects_malformed_and_secret_output():
     assert call(bridge, "hello", {})["result"] == {"protocol": 1}
 
 
+@pytest.mark.parametrize(
+    "message,code",
+    [
+        ("Source keys must be non-empty and safe text.", "source_key_invalid"),
+        (
+            "Policy schema or safety constraints are invalid; see policy-format.md.",
+            "policy_configuration",
+        ),
+        ("private synthetic value must never cross", "safety_rejected"),
+    ],
+)
+def test_bridge_returns_only_allowlisted_value_free_safety_codes(message, code):
+    class RejectingBridge(Bridge):
+        def dispatch(self, command: str, raw: object) -> dict:
+            raise SafetyError(message)
+
+    result = call(RejectingBridge(), "hello", {})
+    assert result["error"] == code
+    assert message not in json.dumps(result)
+
+
 def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
     def denied(*_args, **_kwargs):
         raise AssertionError("Network access attempted")
@@ -75,15 +97,15 @@ def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
     assert prepared["ok"] and prepared["result"]["validation"]["passed"]
     token = prepared["result"]["review_id"]
     assert not json.loads(bridge.process_line(b"broken\n"))["ok"]
-    assert not call(
-        bridge, "approve_protection", {"review_id": token, "passphrase": PASSPHRASE}
-    )["ok"]
+    assert not call(bridge, "approve_protection", {"review_id": token, "passphrase": PASSPHRASE})[
+        "ok"
+    ]
     prepared = call(bridge, "prepare_protection", request)
     token = prepared["result"]["review_id"]
     assert call(bridge, "cancel", {})["result"] == {"cancelled": True}
-    assert not call(
-        bridge, "approve_protection", {"review_id": token, "passphrase": PASSPHRASE}
-    )["ok"]
+    assert not call(bridge, "approve_protection", {"review_id": token, "passphrase": PASSPHRASE})[
+        "ok"
+    ]
     prepared = call(bridge, "prepare_protection", request)
     token = prepared["result"]["review_id"]
     call(bridge, "inspect", {"source": str(source), "sheet": None})

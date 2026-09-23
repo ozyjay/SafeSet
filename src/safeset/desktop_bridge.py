@@ -28,6 +28,37 @@ PROTOCOL_VERSION = 1
 MAX_REQUEST = 1024 * 1024
 MAX_RESPONSE = 1024 * 1024
 
+# Only fixed, value-free codes cross the desktop boundary. Unknown errors stay generic.
+PUBLIC_SAFETY_ERRORS = {
+    "Policy schema or safety constraints are invalid; see policy-format.md.": (
+        "policy_configuration"
+    ),
+    "Every source field needs an explicit protection decision.": "field_decisions",
+    "Every selected worksheet needs explicit field decisions.": "field_decisions",
+    "Every selected worksheet needs an explicit policy.": "field_decisions",
+    "Source keys must be non-empty and safe text.": "source_key_invalid",
+    "Source keys must be non-empty and unique.": "source_key_invalid",
+    "Source worksheets use a reserved relational heading.": "reserved_heading",
+    "Empty worksheets cannot be exported.": "empty_worksheet",
+    "Source category is outside the approved domain.": "category_domain",
+    "Numeric input violates approved bounds or precision.": "numeric_domain",
+    "A numeric input cannot be binned.": "numeric_domain",
+    "Non-finite numeric input is prohibited.": "numeric_domain",
+    "Numeric input falls outside approved bins.": "numeric_domain",
+    "Excel formula has no saved result. Recalculate and save locally.": "formula_result",
+    "Excel data range contains hidden rows.": "hidden_data",
+    "Excel data range contains hidden columns.": "hidden_data",
+    "Excel data range contains merged cells.": "merged_data",
+    "Excel workbook contains unsupported active content.": "active_content",
+    "Excel workbook contains unsupported cell features.": "cell_features",
+    "Excel workbook contains an unsupported cell type.": "cell_type",
+    "Destination already exists; overwriting is prohibited.": "destination_exists",
+    "Mapping destination already exists; overwriting is prohibited.": "destination_exists",
+    "Output directory must already exist.": "output_directory",
+    "Operational artefacts must be stored outside repositories.": "repository_destination",
+    "Mapping and export must use separate storage directories.": "destination_separation",
+}
+
 
 def _unique(pairs: list[tuple[str, object]]) -> dict:
     result = {}
@@ -413,13 +444,13 @@ class Bridge:
             command = _string(request["command"])
             result = self.dispatch(command, request["payload"])
             response = {"version": PROTOCOL_VERSION, "id": request_id, "ok": True, "result": result}
-        except SafetyError:
+        except SafetyError as error:
             self.pending = None
             response = {
                 "version": PROTOCOL_VERSION,
                 "id": request_id,
                 "ok": False,
-                "error": "safety_rejected",
+                "error": PUBLIC_SAFETY_ERRORS.get(str(error), "safety_rejected"),
             }
         except (ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
             self.pending = None
