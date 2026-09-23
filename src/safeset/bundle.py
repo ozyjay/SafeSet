@@ -39,9 +39,10 @@ def policy_payload(policy: Policy) -> dict:
             item["bins"] = [[number(lo), number(hi)] for lo, hi in rule.bins]
         elif rule.action == "keep_numeric":
             item["bounds"] = [number(value) for value in rule.bounds]
-            item["max_decimal_places"] = rule.max_decimal_places
+            if policy.version == 2:
+                item["max_decimal_places"] = rule.max_decimal_places
         columns[name] = item
-    return {"version": 2, "columns": columns, "min_group_size": policy.min_group_size}
+    return {"version": policy.version, "columns": columns, "min_group_size": policy.min_group_size}
 
 
 def create_bundle(source: Table, policy: Policy, candidate) -> dict:
@@ -103,7 +104,7 @@ def validate_bundle(value: object) -> dict:
     ):
         raise SafetyError("Restoration bundle version or structure is unsupported.")
     policy = parse_policy(value["policy"])
-    if value["policy"]["version"] != 2:
+    if value["policy"]["version"] not in {2, 3}:
         raise SafetyError("Restoration bundle policy version is unsupported.")
     source_columns = value["source_columns"]
     protected_columns = value["protected_columns"]

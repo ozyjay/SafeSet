@@ -43,7 +43,7 @@ class ColumnRule:
     allowed_values: tuple[str, ...] = ()
     bins: tuple[tuple[Decimal, Decimal], ...] = ()
     bounds: tuple[Decimal, Decimal] | None = None
-    max_decimal_places: int = 0
+    max_decimal_places: int | None = None
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -57,6 +57,7 @@ class ColumnRule:
 class Policy:
     columns: dict[str, ColumnRule]
     min_group_size: int
+    version: int
 
     @property
     def source_key(self) -> str:
@@ -83,7 +84,7 @@ def parse_policy(raw: object) -> Policy:
 
     require(isinstance(raw, dict))
     require(set(raw) == {"version", "columns", "min_group_size"})
-    require(type(raw["version"]) is int and raw["version"] in {1, 2})
+    require(type(raw["version"]) is int and raw["version"] in {1, 2, 3})
     version = raw["version"]
     require(type(raw["min_group_size"]) is int and 2 <= raw["min_group_size"] <= 50_000)
     require(isinstance(raw["columns"], dict) and 1 <= len(raw["columns"]) <= 128)
@@ -94,7 +95,7 @@ def parse_policy(raw: object) -> Policy:
         action = config.get("action")
         classification = config.get("classification")
         actions = {"drop", "keep", "bin", "pseudonymise"}
-        if version == 2:
+        if version in {2, 3}:
             actions |= {"code", "keep_numeric"}
         require(isinstance(action, str) and action in actions)
         require(isinstance(classification, str) and classification in CLASSES)
@@ -103,7 +104,7 @@ def parse_policy(raw: object) -> Policy:
         elif action == "bin":
             extra = {"bins"}
         elif action == "keep_numeric":
-            extra = {"bounds", "max_decimal_places"}
+            extra = {"bounds", "max_decimal_places"} if version == 2 else {"bounds"}
         else:
             extra = set()
         require(set(config) == {"action", "classification"} | extra)
@@ -131,7 +132,7 @@ def parse_policy(raw: object) -> Policy:
                 require(not bins or bins[-1][1] == lo)
                 bins.append((lo, hi))
         bounds = None
-        max_decimal_places = 0
+        max_decimal_places = None
         if action == "keep_numeric":
             pair = config["bounds"]
             require(isinstance(pair, list) and len(pair) == 2)
@@ -139,14 +140,15 @@ def parse_policy(raw: object) -> Policy:
             lo, hi = (Decimal(str(n)) for n in pair)
             require(lo.is_finite() and hi.is_finite() and 0 <= lo < hi)
             bounds = (lo, hi)
-            max_decimal_places = config["max_decimal_places"]
-            require(type(max_decimal_places) is int and 0 <= max_decimal_places <= 6)
+            if version == 2:
+                max_decimal_places = config["max_decimal_places"]
+                require(type(max_decimal_places) is int and 0 <= max_decimal_places <= 6)
         columns[name] = ColumnRule(
             action, classification, allowed, tuple(bins), bounds, max_decimal_places
         )
         require(all(len(label) <= 64 for label in columns[name].labels))
     require(sum(r.action == "pseudonymise" for r in columns.values()) == 1)
-    return Policy(columns, raw["min_group_size"])
+    return Policy(columns, raw["min_group_size"], version)
 
 
 def load_policy(path: Path) -> Policy:

@@ -1,18 +1,19 @@
-# Policy versions 1 and 2
+# Policy versions 1, 2 and 3
 
-The guided protected-workbook desktop constructs a strict version 2 policy in
-memory from explicit field decisions. Saving YAML is optional. This iteration
-does not add a policy action or change the YAML schema. Source-derived protected
+The guided protected-workbook desktop constructs a strict version 3 policy in
+memory from explicit field decisions. Saving YAML is optional. Source-derived protected
 fields are immutable during version 2 bundle reconstruction; newly added result
 fields need separate explicit approval and are not policy source columns. The
-version 2 *restoration bundle* is distinct from policy version 2 and legacy
+version 2 *restoration bundle* is distinct from policy versions 2 and 3 and legacy
 version 1 identity maps.
 
 See `examples/example-policy.yaml`. YAML mappings reject duplicate keys and aliases;
 unknown keys and types fail. Top-level keys are exactly `version`, `columns` and
-`min_group_size`. The version must be integer 1 or 2; minimum group size an integer
+`min_group_size`. The version must be integer 1, 2 or 3; minimum group size an integer
 >=2. Version 1 policies retain their original meaning. Version 2 adds `code` and
-`keep_numeric`; those actions are rejected under version 1. The example uses version 2.
+`keep_numeric`; those actions are rejected under version 1. Version 3 removes the
+decimal-place limit from `keep_numeric` while retaining its bounds. The example uses
+version 3.
 Column names use the source workbook's literal headings. They must be non-empty,
 unique, at most 64 characters, have no leading or trailing whitespace, and contain
 no control characters. Spaces, punctuation, mixed case and Unicode are supported.
@@ -20,7 +21,7 @@ no control characters. Spaces, punctuation, mixed case and Unicode are supported
 Source headings must match the policy exactly (order may differ). For structured
 Excel Tables, the visible header cells must also match the table's header metadata
 exactly.
-This relaxation applies to policy versions 1 and 2; existing policies and mappings
+This relaxation applies to all supported policy versions; existing policies and mappings
 retain their meaning and require no migration. Returned result headings obey the
 same bounds and still require an explicit allowlist before restoration.
 
@@ -40,8 +41,9 @@ that classify dropped fields remain valid.
 | `pseudonymise` | `action`, `classification` | Direct identifier only; exactly one |
 | `keep` | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
 | `bin` | Plus `bins`: list of at least two `[lower, upper]` numeric pairs | Quasi-identifier or analytical attribute |
-| `code` (v2) | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
+| `code` (v2/v3) | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
 | `keep_numeric` (v2) | Plus `bounds: [lower, upper]` and `max_decimal_places` | Quasi-identifier or analytical attribute |
+| `keep_numeric` (v3) | Plus `bounds: [lower, upper]` | Quasi-identifier or analytical attribute |
 
 Keep labels must be short categories. Use quoted YAML strings for numbers/booleans.
 `code` checks source values against the same strict categorical allowlist, then
@@ -59,12 +61,15 @@ the map contains no source snapshot. The encrypted map still contains only
 the exact numeric value of a plain non-negative decimal within inclusive finite
 bounds. Leading and trailing zeros are normalised (for example, `04.20` becomes
 `4.2`); signs, whitespace (including whitespace-only cells) and exponent notation
-are rejected. `max_decimal_places` is a mandatory integer from 0 to 6; a non-blank
-source string is limited to 64 characters. This action exposes the exact numeric
-values and missingness pattern in the export. All retained fields, including blank
-numeric cells, coded categories and exact numeric values, participate in per-field
-and joint group checks. A passing check is not an anonymity or recipient-suitability
-decision.
+are rejected. A non-blank source string is limited to 64 characters. Version 2
+also requires `max_decimal_places`, an integer from 0 to 6, and rejects source
+values with greater precision. Version 3 deliberately has no decimal-place limit.
+Loading a version 2 policy and saving it from the current desktop writes version 3
+and therefore removes that limit; the original file is never overwritten. This
+action exposes the exact numeric values and missingness pattern in the export. All
+retained fields, including blank numeric cells, coded categories and exact numeric
+values, participate in per-field and joint group checks. A passing check is not an
+anonymity or recipient-suitability decision.
 
 A heading detected as a direct identifier cannot be kept even if classified as an
 analytical attribute. A heading detected as free text must be dropped. For these
@@ -76,13 +81,13 @@ Output columns follow policy order with `record_id` first; dropped columns never
 appear. Source keys must be non-empty and unique, and remain exact strings in the
 map. Source keys with spreadsheet-formula prefixes or control characters fail
 before export so the resulting map remains restorable. Bin labels are limited to
-64 characters. There is no `generalise` or `redact` in either version. To add an action or schema option,
+64 characters. There is no `generalise` or `redact` in any version. To add an action or schema option,
 follow `.github/skills/policy-schema/SKILL.md`, update examples and migration
 behaviour and add rejection tests first.
 
 Validation profiles are workflow configuration, not YAML policy keys. Adding a
-`validation_profile` key to a version 1 or 2 policy remains an unknown-key error.
-The relational workflow applies one ordinary strict version 2 policy to each
+`validation_profile` key to any policy remains an unknown-key error.
+The relational workflow applies one ordinary strict version 3 policy to each
 selected worksheet. Each policy must contain exactly one pseudonymised source key;
 those explicitly selected keys form one shared entity domain even when their
 headings differ. `record_id` and `entity_id` are reserved relational output

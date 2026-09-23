@@ -134,7 +134,6 @@ def _draft_payload() -> dict:
                 "allowed_values": list(draft.allowed_values),
                 "bins": [list(pair) for pair in draft.bins],
                 "bounds": list(draft.bounds) if draft.bounds is not None else None,
-                "max_decimal_places": draft.max_decimal_places,
             }
             for name, draft in fields.items()
         }
@@ -183,7 +182,7 @@ def test_relational_exact_numeric_field_preserves_blanks():
     policies = {
         "Marks": parse_policy(
             {
-                "version": 2,
+                "version": 3,
                 "min_group_size": 2,
                 "columns": {
                     "student_key": {
@@ -194,7 +193,6 @@ def test_relational_exact_numeric_field_preserves_blanks():
                         "action": "keep_numeric",
                         "classification": "analytical_attribute",
                         "bounds": [0, 10],
-                        "max_decimal_places": 2,
                     },
                 },
             }

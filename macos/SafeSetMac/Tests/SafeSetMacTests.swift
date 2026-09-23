@@ -7,6 +7,7 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertEqual(draft.action, "")
         XCTAssertEqual(draft.classification, "")
         XCTAssertEqual(draft.payload()["allowed_values"] as? [String], [])
+        XCTAssertNil(draft.payload()["max_decimal_places"])
     }
 
     func testActionNamesMapToStrictPolicyActions() {

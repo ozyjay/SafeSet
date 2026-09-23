@@ -63,14 +63,20 @@ def safe_category(value: str) -> bool:
 
 
 def canonical_numeric(
-    value: str, bounds: tuple[Decimal, Decimal] | None, max_decimal_places: int
+    value: str,
+    bounds: tuple[Decimal, Decimal] | None,
+    max_decimal_places: int | None = None,
 ) -> str | None:
     """Preserve a blank or check a bounded number, normalising numeric formatting."""
     if value == "":
         return ""
     if bounds is None or len(value) > 64 or not PLAIN_NUMBER.fullmatch(value):
         return None
-    if "." in value and len(value.partition(".")[2]) > max_decimal_places:
+    if (
+        max_decimal_places is not None
+        and "." in value
+        and len(value.partition(".")[2]) > max_decimal_places
+    ):
         return None
     number = Decimal(value)
     if not number.is_finite() or not bounds[0] <= number <= bounds[1]:

@@ -73,10 +73,11 @@ hides their labels while preserving equality and frequency patterns within each
 column; it does not remove linkability through those patterns. In the legacy
 version 1 map workflow the codebook is ephemeral. The protected working-copy
 workflow encrypts observed codebooks inside the version 2 restoration bundle.
-Version 2 policies can retain exact plain decimal values within policy bounds
-and precision. Exact numbers may form rare groups and increase disclosure risk;
-the same per-field and joint checks apply. The validation report warns when either
-action is used.
+Version 3 policies can retain exact plain decimal values within policy bounds and
+do not impose a decimal-place limit. Version 2 policies retain their original
+configured precision check. Exact numbers may form rare groups and increase
+disclosure risk; the same per-field and joint checks apply. The validation report
+warns when either action is used.
 During legacy authorised local restoration, original labels for coded fields can be read
 from the original source workbook with exact source-key coverage and matching
 category/code groupings. Dropped fields remain absent. The encrypted map does not

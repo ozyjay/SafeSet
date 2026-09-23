@@ -41,7 +41,7 @@ PUBLIC_SAFETY_ERRORS = {
     "Source worksheets use a reserved relational heading.": "reserved_heading",
     "Empty worksheets cannot be exported.": "empty_worksheet",
     "Source category is outside the approved domain.": "category_domain",
-    "Numeric input violates approved bounds or precision.": "numeric_domain",
+    "Numeric input violates approved bounds or format.": "numeric_domain",
     "A numeric input cannot be binned.": "numeric_domain",
     "Non-finite numeric input is prohibited.": "numeric_domain",
     "Numeric input falls outside approved bins.": "numeric_domain",
@@ -118,7 +118,6 @@ def _drafts(value: object) -> dict[str, RuleDraft]:
                 "allowed_values",
                 "bins",
                 "bounds",
-                "max_decimal_places",
             }
         ):
             raise ValueError("draft")
@@ -139,7 +138,7 @@ def _drafts(value: object) -> dict[str, RuleDraft]:
             tuple(raw["allowed_values"]),
             tuple(tuple(pair) for pair in raw["bins"]),
             tuple(bounds) if bounds is not None else None,
-            raw["max_decimal_places"],
+            None,
         )
     return result
 
@@ -151,7 +150,6 @@ def _draft_dict(draft: RuleDraft) -> dict:
         "allowed_values": list(draft.allowed_values),
         "bins": [list(pair) for pair in draft.bins],
         "bounds": list(draft.bounds) if draft.bounds is not None else None,
-        "max_decimal_places": draft.max_decimal_places,
     }
 
 

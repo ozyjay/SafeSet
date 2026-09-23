@@ -10,6 +10,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.chart import BarChart, Reference
 from openpyxl.worksheet.table import Table as ExcelTable
 
+from safeset.bundle import create_bundle
 from safeset.errors import SafetyError
 from safeset.ingestion import (
     MAX_FIELD,
@@ -20,6 +21,7 @@ from safeset.ingestion import (
     read_excel,
 )
 from safeset.policy import load_policy, parse_policy
+from safeset.reconstruction import reconstruct
 from safeset.transform import sanitise
 from safeset.validation import validate
 
@@ -298,7 +300,7 @@ def test_populated_cells_still_enforce_sheet_limits(tmp_path, cell, error):
         "x: !!python/object:thing {}",
         "version: true\ncolumns: {}\nmin_group_size: 2",
         "- a\n- b",
-        "version: 3\ncolumns: {}\nmin_group_size: 2",
+        "version: 4\ncolumns: {}\nmin_group_size: 2",
     ],
 )
 def test_hostile_or_invalid_yaml(text, tmp_path):
@@ -331,7 +333,6 @@ def test_hostile_or_invalid_yaml(text, tmp_path):
         lambda p: p["columns"]["gpa"].update(bounds=[-1, 7]),
         lambda p: p["columns"]["gpa"].update(bounds=[True, 7]),
         lambda p: p["columns"]["gpa"].update(max_decimal_places=True),
-        lambda p: p["columns"]["gpa"].update(max_decimal_places=7),
         lambda p: p["columns"]["gpa"].update(bins=[[0, 7]]),
         lambda p: p["columns"]["campus"].update(bins=[[0, 7]]),
         lambda p: p["columns"]["student_number"].update(action="drop"),
@@ -352,7 +353,7 @@ def test_policy_fail_closed(change):
         parse_policy(raw)
 
 
-@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize("version", [1, 2, 3])
 def test_policy_accepts_literal_excel_headings_and_detects_sensitive_names(version):
     raw = {
         "version": version,
@@ -388,7 +389,7 @@ def test_policy_rejects_unsafe_or_reserved_headings(heading):
 
 @pytest.mark.parametrize(
     "value",
-    [" ", "NaN", "Infinity", "-1", "7.1", "secret-nonnumeric", "4.123", "4e0", "+4.2"],
+    [" ", "NaN", "Infinity", "-1", "7.1", "secret-nonnumeric", "4e0", "+4.2"],
 )
 def test_invalid_numeric_values_do_not_leak(source, policy, value):
     rows = deepcopy(source.rows)
@@ -413,6 +414,29 @@ def test_numeric_value_is_preserved_without_formatting(source, policy):
     rows = tuple({**row, "gpa": "04.20"} for row in source.rows)
     candidate = sanitise(Table(source.columns, rows), policy)
     assert [row["gpa"] for row in candidate.table.rows] == ["4.2"] * len(rows)
+
+
+def test_version_3_numeric_value_has_no_decimal_place_limit(source, policy):
+    rows = tuple({**row, "gpa": "4.123456789"} for row in source.rows)
+    precise_source = Table(source.columns, rows)
+    candidate = sanitise(precise_source, policy)
+    assert [row["gpa"] for row in candidate.table.rows] == ["4.123456789"] * len(rows)
+    assert validate(candidate.table, policy).passed
+    bundle = create_bundle(precise_source, policy, candidate)
+    assert bundle["policy"]["version"] == 3
+    assert "max_decimal_places" not in bundle["policy"]["columns"]["gpa"]
+    restored = reconstruct(precise_source, candidate.table, bundle, ())
+    assert [row["gpa"] for row in restored.rows] == ["4.123456789"] * len(rows)
+
+
+def test_version_2_numeric_precision_remains_compatible(source):
+    raw = yaml.safe_load((ROOT / "examples/example-policy.yaml").read_text())
+    raw["version"] = 2
+    raw["columns"]["gpa"]["max_decimal_places"] = 2
+    policy = parse_policy(raw)
+    rows = tuple({**row, "gpa": "4.123"} for row in source.rows)
+    with pytest.raises(SafetyError):
+        sanitise(Table(source.columns, rows), policy)
 
 
 def test_unapproved_category_does_not_leak(source, policy):

@@ -54,7 +54,8 @@ Negative cases cover unknown/missing schemas, duplicate headings, malformed
 Excel workbooks, input byte/field bounds, FIFO rejection, duplicate/aliased/unsafe YAML,
 unknown policy keys/actions/classifications, version 1 compatibility, invalid
 category domains, invalid or overlapping/gapped bins, numeric boundaries,
-non-finite/out-of-range values, exact-number blank preservation, precision and normalisation, fresh
+non-finite/out-of-range values, exact-number blank preservation, version 2 precision
+compatibility, version 3 unlimited decimal places and normalisation, fresh
 per-export category codes and rejected unapproved source categories,
 duplicate/blank/unsafe source keys, direct/free-text retention, small joint groups,
 invalid/duplicate/missing/unmatched returned IDs, malformed map structures, result

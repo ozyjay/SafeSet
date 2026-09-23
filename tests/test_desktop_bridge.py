@@ -33,7 +33,6 @@ def draft_payload():
             "allowed_values": list(d.allowed_values),
             "bins": [list(p) for p in d.bins],
             "bounds": list(d.bounds) if d.bounds is not None else None,
-            "max_decimal_places": d.max_decimal_places,
         }
         for name, d in drafts.items()
     }, str(threshold)

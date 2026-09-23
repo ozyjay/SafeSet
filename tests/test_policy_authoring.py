@@ -29,7 +29,7 @@ def example_drafts():
         "email": RuleDraft("drop", "direct_identifier"),
         "campus": RuleDraft("code", "quasi_identifier", ("Moon", "Mars")),
         "subject": RuleDraft("code", "quasi_identifier", ("Imaginary101",)),
-        "gpa": RuleDraft("keep_numeric", "quasi_identifier", bounds=(0, 7), max_decimal_places=2),
+        "gpa": RuleDraft("keep_numeric", "quasi_identifier", bounds=(0, 7)),
         "notes": RuleDraft("drop", "free_text"),
     }
 
@@ -40,6 +40,7 @@ def test_policy_builder_saves_private_strict_policy(tmp_path):
         ROOT / "examples/synthetic_students.xlsx", destination, example_drafts(), "2"
     )
     policy = load_policy(saved)
+    assert policy.version == 3
     assert policy.columns["campus"].action == "code"
     assert policy.columns["gpa"].action == "keep_numeric"
     assert stat.S_IMODE(saved.stat().st_mode) == 0o600
@@ -91,7 +92,9 @@ def test_existing_policy_can_be_loaded_and_saved_as_new_file(tmp_path):
     assert drafts["campus"].action == "code"
     assert drafts["gpa"].bounds == (0, 7)
     saved = save_policy(source, tmp_path / "revised.yaml", drafts, str(threshold))
-    assert load_policy(saved).columns["gpa"].action == "keep_numeric"
+    migrated = load_policy(saved)
+    assert migrated.version == 3
+    assert migrated.columns["gpa"].action == "keep_numeric"
 
 
 def test_policy_authoring_uses_selected_worksheet(tmp_path):

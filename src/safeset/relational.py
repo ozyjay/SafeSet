@@ -124,7 +124,7 @@ def _transform_value(value: str, rule, codes: dict[str, str], issued: set[str]) 
     if rule.action == "keep_numeric":
         result = canonical_numeric(value, rule.bounds, rule.max_decimal_places)
         if result is None:
-            raise SafetyError("Numeric input violates approved bounds or precision.")
+            raise SafetyError("Numeric input violates approved bounds or format.")
         return result
     if rule.action == "bin":
         try:

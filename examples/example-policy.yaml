@@ -1,4 +1,4 @@
-version: 2
+version: 3
 min_group_size: 2
 columns:
   student_name:
@@ -22,7 +22,6 @@ columns:
     action: keep_numeric
     classification: quasi_identifier
     bounds: [0, 7]
-    max_decimal_places: 2
   notes:
     action: drop
     classification: free_text

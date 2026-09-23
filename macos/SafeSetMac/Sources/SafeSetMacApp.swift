@@ -86,7 +86,7 @@ final class BackendBridge: @unchecked Sendable {
         case "reserved_heading": message = "A selected worksheet already uses record_id or entity_id, which are reserved output headings."
         case "empty_worksheet": message = "A selected worksheet has no data rows."
         case "category_domain": message = "A source category is outside the reviewed value list. Review the category values again."
-        case "numeric_domain": message = "A non-blank numeric value does not fit the reviewed bounds, precision or ranges. Genuine blank cells remain blank; whitespace-only cells are rejected."
+        case "numeric_domain": message = "A non-blank numeric value does not fit the reviewed bounds, plain-number format or ranges. Genuine blank cells remain blank; whitespace-only cells are rejected."
         case "formula_result": message = "A source formula has no saved value. Recalculate and save the workbook locally, then try again."
         case "hidden_data": message = "A selected data range contains hidden rows or columns. Unhide them or select a clean table."
         case "merged_data": message = "A selected data range contains merged cells, which SafeSet cannot process safely."
@@ -119,7 +119,6 @@ struct FieldDraft: Identifiable, Equatable {
     var binsText = ""
     var lower = ""
     var upper = ""
-    var places = "0"
 
     func payload() -> [String: Any] {
         let bins: [[Double]] = binsText.split(separator: "\n").compactMap { line in
@@ -133,7 +132,7 @@ struct FieldDraft: Identifiable, Equatable {
             ? [Double(lower)!, Double(upper)!] : NSNull()
         return [
             "action": action, "classification": classification, "allowed_values": allowedValues,
-            "bins": bins, "bounds": bounds, "max_decimal_places": Int(places) as Any? ?? NSNull()
+            "bins": bins, "bounds": bounds
         ]
     }
 }
@@ -223,9 +222,8 @@ struct CategorySheet: Identifiable {
             }
             if field.action == "keep_numeric" {
                 guard let lower = Double(field.lower), let upper = Double(field.upper),
-                      lower >= 0, lower < upper,
-                      let places = Int(field.places), (0...6).contains(places) else {
-                    return "Enter valid bounds and decimal precision for every exact numeric field."
+                      lower >= 0, lower < upper else {
+                    return "Enter valid bounds for every exact numeric field."
                 }
             }
         }
@@ -511,9 +509,6 @@ struct CategorySheet: Identifiable {
                     self.fields[index].lower = String(bounds[0])
                     self.fields[index].upper = String(bounds[1])
                 }
-                if let places = draft["max_decimal_places"] as? Int {
-                    self.fields[index].places = String(places)
-                }
             }
             self.threshold = String(result["threshold"] as? Int ?? 2)
             self.invalidate()
@@ -669,7 +664,6 @@ struct FieldCard: View {
                 HStack {
                     TextField("Lower bound", text: $field.lower)
                     TextField("Upper bound", text: $field.upper)
-                    TextField("Decimal places", text: $field.places)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {

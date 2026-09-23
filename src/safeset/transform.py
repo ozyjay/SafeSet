@@ -53,7 +53,7 @@ def sanitise(source: Table, policy: Policy) -> Candidate:
             elif rule.action == "keep_numeric":
                 value = canonical_numeric(row[name], rule.bounds, rule.max_decimal_places)
                 if value is None:
-                    raise SafetyError("Numeric input violates approved bounds or precision.")
+                    raise SafetyError("Numeric input violates approved bounds or format.")
                 result[name] = value
             elif rule.action == "bin":
                 try:

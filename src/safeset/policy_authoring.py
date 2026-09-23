@@ -107,7 +107,7 @@ def parse_number(text: str) -> int | float:
 
 
 def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
-    """Build a version 2 payload; the canonical parser enforces every safety rule."""
+    """Build a version 3 payload; the canonical parser enforces every safety rule."""
     if not threshold.isascii() or not threshold.isdecimal():
         raise SafetyError("Enter a whole-number minimum group size of at least 2.")
     columns = {}
@@ -120,9 +120,8 @@ def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
             config["bins"] = [list(pair) for pair in draft.bins]
         elif draft.action == "keep_numeric":
             config["bounds"] = list(draft.bounds) if draft.bounds is not None else None
-            config["max_decimal_places"] = draft.max_decimal_places
         columns[name] = config
-    payload = {"version": 2, "min_group_size": int(threshold), "columns": columns}
+    payload = {"version": 3, "min_group_size": int(threshold), "columns": columns}
     parse_policy(payload)
     return payload
 

@@ -47,7 +47,7 @@ The export and restore operations need no runtime network access.
 ## Relational workbook round trip (bundle version 3)
 
 The relational workflow protects an explicitly selected set of worksheets without
-flattening their schemas. Each worksheet has its own strict version 2 policy and
+flattening their schemas. Each worksheet has its own strict version 3 policy and
 exact source-table binding. The single `pseudonymise` field selected in every
 worksheet is declared to belong to one shared entity domain: equal source-key text
 therefore receives the same fresh random `entity_id` throughout the workbook.
@@ -114,7 +114,7 @@ uses native file pickers and masked passphrase entries. A prepared candidate rem
 in memory until its validation summary is reviewed and export is approved. Editing
 an input field invalidates the review. The publication boundary revalidates and
 checks destinations again.
-`policy_authoring` builds strict version 2 policies from explicit desktop choices,
+`policy_authoring` builds strict version 3 policies from explicit desktop choices,
 checks the source heading set again, and publishes a private, no-clobber YAML file
 outside repositories. Advisory classification hints never select an action. Distinct
 category values appear in the desktop only after a separate local review action;
@@ -171,12 +171,12 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   values are read without dataframe type inference; numeric cells become plain
   decimal text. Source identifiers requiring exact formatting must be stored
   as text in Excel. Exports write every cell as text.
-- Strict version 1 and 2 policies; unknown options, duplicate YAML keys, aliases,
+- Strict version 1, 2 and 3 policies; unknown options, duplicate YAML keys, aliases,
   unknown classifications, malformed bounds/bins and source-schema drift are errors.
 - Policy, mapping and result headings preserve literal Excel text within the
   ingestion bounds (non-empty, unique, at most 64 characters, no surrounding
   whitespace or controls). Exact matching and explicit allowlists remain required.
-  This backward-compatible rule applies to both policy versions and existing maps.
+  This backward-compatible rule applies to all policy versions and existing maps.
 - Exactly one unique, non-empty source identifier is pseudonymised to `record_id`.
   Other direct identifiers and all free text must be dropped. Map only that key,
   never names, notes or whole source rows. Rejoining dropped source fields is a
@@ -184,9 +184,10 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
 - Keep and code actions require explicit finite categorical `allowed_values`.
   Codes are random per distinct observed category, column and run. The category
   codebook exists only in memory and is not added to the encrypted identity map.
-  Bins generate labels under the original column heading. Version 2 numeric keep
-  requires bounds and precision, preserves genuine blank cells, and preserves
-  normalised exact numeric text. No inferred text redaction.
+  Bins generate labels under the original column heading. Version 3 numeric keep
+  requires bounds, has no decimal-place limit, preserves genuine blank cells, and
+  preserves normalised exact numeric text. Version 2 retains its configured
+  precision limit. No inferred text redaction.
 - Every retained attribute participates in the joint equivalence-class check,
   including analytical attributes; no silent risk exemption via classification.
 - Candidate data stays in memory until validation and explicit export approval.
