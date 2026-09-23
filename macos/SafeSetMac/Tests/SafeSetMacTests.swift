@@ -173,6 +173,58 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[0].allowedValues, [])
     }
 
+    @MainActor func testRemoveUndecidedFieldsPreservesConfiguredDecisions() {
+        let model = AppModel()
+        model.sourceSheets = ["Synthetic A", "Synthetic B"]
+        model.selectedSourceSheets = ["Synthetic A", "Synthetic B"]
+        model.sourceSheet = "Synthetic A"
+        var identifier = FieldDraft(id: "Invented ID")
+        identifier.action = "pseudonymise"
+        identifier.classification = "direct_identifier"
+        var partlyConfigured = FieldDraft(id: "Cohort")
+        partlyConfigured.action = "code"
+        partlyConfigured.classification = "quasi_identifier"
+        model.fieldsBySheet = [
+            "Synthetic A": [identifier, FieldDraft(id: "Unused"), partlyConfigured],
+            "Synthetic B": [identifier, FieldDraft(id: "Unused"), FieldDraft(id: "Cohort")]
+        ]
+        model.fields = model.fieldsBySheet["Synthetic A"]!
+
+        XCTAssertEqual(model.undecidedFieldCount, 1)
+        XCTAssertTrue(model.hasSourceKeySelections)
+        model.removeUndecidedFields()
+
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[1].action, "drop")
+        XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[1].action, "drop")
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[0].action, "pseudonymise")
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[2].action, "code")
+        XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[2].action, "")
+        XCTAssertTrue(model.fieldNeedsAttention("Cohort"))
+        XCTAssertFalse(model.fieldNeedsAttention("Unused"))
+    }
+
+    @MainActor func testBulkRemovalRequiresSourceKeySelections() {
+        let model = AppModel()
+        model.sourceSheets = ["Synthetic A"]
+        model.selectedSourceSheets = ["Synthetic A"]
+        model.sourceSheet = "Synthetic A"
+        model.fieldsBySheet = ["Synthetic A": [FieldDraft(id: "Invented ID")]]
+        XCTAssertFalse(model.hasSourceKeySelections)
+        model.removeUndecidedFields()
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[0].action, "")
+    }
+
+    func testFieldAttentionIncludesRequiredCategoryReview() {
+        var field = FieldDraft(id: "Invented cohort")
+        field.action = "keep"
+        field.classification = "analytical_attribute"
+        XCTAssertTrue(field.needsAttention)
+        field.allowedValues = ["Example A", "Example B"]
+        XCTAssertFalse(field.needsAttention)
+        field.blankCount = 1
+        XCTAssertTrue(field.needsAttention)
+    }
+
     @MainActor func testRestoreWorksheetSelectionsPreserveWorkbookOrder() {
         let model = AppModel()
         model.returnedSheets = ["Later", "Earlier", "Analysis"]

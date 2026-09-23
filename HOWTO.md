@@ -9,7 +9,7 @@ In the macOS app, use **⌘+** and **⌘−** to change text size, or **⌘0** t
 ## Protect a workbook
 
 1. Choose **Protect a workbook** and select the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. If several are visible, select every related worksheet in this release.
-2. Review the field summary. Choose an action for every field, and classify every field you keep or replace. Removed fields need no classification. The suggested classifications are only hints.
+2. Review the field summary. It initially shows fields needing attention; turn off **Show only fields needing attention** to revisit completed decisions. Choose and classify one source identifier per worksheet, then use **Remove undecided fields** to remove all fields that have no action on any selected worksheet. Set actions for other fields needed for analysis before using that shortcut. Classify every field you keep or replace. Removed fields need no classification. The suggested classifications are only hints.
 3. Choose exactly one direct source identifier per worksheet for **Replace with random record ID**. Remove other direct identifiers, free text and fields the analysis does not need.
 4. Review the values for each **Keep** or **Obfuscate values** field and approve its exact category list. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds; exact values may still disclose information.
 5. Set the minimum group size to at least 2. Choose a new protected workbook destination outside a repository, then review the validation summary. Mandatory failures block creation.

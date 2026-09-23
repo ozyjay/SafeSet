@@ -155,6 +155,31 @@ struct FieldDraft: Identifiable, Equatable {
     var lower = ""
     var upper = ""
 
+    var needsAttention: Bool {
+        if action.isEmpty { return true }
+        if action == "drop" { return false }
+        if classification.isEmpty { return true }
+        if action == "pseudonymise" { return classification != "direct_identifier" }
+        if !["quasi_identifier", "analytical_attribute"].contains(classification) { return true }
+        if action == "keep" || action == "code" {
+            return allowedValues.isEmpty || blankCount > 0
+        }
+        if action == "bin" {
+            let validPairs = binsText.split(separator: "\n").filter { line in
+                let parts = line.split(separator: ",", omittingEmptySubsequences: false)
+                return parts.count == 2
+                    && Double(parts[0].trimmingCharacters(in: .whitespaces)) != nil
+                    && Double(parts[1].trimmingCharacters(in: .whitespaces)) != nil
+            }
+            return validPairs.count < 2
+        }
+        if action == "keep_numeric" {
+            guard let lower = Double(lower), let upper = Double(upper) else { return true }
+            return lower < 0 || lower >= upper
+        }
+        return false
+    }
+
     func payload() -> [String: Any] {
         let bins: [[Double]] = binsText.split(separator: "\n").compactMap { line in
             let parts = line.split(separator: ",", omittingEmptySubsequences: false)
@@ -282,6 +307,47 @@ struct ConsolidatedField: Identifiable {
                 metadata: metadata
             )
         }
+    }
+
+    func fieldNeedsAttention(_ heading: String) -> Bool {
+        orderedSelectedSourceSheets.contains { sheet in
+            fieldsBySheet[sheet]?.first(where: { $0.id == heading })?.needsAttention ?? false
+        }
+    }
+
+    var undecidedFieldCount: Int {
+        consolidatedFields.filter { item in
+            item.sheets.allSatisfy { sheet in
+                fieldsBySheet[sheet]?.first(where: { $0.id == item.id })?.action == ""
+            }
+        }.count
+    }
+
+    var hasSourceKeySelections: Bool {
+        !selectedSourceSheets.isEmpty && selectedSourceSheets.allSatisfy { sheet in
+            (fieldsBySheet[sheet] ?? []).filter {
+                $0.action == "pseudonymise" && $0.classification == "direct_identifier"
+            }.count == 1
+        }
+    }
+
+    func removeUndecidedFields() {
+        guard hasSourceKeySelections else { return }
+        let headings = consolidatedFields.filter { item in
+            item.sheets.allSatisfy { sheet in
+                fieldsBySheet[sheet]?.first(where: { $0.id == item.id })?.action == ""
+            }
+        }.map(\.id)
+        for heading in headings {
+            for sheet in selectedSourceSheets {
+                guard var sheetFields = fieldsBySheet[sheet],
+                      let index = sheetFields.firstIndex(where: { $0.id == heading }) else { continue }
+                sheetFields[index].action = "drop"
+                fieldsBySheet[sheet] = sheetFields
+                if sheet == sourceSheet { fields = sheetFields }
+            }
+        }
+        invalidate()
     }
 
     func decisionProblem(_ configured: [FieldDraft]) -> String? {
@@ -1287,6 +1353,7 @@ struct ProtectView: View {
     @State private var passphrase = ""
     @State private var confirmation = ""
     @State private var showApproval = false
+    @State private var showOnlyFieldsNeedingAttention = true
 
     var body: some View {
         ScrollView {
@@ -1313,7 +1380,38 @@ struct ProtectView: View {
                     Text("Review fields across selected worksheets").appFont(18, weight: .bold)
                     Text("A repeated heading appears once and its decision applies to every listed worksheet. Sheet-specific headings remain separate. Classify fields you keep or replace; removed fields need no classification.")
                         .foregroundStyle(.secondary)
-                    ForEach(model.consolidatedFields) { item in
+                    let attentionCount = model.consolidatedFields.filter {
+                        model.fieldNeedsAttention($0.id)
+                    }.count
+                    HStack {
+                        Text("\(attentionCount) of \(model.consolidatedFields.count) fields need attention")
+                            .appFont(13, weight: .semibold)
+                        Spacer()
+                        Toggle("Show only fields needing attention",
+                               isOn: $showOnlyFieldsNeedingAttention)
+                            .appFont(13)
+                            .toggleStyle(.checkbox)
+                    }
+                    if model.undecidedFieldCount > 0 {
+                        Button("Remove \(model.undecidedFieldCount) undecided fields") {
+                            model.removeUndecidedFields()
+                        }
+                        .appFont(13)
+                        .disabled(!model.hasSourceKeySelections)
+                        .help("Applies Remove only to fields with no action on any selected worksheet. You can show all fields to change a decision.")
+                        if !model.hasSourceKeySelections {
+                            Text("Choose and classify one source identifier per worksheet before removing the undecided fields.")
+                                .appFont(12)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if showOnlyFieldsNeedingAttention && attentionCount == 0 {
+                        Text("No fields need further input here. Show all fields to review or change them.")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.consolidatedFields.filter {
+                        !showOnlyFieldsNeedingAttention || model.fieldNeedsAttention($0.id)
+                    }) { item in
                         FieldCard(
                             field: Binding(
                                 get: {

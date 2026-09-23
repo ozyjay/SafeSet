@@ -94,7 +94,7 @@ real identities or credentials.
 | Incorrect legacy coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The version 1 map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |
 | Remembered private-bundle path | Desktop preferences retain only the last existing `.enc` path, never the passphrase or bundle content; stale paths are removed and the user can forget the path explicitly | The local account, device backups or preference inspection may reveal the bundle filename and location |
-| Policy authoring exposure | Field choices are explicit; distinct category values appear only after a local review action; saved policies use private no-clobber storage outside repositories | A policy can contain sensitive headings and category labels; an incorrect classification may retain inappropriate data |
+| Policy authoring exposure | Field choices are explicit; the desktop's bulk Remove action requires a selected source key and changes only wholly undecided headings; distinct category values appear only after a local review action; saved policies use private no-clobber storage outside repositories | A policy can contain sensitive headings and category labels; an incorrect classification may retain inappropriate data; bulk removal can omit fields needed for analysis |
 
 ## Encryption and keys
 

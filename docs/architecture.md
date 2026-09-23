@@ -70,6 +70,12 @@ Categorical review presents the union of labels to the operator but retains each
 worksheet's exact observed allowlist in its own policy. Sheet-specific headings
 remain separate. Consolidation does not infer that same-named fields have the same
 semantics; that judgement remains explicit operator responsibility.
+The desktop initially filters the editor to fields whose decisions or required
+category/numeric settings remain incomplete. Operators can show all fields to
+revisit decisions. Its bulk Remove action applies only to headings that have no
+action in every selected worksheet; any configured decision is left alone. Both
+controls change authoring convenience, while per-sheet policies and validation
+still require explicit decisions for every source field.
 The encrypted version 3 bundle contains one `entity_id`-to-source-key map, per-sheet
 `record_id`-to-source-row-index maps, exact per-sheet schemas, policies, codebooks
 and source digests. It also authenticates the explicitly confirmed list of shared
