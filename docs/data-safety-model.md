@@ -22,6 +22,11 @@ This check prevents accidental source overwrite but cannot establish that an
 approved result is accurate or that the protected workbook is suitable for a
 recipient. The source-table fingerprint binds the selected data and order, so even
 benign source edits require a new protection run.
+After that binding is verified, reconstruction rejects original source cells
+with formula-like prefixes or control characters before writing the restored
+workbook. Such cells can be in fields omitted from the protected copy. Correcting
+them requires a new source, protection run and matching private bundle; the bound
+source cannot be edited in place for an existing release.
 
 A **direct identifier** connects a record to a person; a **pseudonymous identifier**
 is the generated random `record_id`. A **quasi-identifier** may identify someone in
