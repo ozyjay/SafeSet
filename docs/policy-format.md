@@ -77,3 +77,11 @@ before export so the resulting map remains restorable. Bin labels are limited to
 64 characters. There is no `generalise` or `redact` in either version. To add an action or schema option,
 follow `.github/skills/policy-schema/SKILL.md`, update examples and migration
 behaviour and add rejection tests first.
+
+Validation profiles are workflow configuration, not YAML policy keys. Adding a
+`validation_profile` key to a version 1 or 2 policy remains an unknown-key error.
+The relational workflow applies one ordinary strict version 2 policy to each
+selected worksheet. Each policy must contain exactly one pseudonymised source key;
+those explicitly selected keys form one shared entity domain even when their
+headings differ. `record_id` and `entity_id` are reserved relational output
+headings and are rejected in relational source schemas.

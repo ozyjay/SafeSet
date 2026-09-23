@@ -44,6 +44,50 @@ trust boundaries. The bundle stays outside export directories and repositories;
 the reconstructed output is sensitive plaintext and never overwrites the source.
 The export and restore operations need no runtime network access.
 
+## Relational workbook round trip (bundle version 3)
+
+The relational workflow protects an explicitly selected set of worksheets without
+flattening their schemas. Each worksheet has its own strict version 2 policy and
+exact source-table binding. The single `pseudonymise` field selected in every
+worksheet is declared to belong to one shared entity domain: equal source-key text
+therefore receives the same fresh random `entity_id` throughout the workbook.
+SafeSet never infers this relationship from similar headings. Each source row also
+receives a globally unique random `record_id`, so result restoration remains
+unambiguous when an entity occurs in several worksheets or several rows.
+
+The protected workbook preserves selected worksheet names and contains both IDs.
+The encrypted version 3 bundle contains one `entity_id`-to-source-key map, per-sheet
+`record_id`-to-source-row-index maps, exact per-sheet schemas, policies, codebooks
+and source digests. It contains no dropped fields or whole source rows. All sheets
+are reviewed and published as one release; a failure in any sheet or in linked
+validation blocks the workbook. Publication writes the authenticated private bundle
+before the protected workbook, so a failure may leave an orphan bundle but never a
+protected workbook without its bundle.
+
+Reconstruction requires the exact original and returned worksheet set. It verifies
+every record ID, entity ID, protected value, source row position and workbook
+binding before importing explicitly approved new result columns per sheet. The
+result is a new multi-sheet sensitive workbook. Version 2 and version 3 bundle
+envelopes are not reinterpreted or migrated implicitly.
+
+Shared entity IDs deliberately reveal equality, cross-sheet participation and
+frequency patterns. Validation therefore reports per-sheet marginal and joint
+groups plus linked entity fingerprints formed from every released source-derived
+attribute and worksheet participation pattern.
+
+## Validation profiles
+
+`strict` remains the default. Small retained-value groups, small per-sheet joint
+classes and small linked entity classes are mandatory failures.
+
+`controlled_pseudonymisation` is an explicit release profile. It retains all
+structural, schema, domain, unsafe-text, identifier and integrity failures as
+mandatory blockers, but reports the three small-group findings as prominent
+warnings for explicit human review. It is not a validation bypass and does not
+claim anonymity. The selected profile is authenticated in a version 3 bundle;
+single-sheet approval revalidates with the reviewed profile immediately before
+publication. Changing profiles invalidates the desktop review.
+
 ## Existing version 1 map path and shared foundations
 
 The CLI and SwiftUI desktop helper delegate to typed Python domain modules.
@@ -85,7 +129,7 @@ validation, approval or publication outcomes. The log is truncated at 1 MiB.
 Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
 50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per
 field. A workbook may contain multiple worksheets. The desktop processes one
-selected worksheet at a time. The CLI can combine explicitly selected worksheets
+selected worksheet or an explicitly linked relational set. The legacy CLI path can combine worksheets
 when their headings match in the same order. Their rows are appended in the supplied
 order, with the row limit applied to the combined table. Duplicate source keys
 fail before export; no automatic choice is made between overlapping records. Only selected sheets enter

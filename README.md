@@ -5,11 +5,11 @@ SafeSet is an offline desktop and CLI tool for creating a protected Excel workin
 ## Primary desktop workflow
 
 1. Open `SafeSet.app` on macOS and choose **Protect a workbook**. The installed CLI command `safeset desktop` also opens the app.
-2. Choose the original `.xlsx` workbook. SafeSet selects its only visible worksheet automatically; if there are several, select one explicitly. Inspection runs locally and shows counts and field hints, not cell samples.
+2. Choose the original `.xlsx` workbook. SafeSet selects its only visible worksheet automatically. For a relational release, explicitly select every related worksheet and configure each one. The pseudonymised source-key fields form one shared entity domain, so equal source IDs receive the same random `entity_id`; every row also receives its own `record_id`. Inspection runs locally and shows counts and field hints, not cell samples.
 3. Give **every** field an action. Classify fields you keep or replace; **Remove** needs no classification choice. Use **Replace with anonymous ID** for exactly one source key, **Obfuscate values**, **Keep**, **Group into ranges** or **Keep exact number**. Review category allowlists and numeric settings explicitly. Heuristic hints do not make decisions for you.
-4. Review the mandatory validation status, field counts and destinations. Approve the protection and enter a confirmed passphrase. SafeSet writes a new protected workbook and a separate encrypted version 2 restoration bundle in private local storage by default. It never overwrites an existing file.
+4. Choose **Strict** validation (the default) or explicitly choose **Controlled pseudonymisation**. Strict mode blocks rare groups. Controlled pseudonymisation keeps structural and integrity failures mandatory but presents rare per-sheet and linked groups as disclosure warnings. Review the status, warnings, field counts and destinations before approval. SafeSet writes a protected workbook and a separate encrypted version 2 single-sheet or version 3 relational restoration bundle. It never overwrites an existing file.
 5. Work with the protected workbook. You may append new result columns such as a synthetic `Team` field. Keep `record_id` and all original protected columns and values intact.
-6. Choose **Restore a workbook**. Supply the modified protected workbook, original source and bundle. Unlock the bundle locally so SafeSet can verify the exact source, rows, IDs, schema and protected values. Review and explicitly approve each new result field. Authorise creation of a **new** locally reidentified workbook. The original file is never modified.
+6. Choose **Restore a workbook** and select **Multi-sheet relational bundle** for a version 3 release. Supply the modified protected workbook, original source and bundle. Unlock the bundle locally so SafeSet can verify every selected worksheet, source row, entity ID, record ID, schema and protected value. Review and explicitly approve each new result field per worksheet. Authorise creation of a **new** locally reidentified workbook. The original file is never modified.
 
 Reconstruction restores source fields from the exact original workbook, including fields removed from the protected copy. New result fields are imported only when approved. Changes to source-derived protected fields, including coded categories, are blocked. Result cells currently accept only short, safe categorical text. Editable source-derived fields are not supported in this version.
 
@@ -53,6 +53,28 @@ safeset reconstruct $ExportExcel --original-source examples/synthetic_students.x
 ```
 
 CLI protection requires validation, review, explicit approval and hidden passphrase entry. Reconstruction requires exact IDs, approval of every new result field and explicit authorisation. The legacy `sanitise` and `restore` commands still create a version 1 map and perform a selected-result join.
+
+For related worksheets with distinct schemas, provide one policy per sheet. The
+left side of each `--sheet-policy` is the literal worksheet name. Every policy's
+pseudonymised source key is placed in the same explicit entity domain:
+
+```pwsh
+safeset protect-relational source.xlsx `
+  --sheet-policy 'Enrolments=enrolments-policy.yaml' `
+  --sheet-policy 'Preferences=preferences-policy.yaml' `
+  --validation-profile controlled_pseudonymisation `
+  --output protected.xlsx --create-bundle --bundle relational.enc
+
+safeset reconstruct-relational returned.xlsx `
+  --original-source source.xlsx --bundle relational.enc `
+  --output restored.xlsx `
+  --result-column 'Enrolments=Team' `
+  --result-column 'Preferences=Team' --authorise
+```
+
+The CLI reports validation before prompting for approval or publishing. Omit
+`--validation-profile` for strict mode. Controlled pseudonymisation changes only
+rare-group findings into warnings; it does not bypass schema or integrity failures.
 
 See [HOWTO.md](HOWTO.md), [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [safety model](docs/data-safety-model.md), [policy format](docs/policy-format.md) and [verification](docs/verification.md).
 

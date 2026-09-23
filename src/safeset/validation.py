@@ -11,6 +11,7 @@ from .pseudonyms import valid_id
 @dataclass
 class ValidationReport:
     rows: int
+    profile: str = "strict"
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     minimum_class_size: int = 0
@@ -37,8 +38,10 @@ class ValidationReport:
         }
 
 
-def validate(table: Table, policy: Policy) -> ValidationReport:
-    report = ValidationReport(len(table.rows))
+def validate(table: Table, policy: Policy, profile: str = "strict") -> ValidationReport:
+    if not isinstance(profile, str) or profile not in {"strict", "controlled_pseudonymisation"}:
+        raise SafetyError("Validation profile is unsupported.")
+    report = ValidationReport(len(table.rows), profile)
     if len(set(table.columns)) != len(table.columns) or set(table.columns) != set(
         policy.output_columns
     ):
@@ -100,9 +103,17 @@ def validate(table: Table, policy: Policy) -> ValidationReport:
     report.unique_records = sum(n == 1 for n in classes.values())
     report.unique_fraction = report.unique_records / len(table.rows)
     report.small_class_records = sum(n for n in classes.values() if n < policy.min_group_size)
+    rare_findings = []
     if report.small_cells:
-        report.errors.append("Small retained-value groups fall below the policy threshold.")
+        rare_findings.append("Small retained-value groups fall below the policy threshold.")
     if report.small_class_records:
-        report.errors.append("Small joint equivalence classes fall below the policy threshold.")
+        rare_findings.append("Small joint equivalence classes fall below the policy threshold.")
+    if profile == "strict":
+        report.errors.extend(rare_findings)
+    else:
+        report.warnings.extend(
+            f"Controlled pseudonymisation risk accepted for review: {finding}"
+            for finding in rare_findings
+        )
     report.errors = list(dict.fromkeys(report.errors))
     return report

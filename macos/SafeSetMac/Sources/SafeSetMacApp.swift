@@ -134,8 +134,11 @@ struct CategorySheet: Identifiable {
     @Published var source = ""
     @Published var sourceSheets: [String] = []
     @Published var sourceSheet = ""
+    @Published var selectedSourceSheets: Set<String> = []
+    @Published var fieldsBySheet: [String: [FieldDraft]] = [:]
     @Published var fields: [FieldDraft] = []
     @Published var threshold = "2"
+    @Published var validationProfile = "strict"
     @Published var protectedOutput = ""
     @Published var bundleOutput = ""
     @Published var protectionReview: [String: Any]?
@@ -150,6 +153,7 @@ struct CategorySheet: Identifiable {
     @Published var restoredOutput = ""
     @Published var restorationReview: [String: Any]?
     @Published var approvedResults: Set<String> = []
+    @Published var relationalRestore = false
     @Published var legacyPolicy = ""
     @Published var legacyMap = ""
     @Published var legacyOutput = ""
@@ -161,15 +165,28 @@ struct CategorySheet: Identifiable {
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
 
     var canPrepareProtection: Bool {
-        !fields.isEmpty && fields.allSatisfy {
-            !$0.action.isEmpty && ($0.action == "drop" || !$0.classification.isEmpty)
+        if selectedSourceSheets.isEmpty {
+            return !fields.isEmpty && fields.allSatisfy {
+                !$0.action.isEmpty && ($0.action == "drop" || !$0.classification.isEmpty)
+            }
+        }
+        return selectedSourceSheets.allSatisfy { sheet in
+            let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
+            return !configured.isEmpty && configured.allSatisfy {
+                !$0.action.isEmpty && ($0.action == "drop" || !$0.classification.isEmpty)
+            }
         }
     }
 
     var canApproveRestoration: Bool {
-        guard let review = restorationReview,
-              review["review_id"] is String,
-              let names = review["new_columns"] as? [String] else { return false }
+        guard let review = restorationReview, review["review_id"] is String else { return false }
+        if relationalRestore, let groups = review["new_columns"] as? [String: [String]] {
+            let names = Set(groups.flatMap { sheet, columns in
+                columns.map { "\(sheet)::\($0)" }
+            })
+            return names == approvedResults
+        }
+        guard let names = review["new_columns"] as? [String] else { return false }
         return Set(names) == approvedResults
     }
 
@@ -207,20 +224,42 @@ struct CategorySheet: Identifiable {
     }
 
     func chooseSource(_ url: URL) {
-        source = url.path; fields = []; invalidate()
+        source = url.path; fields = []; fieldsBySheet = [:]
+        selectedSourceSheets = []; invalidate()
         send("list_sheets", ["path": source]) { result in
             self.sourceSheets = result["sheets"] as? [String] ?? []
             self.sourceSheet = self.sourceSheets.count == 1 ? self.sourceSheets[0] : ""
+            self.selectedSourceSheets = Set(self.sourceSheet.isEmpty ? [] : [self.sourceSheet])
             if !self.sourceSheet.isEmpty { self.inspect() }
         }
     }
 
+    func toggleSourceSheet(_ sheet: String, selected: Bool) {
+        if !sourceSheet.isEmpty { fieldsBySheet[sourceSheet] = fields }
+        if selected { selectedSourceSheets.insert(sheet) }
+        else { selectedSourceSheets.remove(sheet); fieldsBySheet.removeValue(forKey: sheet) }
+        if selected && sourceSheet.isEmpty { selectSourceSheet(sheet) }
+        else if !selectedSourceSheets.contains(sourceSheet) {
+            selectSourceSheet(selectedSourceSheets.sorted().first ?? "")
+        }
+        invalidate()
+    }
+
+    func selectSourceSheet(_ sheet: String) {
+        if !sourceSheet.isEmpty { fieldsBySheet[sourceSheet] = fields }
+        sourceSheet = sheet
+        guard !sheet.isEmpty else { fields = []; return }
+        if let saved = fieldsBySheet[sheet] { fields = saved }
+        else { fields = []; inspect() }
+    }
+
     func inspect() {
         guard !source.isEmpty, !sourceSheet.isEmpty else { return }
+        let inspectedSheet = sourceSheet
         invalidate()
-        send("inspect", ["source": source, "sheet": sourceSheet]) { result in
+        send("inspect", ["source": source, "sheet": inspectedSheet]) { result in
             let data = result["columns"] as? [[String: Any]] ?? []
-            self.fields = data.map { item in
+            let inspectedFields = data.map { item in
                 var field = FieldDraft(id: item["column"] as? String ?? "")
                 field.type = item["type"] as? String ?? ""
                 field.cardinality = item["cardinality"] as? Int ?? 0
@@ -228,6 +267,8 @@ struct CategorySheet: Identifiable {
                 field.flags = item["flags"] as? [String] ?? []
                 return field
             }
+            self.fieldsBySheet[inspectedSheet] = inspectedFields
+            if self.sourceSheet == inspectedSheet { self.fields = inspectedFields }
         }
     }
 
@@ -244,6 +285,7 @@ struct CategorySheet: Identifiable {
     func approveCategories(_ category: CategorySheet) {
         if let index = fields.firstIndex(where: { $0.id == category.field }) {
             fields[index].allowedValues = category.values
+            fieldsBySheet[sourceSheet] = fields
         }
         categorySheet = nil
     }
@@ -259,18 +301,38 @@ struct CategorySheet: Identifiable {
         }
         let output = protectedOutput.isEmpty
             ? (source as NSString).deletingPathExtension + "-protected.xlsx" : protectedOutput
-        var payload: [String: Any] = [
-            "source": source, "sheet": sourceSheet, "output": output,
-            "drafts": draftPayload(), "threshold": threshold
-        ]
+        fieldsBySheet[sourceSheet] = fields
+        let relational = selectedSourceSheets.count > 1
+        var payload: [String: Any]
+        if relational {
+            let drafts = Dictionary(uniqueKeysWithValues: selectedSourceSheets.map { sheet in
+                (sheet, Dictionary(uniqueKeysWithValues:
+                    (fieldsBySheet[sheet] ?? []).map { ($0.id, $0.payload()) }))
+            })
+            payload = [
+                "source": source, "sheets": selectedSourceSheets.sorted(), "output": output,
+                "drafts": drafts, "threshold": threshold,
+                "validation_profile": validationProfile
+            ]
+        } else {
+            payload = [
+                "source": source, "sheet": sourceSheet, "output": output,
+                "drafts": draftPayload(), "threshold": threshold,
+                "validation_profile": validationProfile
+            ]
+        }
         payload["bundle"] = bundleOutput.isEmpty ? NSNull() : bundleOutput
-        send("prepare_protection", payload) { self.protectionReview = $0 }
+        send(relational ? "prepare_relational_protection" : "prepare_protection", payload) {
+            self.protectionReview = $0
+        }
     }
 
     func approveProtection(passphrase: String) {
         guard let review = protectionReview,
               let token = review["review_id"] as? String else { return }
-        send("approve_protection", ["review_id": token, "passphrase": passphrase]) { _ in
+        let relational = review["worksheets"] != nil
+        send(relational ? "approve_relational_protection" : "approve_protection",
+             ["review_id": token, "passphrase": passphrase]) { _ in
             self.original = self.source
             self.originalSheets = self.sourceSheets
             self.originalSheet = self.sourceSheet
@@ -299,16 +361,21 @@ struct CategorySheet: Identifiable {
 
     func prepareRestoration(passphrase: String) {
         guard !returned.isEmpty, !original.isEmpty, !restoreBundle.isEmpty,
-              !returnedSheet.isEmpty, !originalSheet.isEmpty else {
+              relationalRestore || (!returnedSheet.isEmpty && !originalSheet.isEmpty) else {
             alert = "Choose both workbooks, their worksheets and the private bundle."; return
         }
         let output = restoredOutput.isEmpty
             ? (returned as NSString).deletingPathExtension + "-restored.xlsx" : restoredOutput
-        send("prepare_reconstruction", [
-            "returned": returned, "returned_sheet": returnedSheet,
-            "source": original, "source_sheet": originalSheet,
-            "bundle": restoreBundle, "output": output, "passphrase": passphrase
-        ]) { result in
+        let command = relationalRestore ? "prepare_relational_reconstruction" : "prepare_reconstruction"
+        var payload: [String: Any] = [
+            "returned": returned, "source": original, "bundle": restoreBundle,
+            "output": output, "passphrase": passphrase
+        ]
+        if !relationalRestore {
+            payload["returned_sheet"] = returnedSheet
+            payload["source_sheet"] = originalSheet
+        }
+        send(command, payload) { result in
             self.restorationReview = result
             self.approvedResults = []
         }
@@ -317,14 +384,21 @@ struct CategorySheet: Identifiable {
     func approveRestoration() {
         guard canApproveRestoration,
               let review = restorationReview,
-              let token = review["review_id"] as? String,
-              let names = review["new_columns"] as? [String] else {
+              let token = review["review_id"] as? String else {
             alert = "Approve every new result field or remove it from the returned workbook."
             return
         }
-        send("approve_reconstruction", [
-            "review_id": token, "approved_results": names
-        ]) { _ in
+        let command: String
+        let approved: Any
+        if relationalRestore, let groups = review["new_columns"] as? [String: [String]] {
+            command = "approve_relational_reconstruction"
+            approved = groups
+        } else {
+            guard let names = review["new_columns"] as? [String] else { return }
+            command = "approve_reconstruction"
+            approved = names
+        }
+        send(command, ["review_id": token, "approved_results": approved]) { _ in
             self.restorationReview = nil
             self.alert = "A new locally reidentified workbook was created. Keep it private."
             self.page = .home
@@ -550,18 +624,22 @@ struct RootView: View {
         .alert("SafeSet", isPresented: Binding(
             get: { !model.alert.isEmpty }, set: { if !$0 { model.alert = "" } }
         )) { Button("OK") { model.alert = "" } } message: { Text(model.alert) }
-        .onChange(of: model.fields) { model.invalidate() }
+        .onChange(of: model.fields) {
+            if !model.sourceSheet.isEmpty { model.fieldsBySheet[model.sourceSheet] = model.fields }
+            model.invalidate()
+        }
         .onChange(of: model.source) { model.invalidate() }
-        .onChange(of: model.sourceSheet) { model.fields = []; model.invalidate() }
         .onChange(of: model.protectedOutput) { model.invalidate() }
         .onChange(of: model.bundleOutput) { model.invalidate() }
         .onChange(of: model.threshold) { model.invalidate() }
+        .onChange(of: model.validationProfile) { model.invalidate() }
         .onChange(of: model.returned) { model.invalidate() }
         .onChange(of: model.returnedSheet) { model.invalidate() }
         .onChange(of: model.original) { model.invalidate() }
         .onChange(of: model.originalSheet) { model.invalidate() }
         .onChange(of: model.restoreBundle) { model.invalidate() }
         .onChange(of: model.restoredOutput) { model.invalidate() }
+        .onChange(of: model.relationalRestore) { model.invalidate() }
         .onChange(of: model.legacyPolicy) { model.invalidate() }
         .onChange(of: model.legacyMap) { model.invalidate() }
         .onChange(of: model.legacyOutput) { model.invalidate() }
@@ -606,14 +684,30 @@ struct ProtectView: View {
                 PathRow(title: "Original workbook", path: $model.source, save: false,
                         fileExtension: "xlsx") { model.chooseSource($0) }
                 if model.sourceSheets.count > 1 {
-                    Picker("Worksheet", selection: $model.sourceSheet) {
-                        Text("Choose…").tag("")
-                        ForEach(model.sourceSheets, id: \.self) { Text($0).tag($0) }
+                    GroupBox("Related worksheets") {
+                        VStack(alignment: .leading) {
+                            Text("Select every worksheet that belongs to this linked release.")
+                                .foregroundStyle(.secondary)
+                            ForEach(model.sourceSheets, id: \.self) { sheet in
+                                Toggle(sheet, isOn: Binding(
+                                    get: { model.selectedSourceSheets.contains(sheet) },
+                                    set: { model.toggleSourceSheet(sheet, selected: $0) }
+                                ))
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Button("Inspect worksheet") { model.inspect() }
+                    Picker("Configure worksheet", selection: Binding(
+                        get: { model.sourceSheet },
+                        set: { model.selectSourceSheet($0) }
+                    )) {
+                        Text("Choose…").tag("")
+                        ForEach(model.selectedSourceSheets.sorted(), id: \.self) {
+                            Text($0).tag($0)
+                        }
+                    }
                 }
                 if !model.fields.isEmpty {
-                    Text("Review every field").font(.title2.bold())
+                    Text("Review every field in \(model.sourceSheet)").font(.title2.bold())
                     Text("Choose an action for every field. Classify fields you keep or replace; removed fields need no classification.")
                         .foregroundStyle(.secondary)
                     ForEach($model.fields) { field in
@@ -623,6 +717,15 @@ struct ProtectView: View {
                         Text("Minimum group size")
                         TextField("2", text: $model.threshold).frame(width: 75)
                     }
+                    Picker("Validation profile", selection: $model.validationProfile) {
+                        Text("Strict — rare groups block export").tag("strict")
+                        Text("Controlled pseudonymisation — rare groups warn")
+                            .tag("controlled_pseudonymisation")
+                    }
+                    Text(model.validationProfile == "strict"
+                         ? "Strict mode blocks small marginal and joint groups."
+                         : "Controlled pseudonymisation keeps structural checks mandatory and requires explicit review of rare-group and linkage warnings.")
+                        .foregroundStyle(.secondary)
                     PathRow(title: "Protected workbook", path: $model.protectedOutput,
                             save: true, fileExtension: "xlsx")
                     DisclosureGroup("Advanced settings") {
@@ -636,7 +739,11 @@ struct ProtectView: View {
                    let validation = review["validation"] as? [String: Any] {
                     Divider()
                     Text("Final review").font(.title2.bold())
-                    Text("\(review["rows"] as? Int ?? 0) records · \(review["removed"] as? Int ?? 0) removed · 1 identifier replaced · \(review["obfuscated"] as? Int ?? 0) obfuscated · \(review["retained"] as? Int ?? 0) retained")
+                    if let worksheets = review["worksheets"] as? Int {
+                        Text("\(review["rows"] as? Int ?? 0) records · \(worksheets) related worksheets · \(review["entities"] as? Int ?? 0) linked entities")
+                    } else {
+                        Text("\(review["rows"] as? Int ?? 0) records · \(review["removed"] as? Int ?? 0) removed · 1 identifier replaced · \(review["obfuscated"] as? Int ?? 0) obfuscated · \(review["retained"] as? Int ?? 0) retained")
+                    }
                     Text("Protected copy: \(review["output"] as? String ?? "")")
                     Text("Private restoration bundle: \(review["bundle"] as? String ?? "")")
                     Text((validation["passed"] as? Bool == true) ? "Mandatory validation passed" : "Mandatory validation blocked")
@@ -648,8 +755,13 @@ struct ProtectView: View {
                         ForEach(errors, id: \.self) { Text("Blocked: \($0)") }
                     }
                     DisclosureGroup("Technical validation") {
-                        Text("Minimum joint group: \(validation["minimum_class_size"] as? Int ?? 0)")
-                        Text("Records in small classes: \(validation["small_class_records"] as? Int ?? 0)")
+                        if review["worksheets"] != nil {
+                            Text("Minimum linked group: \(validation["minimum_linked_group_size"] as? Int ?? 0)")
+                            Text("Entities in small linked classes: \(validation["linked_small_entities"] as? Int ?? 0)")
+                        } else {
+                            Text("Minimum joint group: \(validation["minimum_class_size"] as? Int ?? 0)")
+                            Text("Records in small classes: \(validation["small_class_records"] as? Int ?? 0)")
+                        }
                     }
                     Text("Passing validation does not establish anonymity or recipient suitability.")
                         .foregroundStyle(.secondary)
@@ -722,11 +834,16 @@ struct RestoreView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Restore a workbook").font(.largeTitle.bold())
+                Toggle("Multi-sheet relational bundle", isOn: $model.relationalRestore)
+                Text(model.relationalRestore
+                     ? "All worksheets bound by the version 3 bundle will be verified and reconstructed together."
+                     : "Restore a single worksheet from a version 2 bundle.")
+                    .foregroundStyle(.secondary)
                 PathRow(title: "Modified protected copy", path: $model.returned,
                         save: false, fileExtension: "xlsx") {
                     model.chooseRestoreFile($0, sourceFile: false)
                 }
-                if model.returnedSheets.count > 1 {
+                if !model.relationalRestore && model.returnedSheets.count > 1 {
                     Picker("Protected worksheet", selection: $model.returnedSheet) {
                         Text("Choose…").tag("")
                         ForEach(model.returnedSheets, id: \.self) { Text($0).tag($0) }
@@ -736,7 +853,7 @@ struct RestoreView: View {
                         save: false, fileExtension: "xlsx") {
                     model.chooseRestoreFile($0, sourceFile: true)
                 }
-                if model.originalSheets.count > 1 {
+                if !model.relationalRestore && model.originalSheets.count > 1 {
                     Picker("Source worksheet", selection: $model.originalSheet) {
                         Text("Choose…").tag("")
                         ForEach(model.originalSheets, id: \.self) { Text($0).tag($0) }
@@ -774,6 +891,20 @@ struct RestoreView: View {
                                 set: { if $0 { model.approvedResults.insert(name) }
                                        else { model.approvedResults.remove(name) } }
                             ))
+                        }
+                    }
+                    if let groups = review["new_columns"] as? [String: [String]] {
+                        Text("Approve each new result field in every worksheet")
+                        ForEach(groups.keys.sorted(), id: \.self) { sheet in
+                            Text(sheet).font(.headline)
+                            ForEach(groups[sheet] ?? [], id: \.self) { name in
+                                let key = "\(sheet)::\(name)"
+                                Toggle(name, isOn: Binding(
+                                    get: { model.approvedResults.contains(key) },
+                                    set: { if $0 { model.approvedResults.insert(key) }
+                                           else { model.approvedResults.remove(key) } }
+                                ))
+                            }
                         }
                     }
                     Text("New sensitive workbook: \(review["output"] as? String ?? "")")

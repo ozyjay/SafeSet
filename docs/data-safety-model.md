@@ -33,6 +33,21 @@ members. Reports include minimum class size, unique-record count and fraction,
 small-class record count, and high-cardinality warnings. This is a configurable
 k-style diagnostic, not a formal privacy guarantee. IDs are excluded from grouping.
 
+Strict validation is the default and retains that blocking behaviour. Under the
+explicit `controlled_pseudonymisation` profile, small cells and small joint or
+linked classes are warnings requiring review rather than mandatory failures.
+Unexpected fields, unsafe values, direct/free-text retention, domain violations,
+malformed identifiers and restoration-integrity failures still block export with
+no override. This profile accepts additional residual disclosure risk for a
+controlled pseudonymised use; it does not establish anonymity.
+
+For a relational release, every source row has a unique `record_id` and every
+distinct source key in the declared shared entity domain has one reusable random
+`entity_id`. Both are excluded from equivalence grouping. Each sheet is assessed
+independently, then all retained source-derived values and worksheet participation
+are combined into an entity fingerprint for linked-class reporting. Reusing the
+entity ID exposes equality and participation by design.
+
 Categorical allowlists, numeric bounds and bin intervals are deliberate
 minimisation boundaries.
 Keep values must be non-empty short labels (at most 64 characters and four words),

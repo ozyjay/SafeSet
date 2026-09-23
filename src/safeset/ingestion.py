@@ -79,9 +79,7 @@ def _cell_text(cell, *, allow_dates: bool = False) -> str:
     value = cell.value
     if value is None:
         return ""
-    if allow_dates and cell.data_type in {"d", "n"} and isinstance(
-        value, (date, datetime, time)
-    ):
+    if allow_dates and cell.data_type in {"d", "n"} and isinstance(value, (date, datetime, time)):
         return value.isoformat()
     if cell.data_type not in {"s", "n", "inlineStr"} or isinstance(
         value, (bool, date, datetime, time)
@@ -335,6 +333,49 @@ def read_excel(
         raise SafetyError("Input is not a supported Excel workbook.") from None
 
 
+def read_excel_sheets(
+    path: Path,
+    sheets: tuple[str, ...],
+    *,
+    allow_cached_formulas: bool = False,
+    allow_source_dates: bool = False,
+) -> dict[str, Table]:
+    """Read selected worksheets separately, preserving their distinct schemas."""
+    if path.suffix.lower() != ".xlsx":
+        raise SafetyError("Only .xlsx Excel workbooks are supported.")
+    if not sheets or len(sheets) != len(set(sheets)):
+        raise SafetyError("Select one or more distinct worksheets.")
+    data = read_bounded(path)
+    _check_archive(data)
+    try:
+        workbook = load_workbook(io.BytesIO(data), read_only=False, data_only=False)
+        cached_workbook = (
+            load_workbook(io.BytesIO(data), read_only=False, data_only=True)
+            if allow_cached_formulas
+            else None
+        )
+        if workbook._external_links:
+            raise SafetyError("Excel workbook contains external links.")
+        visible = {ws.title for ws in workbook.worksheets if ws.sheet_state == "visible"}
+        if any(name not in visible for name in sheets):
+            raise SafetyError("Selected worksheet is missing or hidden.")
+        result = {
+            name: _read_worksheet(
+                workbook[name],
+                cached_workbook[name] if cached_workbook is not None else None,
+                allow_source_dates=allow_source_dates,
+            )
+            for name in sheets
+        }
+        if sum(len(table.rows) for table in result.values()) > MAX_ROWS:
+            raise SafetyError("Selected worksheets exceed the combined row limit.")
+        return result
+    except SafetyError:
+        raise
+    except Exception:
+        raise SafetyError("Input is not a supported Excel workbook.") from None
+
+
 def require_excel_path(path: Path) -> None:
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Excel output must have an .xlsx filename.")
@@ -351,6 +392,32 @@ def excel_bytes(table: Table) -> bytes:
         for cell in cells:
             cell.data_type = "s"
             cell.number_format = "@"
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def excel_workbook_bytes(tables: dict[str, Table]) -> bytes:
+    """Create one workbook containing the supplied ordered worksheet tables."""
+    if not tables or len(tables) > MAX_TABLES or any(not valid_heading(name) for name in tables):
+        raise SafetyError("Protected workbook worksheet structure is invalid.")
+    if sum(len(table.rows) for table in tables.values()) > MAX_ROWS:
+        raise SafetyError("Protected workbook exceeds the combined row limit.")
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    for name, table in tables.items():
+        if not table.columns or len(table.columns) > MAX_COLUMNS:
+            raise SafetyError("Protected worksheet schema is invalid.")
+        sheet = workbook.create_sheet(name)
+        sheet.append(table.columns)
+        for row in table.rows:
+            if set(row) != set(table.columns):
+                raise SafetyError("Protected worksheet contains a malformed row.")
+            sheet.append(tuple(row[column] for column in table.columns))
+        for cells in sheet:
+            for cell in cells:
+                cell.data_type = "s"
+                cell.number_format = "@"
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()

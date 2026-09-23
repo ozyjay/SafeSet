@@ -33,6 +33,23 @@ passphrase loss prevents restoration. The bundle never contains a copy of source
 rows or dropped personal fields; the selected source key and codebook labels are
 necessary reversible secrets. Legacy version 1 maps cannot be used for this flow.
 
+## Version 3 relational restoration bundle
+
+A version 3 bundle binds multiple selected worksheets, their distinct schemas and
+policies, one shared random entity map, globally unique random row IDs and per-sheet
+codebooks. Equal source-key text in the explicitly declared entity domain receives
+the same `entity_id`; no hash or deterministic pseudonym is used. A separate
+`record_id` identifies each row for exact restoration. Worksheet removal, addition,
+renaming, row reordering, entity-ID substitution, record-ID substitution and
+protected-value changes block reconstruction.
+
+The shared entity ID is intentional linkability. A recipient can learn that rows
+across worksheets concern the same entity and can observe which worksheets and
+categories that entity appears in. SafeSet evaluates linked frequency patterns but
+cannot prevent auxiliary-data re-identification, graph attacks or inference from
+participation. Only worksheets genuinely belonging to the same authorised entity
+domain may be grouped into one release.
+
 This is a conservative local tool, not an anonymity or compliance guarantee.
 Protect source identities, identity maps, passphrases and restored data. The
 operator, policy author, OS and installed dependencies are trusted. The external
@@ -48,6 +65,7 @@ real identities or credentials.
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
+| Cross-sheet linkage | Explicit shared entity domain, fresh UUIDv4 entity IDs, linked-class review | Equality and participation across released worksheets are deliberately visible |
 | Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; the encrypted version 2 bundle stores observed codebooks |
 | Exact numeric disclosure | Version 2 requires bounds, precision and all-attribute group checks | Exact values remain visible and may be distinctive, even when category labels are coded |
 | Sensitive logging | Private local log accepts only fixed stage and reason codes; no values, headings, paths or exception text | Event timestamps reveal when operations were attempted; inspect output still displays escaped headings |
@@ -55,6 +73,7 @@ real identities or credentials.
 | Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, cached-result checks for source formulas, source date/time conversion, formula and date/time rejection in returned files, link/hidden-content checks | Saved source formula results can be stale or inconsistent with the formula; exact source dates remain sensitive even when represented as text; no formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
 | Incorrect restoration | Authenticated map schema, exact ID coverage, no fuzzy joins | Cannot verify whether external analysis assigned the right result to an ID |
+| Relational row confusion | Separate entity and record IDs, source-row bindings and exact worksheet coverage | An approved external result may still be analytically incorrect |
 | Incorrect legacy coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The version 1 map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |
 | Policy authoring exposure | Field choices are explicit; distinct category values appear only after a local review action; saved policies use private no-clobber storage outside repositories | A policy can contain sensitive headings and category labels; an incorrect classification may retain inappropriate data |

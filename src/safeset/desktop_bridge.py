@@ -8,11 +8,15 @@ from .desktop_flow import (
     approve_export,
     approve_protection,
     approve_reconstruction,
+    approve_relational_protection,
+    approve_relational_reconstruction,
     inspect_returned,
     inspect_source,
     prepare_export,
     prepare_protection,
     prepare_reconstruction,
+    prepare_relational_protection,
+    prepare_relational_reconstruction,
     restore_results,
 )
 from .errors import SafetyError
@@ -127,6 +131,29 @@ def _columns(value: object) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _sheets(value: object) -> tuple[str, ...]:
+    result = _columns(value)
+    if not result or len(result) != len(set(result)):
+        raise ValueError("sheets")
+    return result
+
+
+def _relational_drafts(value: object) -> dict[str, dict[str, RuleDraft]]:
+    if (
+        not isinstance(value, dict)
+        or not 1 <= len(value) <= 128
+        or any(not isinstance(name, str) for name in value)
+    ):
+        raise ValueError("relational drafts")
+    return {name: _drafts(raw) for name, raw in value.items()}
+
+
+def _approved_results(value: object) -> dict[str, tuple[str, ...]]:
+    if not isinstance(value, dict) or not value or any(not isinstance(name, str) for name in value):
+        raise ValueError("approved results")
+    return {name: _columns(columns) for name, columns in value.items()}
+
+
 class Bridge:
     """A single in-memory review is valid until the next operation or approval."""
 
@@ -137,7 +164,13 @@ class Bridge:
         if command == "hello":
             _payload(raw, set())
             return {"protocol": PROTOCOL_VERSION}
-        if command in {"approve_protection", "approve_reconstruction", "approve_export"}:
+        if command in {
+            "approve_protection",
+            "approve_relational_protection",
+            "approve_reconstruction",
+            "approve_relational_reconstruction",
+            "approve_export",
+        }:
             data = _payload(raw, {"review_id"}, {"passphrase", "approved_results"})
             token = _string(data["review_id"])
             pending = self.pending
@@ -149,11 +182,20 @@ class Bridge:
                 _payload(data, {"review_id", "passphrase"})
                 approve_protection(review, _string(data["passphrase"]), approved=True)
                 return {"created": True}
+            if command == "approve_relational_protection":
+                _payload(data, {"review_id", "passphrase"})
+                approve_relational_protection(review, _string(data["passphrase"]), approved=True)
+                return {"created": True}
             if command == "approve_export":
                 _payload(data, {"review_id", "passphrase"})
                 approve_export(review, _string(data["passphrase"]), approved=True)
                 return {"created": True}
             _payload(data, {"review_id", "approved_results"})
+            if command == "approve_relational_reconstruction":
+                rows = approve_relational_reconstruction(
+                    review, _approved_results(data["approved_results"]), authorised=True
+                )
+                return {"created": True, "rows": rows}
             rows = approve_reconstruction(
                 review, _columns(data["approved_results"]), authorised=True
             )
@@ -197,7 +239,11 @@ class Bridge:
             )
             return {"saved": str(saved)}
         if command == "prepare_protection":
-            data = _payload(raw, {"source", "sheet", "output", "drafts", "threshold"}, {"bundle"})
+            data = _payload(
+                raw,
+                {"source", "sheet", "output", "drafts", "threshold"},
+                {"bundle", "validation_profile"},
+            )
             review = prepare_protection(
                 _path(data["source"]),
                 _drafts(data["drafts"]),
@@ -205,6 +251,7 @@ class Bridge:
                 _path(data["output"]),
                 _path(data.get("bundle"), optional=True),
                 _sheet(data["sheet"]),
+                _string(data.get("validation_profile", "strict")),
             )
             token = new_id()
             self.pending = ("approve_protection", token, review)
@@ -214,6 +261,32 @@ class Bridge:
                 "removed": review.removed_fields,
                 "obfuscated": review.obfuscated_fields,
                 "retained": review.retained_fields,
+                "output": str(review.output),
+                "bundle": str(review.bundle_path),
+                "validation": review.validation.summary(),
+            }
+        if command == "prepare_relational_protection":
+            data = _payload(
+                raw,
+                {"source", "sheets", "output", "drafts", "threshold", "validation_profile"},
+                {"bundle"},
+            )
+            review = prepare_relational_protection(
+                _path(data["source"]),
+                _sheets(data["sheets"]),
+                _relational_drafts(data["drafts"]),
+                _string(data["threshold"]),
+                _path(data["output"]),
+                _path(data.get("bundle"), optional=True),
+                _string(data["validation_profile"]),
+            )
+            token = new_id()
+            self.pending = ("approve_relational_protection", token, review)
+            return {
+                "review_id": token,
+                "rows": sum(len(table.rows) for table in review.source_tables.values()),
+                "worksheets": len(review.sheets),
+                "entities": len(review.candidate.entities),
                 "output": str(review.output),
                 "bundle": str(review.bundle_path),
                 "validation": review.validation.summary(),
@@ -248,6 +321,25 @@ class Bridge:
                 "new_columns": list(review.new_columns),
                 "source_columns": list(review.source_table.columns),
                 "coded_columns": list(review.bundle["codebooks"]),
+                "output": str(review.output),
+            }
+        if command == "prepare_relational_reconstruction":
+            data = _payload(raw, {"returned", "source", "bundle", "output", "passphrase"})
+            review = prepare_relational_reconstruction(
+                _path(data["returned"]),
+                _path(data["source"]),
+                _path(data["bundle"]),
+                _path(data["output"]),
+                _string(data["passphrase"]),
+            )
+            token = new_id()
+            self.pending = ("approve_relational_reconstruction", token, review)
+            return {
+                "review_id": token,
+                "rows": sum(len(table.rows) for table in review.returned_tables.values()),
+                "new_columns": {
+                    sheet: list(columns) for sheet, columns in review.new_columns.items()
+                },
                 "output": str(review.output),
             }
         if command == "prepare_export":

@@ -89,6 +89,19 @@ def test_failed_validation_writes_nothing(candidate, policy, destinations):
     assert not output.exists() and not map_path.exists()
 
 
+def test_controlled_profile_reports_rare_groups_without_structural_bypass(candidate, policy):
+    rows = deepcopy(candidate.table.rows)
+    rows[0]["gpa"], rows[2]["gpa"] = rows[2]["gpa"], rows[0]["gpa"]
+    report = validate(Table(candidate.table.columns, rows), policy, "controlled_pseudonymisation")
+    assert report.passed
+    assert report.small_class_records == 4
+    assert any("Controlled pseudonymisation risk" in warning for warning in report.warnings)
+    rows[0]["campus"] = "not-approved"
+    assert not validate(
+        Table(candidate.table.columns, rows), policy, "controlled_pseudonymisation"
+    ).passed
+
+
 @pytest.mark.parametrize(
     "column,classification",
     [

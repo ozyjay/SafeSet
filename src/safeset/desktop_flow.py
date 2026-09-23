@@ -6,12 +6,30 @@ from pathlib import Path
 from .bundle import read_bundle
 from .classification import inspect_table
 from .errors import SafetyError
-from .ingestion import excel_bytes, read_excel, require_excel_path, valid_heading
+from .ingestion import (
+    excel_bytes,
+    excel_workbook_bytes,
+    list_excel_sheets,
+    read_excel,
+    read_excel_sheets,
+    require_excel_path,
+    valid_heading,
+)
 from .mapping import read_mapping
 from .policy import Policy, load_policy, parse_policy
 from .policy_authoring import RuleDraft, policy_payload
 from .pseudonyms import valid_id
 from .reconstruction import reconstruct, review_reconstruction
+from .relational import (
+    RelationalCandidate,
+    RelationalValidation,
+    publish_relational_candidate,
+    read_relational_bundle,
+    reconstruct_relational,
+    review_relational_reconstruction,
+    sanitise_relational,
+    validate_relational,
+)
 from .restoration import restore
 from .storage import default_map_path, map_destination, output_destination, publish
 from .transform import Candidate, sanitise
@@ -57,6 +75,7 @@ class ProtectionReview:
     removed_fields: int
     obfuscated_fields: int
     retained_fields: int
+    validation_profile: str
 
 
 @dataclass(frozen=True)
@@ -73,6 +92,30 @@ class ReconstructionReview:
     returned_sheet: str | tuple[str, ...] | None
 
 
+@dataclass(frozen=True)
+class RelationalProtectionReview:
+    source: Path
+    sheets: tuple[str, ...]
+    output: Path
+    bundle_path: Path
+    source_tables: dict[str, object]
+    policies: dict[str, Policy]
+    candidate: RelationalCandidate
+    validation: RelationalValidation
+
+
+@dataclass(frozen=True)
+class RelationalReconstructionReview:
+    source_path: Path
+    returned_path: Path
+    bundle_path: Path
+    output: Path
+    source_tables: dict[str, object]
+    returned_tables: dict[str, object]
+    bundle: dict
+    new_columns: dict[str, tuple[str, ...]]
+
+
 def prepare_protection(
     source: Path,
     drafts: dict[str, RuleDraft],
@@ -80,13 +123,14 @@ def prepare_protection(
     output: Path,
     bundle_path: Path | None = None,
     sheet: str | tuple[str, ...] | None = None,
+    validation_profile: str = "strict",
 ) -> ProtectionReview:
     table = read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
     if set(table.columns) != set(drafts):
         raise SafetyError("Every source field needs an explicit protection decision.")
     policy = parse_policy(policy_payload(drafts, threshold))
     candidate = sanitise(table, policy)
-    validation = validate(candidate.table, policy)
+    validation = validate(candidate.table, policy, validation_profile)
     require_excel_path(output)
     destination = output_destination(output, source)
     bundle_destination = map_destination(bundle_path or default_map_path(), destination, source)
@@ -103,6 +147,7 @@ def prepare_protection(
         sum(rule.action == "drop" for rule in policy.columns.values()),
         sum(rule.action == "code" for rule in policy.columns.values()),
         sum(rule.action in {"keep", "keep_numeric", "bin"} for rule in policy.columns.values()),
+        validation_profile,
     )
 
 
@@ -118,6 +163,51 @@ def approve_protection(review: ProtectionReview, passphrase: str, *, approved: b
         approved=approved,
         source_path=review.source,
         sheet=review.sheet,
+        validation_profile=review.validation_profile,
+    )
+
+
+def prepare_relational_protection(
+    source: Path,
+    sheets: tuple[str, ...],
+    drafts: dict[str, dict[str, RuleDraft]],
+    threshold: str,
+    output: Path,
+    bundle_path: Path | None = None,
+    validation_profile: str = "strict",
+) -> RelationalProtectionReview:
+    if set(sheets) != set(drafts):
+        raise SafetyError("Every selected worksheet needs explicit field decisions.")
+    sources = read_excel_sheets(source, sheets, allow_cached_formulas=True, allow_source_dates=True)
+    policies = {}
+    for sheet in sheets:
+        if set(sources[sheet].columns) != set(drafts[sheet]):
+            raise SafetyError("Every source field needs an explicit protection decision.")
+        policies[sheet] = parse_policy(policy_payload(drafts[sheet], threshold))
+    candidate = sanitise_relational(sources, policies)
+    validation = validate_relational(candidate, policies, validation_profile)
+    require_excel_path(output)
+    destination = output_destination(output, source)
+    private_bundle = map_destination(bundle_path or default_map_path(), destination, source)
+    return RelationalProtectionReview(
+        source, sheets, destination, private_bundle, sources, policies, candidate, validation
+    )
+
+
+def approve_relational_protection(
+    review: RelationalProtectionReview, passphrase: str, *, approved: bool
+) -> None:
+    publish_relational_candidate(
+        review.source,
+        review.sheets,
+        review.source_tables,
+        review.policies,
+        review.candidate,
+        review.validation,
+        review.output,
+        review.bundle_path,
+        passphrase,
+        approved=approved,
     )
 
 
@@ -174,6 +264,67 @@ def approve_reconstruction(
     )
     publish(destination, excel_bytes(restored))
     return len(restored.rows)
+
+
+def prepare_relational_reconstruction(
+    returned_path: Path,
+    source_path: Path,
+    bundle_path: Path,
+    output: Path,
+    passphrase: str,
+) -> RelationalReconstructionReview:
+    require_excel_path(output)
+    destination = output_destination(output, returned_path, source_path, bundle_path)
+    bundle = read_relational_bundle(bundle_path, passphrase, returned_path, source_path, output)
+    sheets = tuple(bundle["sheets"])
+    if set(list_excel_sheets(returned_path)) != set(sheets):
+        raise SafetyError(
+            "Returned relational workbook worksheet coverage does not match the bundle."
+        )
+    sources = read_excel_sheets(
+        source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
+    )
+    returned = read_excel_sheets(returned_path, sheets)
+    new_columns = review_relational_reconstruction(sources, returned, bundle)
+    return RelationalReconstructionReview(
+        source_path,
+        returned_path,
+        bundle_path,
+        destination,
+        sources,
+        returned,
+        bundle,
+        new_columns,
+    )
+
+
+def approve_relational_reconstruction(
+    review: RelationalReconstructionReview,
+    approved_results: dict[str, tuple[str, ...]],
+    *,
+    authorised: bool,
+) -> int:
+    if not authorised:
+        raise SafetyError("Explicit relational restoration authorisation is required.")
+    sheets = tuple(review.bundle["sheets"])
+    if set(list_excel_sheets(review.returned_path)) != set(sheets):
+        raise SafetyError(
+            "Returned relational workbook worksheet coverage does not match the bundle."
+        )
+    current_sources = read_excel_sheets(
+        review.source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
+    )
+    current_returned = read_excel_sheets(review.returned_path, sheets)
+    if current_sources != review.source_tables or current_returned != review.returned_tables:
+        raise SafetyError("A workbook changed after relational restoration review.")
+    restored = reconstruct_relational(
+        current_sources, current_returned, review.bundle, approved_results
+    )
+    destination = output_destination(
+        review.output, review.returned_path, review.source_path, review.bundle_path
+    )
+    publish(destination, excel_workbook_bytes(restored))
+    return sum(len(table.rows) for table in restored.values())
 
 
 def inspect_source(source: Path, sheet: str | tuple[str, ...] | None = None) -> dict:

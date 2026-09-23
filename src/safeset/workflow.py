@@ -23,11 +23,12 @@ def protect_candidate(
     approved: bool,
     source_path: Path,
     sheet: str | tuple[str, ...] | None = None,
+    validation_profile: str = "strict",
 ) -> None:
     """Publish an authenticated bundle before its protected workbook."""
     if not approved:
         raise SafetyError("Explicit protection approval is required.")
-    validate(candidate.table, policy).require_pass()
+    validate(candidate.table, policy, validation_profile).require_pass()
     current = read_excel(source_path, sheet, allow_cached_formulas=True, allow_source_dates=True)
     if source_digest(current) != source_digest(source):
         raise SafetyError("Source workbook changed after protection review.")
