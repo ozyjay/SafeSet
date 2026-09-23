@@ -32,8 +32,8 @@ func plainLanguageSuggestion(_ classification: String) -> String {
     }
 }
 
-let restorationAnalysisGuidance = "Preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly. It may add short result columns or separate analysis worksheets instead of changing fields such as campus."
-let restorationResultExample = "For result columns, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Added worksheets may contain blank cells and formulas with saved results. SafeSet does not calculate or preserve formulas: after approval, it copies their saved results into new static tables. Formatting and drawings are not preserved."
+let restorationAnalysisGuidance = "Please analyse the protected Excel workbook and return a modified .xlsx file that SafeSet can restore. Preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly. Keep each original record_id exactly once on its original worksheet. Add findings as new columns after the protected columns or as separate analysis worksheets instead of changing protected values. Do not request the original source, private bundle or passphrase."
+let restorationResultExample = "For each new result column on a protected worksheet, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Do not put formulas in protected worksheets. Added analysis worksheets may contain blank cells; use static values where possible. If they contain formulas, the workbook must include saved scalar results. SafeSet copies approved results into static tables, so formulas, formatting and drawings are not preserved. If you cannot keep the original workbook intact, explain the limitation instead of returning a changed file."
 let restorationCopyText = "\(restorationAnalysisGuidance)\n\n\(restorationResultExample)"
 
 private struct AppTextScaleKey: EnvironmentKey {
@@ -1673,7 +1673,7 @@ struct RestoreView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(restorationAnalysisGuidance)
                         Text(restorationResultExample)
-                        Button("Copy guidance") {
+                        Button("Copy prompt") {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(restorationCopyText, forType: .string)
                         }
