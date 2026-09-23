@@ -25,8 +25,9 @@ swift test --disable-sandbox --package-path macos/SafeSetMac
 The build creates `dist/SafeSet.app` and `dist/SafeSet-local.zip`. The smoke
 test copies the app to a temporary directory, removes development Python
 settings from the helper's environment and runs a synthetic protected workbook
-round trip. It also checks that existing output is rejected. It uses no real
-student data. To request a development DMG, run
+round trip. It also checks that the app icon generated from
+`assets/safeset-app-icon-1024.png` is configured and that existing output is
+rejected. It uses no real student data. To request a development DMG, run
 `& ./scripts/build-macos-app.ps1 -CreateDmg` on a Mac whose disk-image service
 is available. A development DMG remains ad-hoc signed.
 

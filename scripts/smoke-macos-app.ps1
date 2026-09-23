@@ -8,6 +8,15 @@ $process = $null
 try {
     $moved = Join-Path $work 'SafeSet.app'
     Copy-Item -LiteralPath $app -Destination $moved -Recurse
+    $iconName = & /usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' `
+        (Join-Path $moved 'Contents/Info.plist')
+    $icon = Join-Path $moved "Contents/Resources/$iconName.icns"
+    $assetCatalog = Join-Path $moved 'Contents/Resources/Assets.car'
+    if ($LASTEXITCODE -ne 0 -or $iconName -ne 'AppIcon' -or
+        -not (Test-Path $icon -PathType Leaf) -or
+        -not (Test-Path $assetCatalog -PathType Leaf)) {
+        throw 'Bundled app icon is missing or not configured.'
+    }
     $helper = Join-Path $moved 'Contents/Helpers/SafeSetBackend/safeset-backend'
     $exports = Join-Path $work 'exports'
     $maps = Join-Path $work 'maps'
