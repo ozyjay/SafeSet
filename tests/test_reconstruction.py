@@ -15,7 +15,13 @@ from safeset.desktop_flow import (
     prepare_reconstruction,
 )
 from safeset.errors import SafetyError
-from safeset.ingestion import Table, excel_bytes, read_excel
+from safeset.ingestion import (
+    Table,
+    excel_bytes,
+    excel_workbook_bytes,
+    read_excel,
+    read_excel_sheets,
+)
 from safeset.policy_authoring import load_drafts
 from safeset.pseudonyms import new_id
 from safeset.reconstruction import reconstruct
@@ -56,6 +62,85 @@ def test_reconstruction_round_trip(destinations):
     ]
     with pytest.raises(SafetyError):
         approve_reconstruction(review, ("Team",), authorised=True)
+
+
+def test_reconstruction_copies_explicitly_approved_analysis_worksheet(destinations):
+    source, output, bundle_path = _prepared(destinations)
+    protected = read_excel(output)
+    returned = output.parent / "analysed-with-sheet.xlsx"
+    returned.write_bytes(
+        excel_workbook_bytes(
+            {
+                "SafeSet": protected,
+                "Changes": Table(
+                    ("Finding", "Count"),
+                    (
+                        {"Finding": "Campus mismatch", "Count": "1"},
+                        {"Finding": "No change", "Count": ""},
+                    ),
+                ),
+            }
+        )
+    )
+    restored = output.parent.parent / "private/restored-with-sheet.xlsx"
+    review = prepare_reconstruction(
+        returned,
+        source,
+        bundle_path,
+        restored,
+        PASSPHRASE,
+        returned_sheet="SafeSet",
+    )
+    assert tuple(review.analysis_sheets) == ("Changes",)
+    with pytest.raises(SafetyError, match="explicit approval"):
+        approve_reconstruction(review, (), authorised=True)
+    assert not restored.exists()
+    assert approve_reconstruction(review, (), ("Changes",), authorised=True) == 4
+    tables = read_excel_sheets(restored, ("SafeSet", "Changes"))
+    assert tables["Changes"].rows == (
+        {"Finding": "Campus mismatch", "Count": "1"},
+        {"Finding": "No change", "Count": ""},
+    )
+
+
+def test_analysis_worksheet_change_after_review_blocks_publication(destinations):
+    source, output, bundle_path = _prepared(destinations)
+    protected = read_excel(output)
+    returned = output.parent / "reviewed-analysis.xlsx"
+    returned.write_bytes(
+        excel_workbook_bytes(
+            {
+                "SafeSet": protected,
+                "Changes": Table(
+                    ("Finding", "Count"),
+                    ({"Finding": "Campus mismatch", "Count": "1"},),
+                ),
+            }
+        )
+    )
+    restored = output.parent.parent / "private/stale-analysis.xlsx"
+    review = prepare_reconstruction(
+        returned,
+        source,
+        bundle_path,
+        restored,
+        PASSPHRASE,
+        returned_sheet="SafeSet",
+    )
+    returned.write_bytes(
+        excel_workbook_bytes(
+            {
+                "SafeSet": protected,
+                "Changes": Table(
+                    ("Finding", "Count"),
+                    ({"Finding": "Campus mismatch", "Count": "2"},),
+                ),
+            }
+        )
+    )
+    with pytest.raises(SafetyError, match="changed after restoration review"):
+        approve_reconstruction(review, (), ("Changes",), authorised=True)
+    assert not restored.exists()
 
 
 @pytest.mark.parametrize(
@@ -174,11 +259,17 @@ def test_cli_protect_and_reconstruct(destinations, monkeypatch):
     table = read_excel(output)
     returned = output.parent / "with-results.xlsx"
     returned.write_bytes(
-        excel_bytes(
-            Table(
+        excel_workbook_bytes(
+            {
+                "SafeSet": Table(
                 (*table.columns, "Team"),
                 tuple({**row, "Team": "Robot Team"} for row in table.rows),
-            )
+                ),
+                "Summary": Table(
+                    ("Finding", "Count"),
+                    ({"Finding": "No change", "Count": "4"},),
+                ),
+            }
         )
     )
     restored = output.parent.parent / "private/reconstructed.xlsx"
@@ -193,6 +284,8 @@ def test_cli_protect_and_reconstruct(destinations, monkeypatch):
             str(bundle_path),
             "--output",
             str(restored),
+            "--sheet",
+            "SafeSet",
             "--authorise",
         ],
     )
@@ -211,8 +304,14 @@ def test_cli_protect_and_reconstruct(destinations, monkeypatch):
             str(restored),
             "--result-column",
             "Team",
+            "--sheet",
+            "SafeSet",
+            "--analysis-sheet",
+            "Summary",
             "--authorise",
         ],
     )
     assert result.exit_code == 0, result.output
-    assert read_excel(restored).columns == (*read_excel(source).columns, "Team")
+    restored_tables = read_excel_sheets(restored, ("SafeSet", "Summary"))
+    assert restored_tables["SafeSet"].columns == (*read_excel(source).columns, "Team")
+    assert restored_tables["Summary"].rows == ({"Finding": "No change", "Count": "4"},)

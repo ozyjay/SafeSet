@@ -19,7 +19,12 @@ from .mapping import read_mapping
 from .policy import Policy, load_policy, parse_policy
 from .policy_authoring import RuleDraft, policy_payload
 from .pseudonyms import valid_id
-from .reconstruction import reconstruct, review_reconstruction
+from .reconstruction import (
+    approved_analysis_sheets,
+    reconstruct,
+    review_analysis_sheets,
+    review_reconstruction,
+)
 from .relational import (
     RelationalCandidate,
     RelationalValidation,
@@ -86,8 +91,11 @@ class ReconstructionReview:
     output: Path
     source_table: object
     returned_table: object
+    analysis_sheets: dict[str, object]
     bundle: dict
     new_columns: tuple[str, ...]
+    restored_sheet_name: str
+    returned_bound_sheets: tuple[str, ...]
     source_sheet: str | tuple[str, ...] | None
     returned_sheet: str | tuple[str, ...] | None
 
@@ -112,6 +120,7 @@ class RelationalReconstructionReview:
     output: Path
     source_tables: dict[str, object]
     returned_tables: dict[str, object]
+    analysis_sheets: dict[str, object]
     bundle: dict
     new_columns: dict[str, tuple[str, ...]]
 
@@ -229,6 +238,20 @@ def prepare_reconstruction(
         source_path, source_sheet, allow_cached_formulas=True, allow_source_dates=True
     )
     returned = read_excel(returned_path, returned_sheet)
+    returned_names = list_excel_sheets(returned_path)
+    selected_names = (
+        (returned_sheet,)
+        if isinstance(returned_sheet, str)
+        else returned_sheet
+        if isinstance(returned_sheet, tuple)
+        else returned_names
+    )
+    new_sheet_names = tuple(name for name in returned_names if name not in selected_names)
+    analysis_sheets = (
+        read_excel_sheets(returned_path, new_sheet_names) if new_sheet_names else {}
+    )
+    restored_sheet_name = selected_names[0] if len(selected_names) == 1 else "SafeSet"
+    review_analysis_sheets(analysis_sheets, (restored_sheet_name,), len(source.rows))
     new_columns = review_reconstruction(source, returned, bundle)
     return ReconstructionReview(
         source_path,
@@ -237,8 +260,11 @@ def prepare_reconstruction(
         destination,
         source,
         returned,
+        analysis_sheets,
         bundle,
         new_columns,
+        restored_sheet_name,
+        selected_names,
         source_sheet,
         returned_sheet,
     )
@@ -247,6 +273,7 @@ def prepare_reconstruction(
 def approve_reconstruction(
     review: ReconstructionReview,
     approved_results: tuple[str, ...],
+    approved_sheets: tuple[str, ...] = (),
     *,
     authorised: bool,
 ) -> int:
@@ -257,13 +284,37 @@ def approve_reconstruction(
         review.source_path, review.source_sheet, allow_cached_formulas=True, allow_source_dates=True
     )
     current_returned = read_excel(review.returned_path, review.returned_sheet)
-    if current_source != review.source_table or current_returned != review.returned_table:
+    current_names = list_excel_sheets(review.returned_path)
+    reviewed_names = (*review.returned_bound_sheets, *review.analysis_sheets)
+    if set(current_names) != set(reviewed_names):
+        raise SafetyError("A workbook changed after restoration review.")
+    current_analysis = (
+        read_excel_sheets(review.returned_path, tuple(review.analysis_sheets))
+        if review.analysis_sheets
+        else {}
+    )
+    if (
+        current_source != review.source_table
+        or current_returned != review.returned_table
+        or current_analysis != review.analysis_sheets
+    ):
         raise SafetyError("A workbook changed after restoration review.")
     restored = reconstruct(current_source, current_returned, review.bundle, approved_results)
+    approved_analysis = approved_analysis_sheets(
+        current_analysis,
+        (review.restored_sheet_name,),
+        approved_sheets,
+        len(current_source.rows),
+    )
     destination = output_destination(
         review.output, review.returned_path, review.source_path, review.bundle_path
     )
-    publish(destination, excel_bytes(restored))
+    workbook = (
+        excel_workbook_bytes({review.restored_sheet_name: restored, **approved_analysis})
+        if approved_analysis
+        else excel_bytes(restored)
+    )
+    publish(destination, workbook)
     return len(restored.rows)
 
 
@@ -278,7 +329,8 @@ def prepare_relational_reconstruction(
     destination = output_destination(output, returned_path, source_path, bundle_path)
     bundle = read_relational_bundle(bundle_path, passphrase, returned_path, source_path, output)
     sheets = tuple(bundle["sheets"])
-    if set(list_excel_sheets(returned_path)) != set(sheets):
+    returned_names = list_excel_sheets(returned_path)
+    if not set(sheets).issubset(returned_names):
         raise SafetyError(
             "Returned relational workbook worksheet coverage does not match the bundle."
         )
@@ -286,6 +338,13 @@ def prepare_relational_reconstruction(
         source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
     returned = read_excel_sheets(returned_path, sheets)
+    new_sheet_names = tuple(name for name in returned_names if name not in sheets)
+    analysis_sheets = (
+        read_excel_sheets(returned_path, new_sheet_names) if new_sheet_names else {}
+    )
+    review_analysis_sheets(
+        analysis_sheets, sheets, sum(len(table.rows) for table in sources.values())
+    )
     new_columns = review_relational_reconstruction(sources, returned, bundle)
     return RelationalReconstructionReview(
         source_path,
@@ -294,6 +353,7 @@ def prepare_relational_reconstruction(
         destination,
         sources,
         returned,
+        analysis_sheets,
         bundle,
         new_columns,
     )
@@ -302,30 +362,46 @@ def prepare_relational_reconstruction(
 def approve_relational_reconstruction(
     review: RelationalReconstructionReview,
     approved_results: dict[str, tuple[str, ...]],
+    approved_sheets: tuple[str, ...] = (),
     *,
     authorised: bool,
 ) -> int:
     if not authorised:
         raise SafetyError("Explicit relational restoration authorisation is required.")
     sheets = tuple(review.bundle["sheets"])
-    if set(list_excel_sheets(review.returned_path)) != set(sheets):
+    returned_names = list_excel_sheets(review.returned_path)
+    if set(returned_names) != set(sheets).union(review.analysis_sheets):
         raise SafetyError(
-            "Returned relational workbook worksheet coverage does not match the bundle."
+            "A workbook changed after relational restoration review."
         )
     current_sources = read_excel_sheets(
         review.source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
     current_returned = read_excel_sheets(review.returned_path, sheets)
-    if current_sources != review.source_tables or current_returned != review.returned_tables:
+    current_analysis = (
+        read_excel_sheets(review.returned_path, tuple(review.analysis_sheets))
+        if review.analysis_sheets
+        else {}
+    )
+    if (
+        current_sources != review.source_tables
+        or current_returned != review.returned_tables
+        or current_analysis != review.analysis_sheets
+    ):
         raise SafetyError("A workbook changed after relational restoration review.")
     restored = reconstruct_relational(
-        current_sources, current_returned, review.bundle, approved_results
+        current_sources,
+        current_returned,
+        review.bundle,
+        approved_results,
+        current_analysis,
+        approved_sheets,
     )
     destination = output_destination(
         review.output, review.returned_path, review.source_path, review.bundle_path
     )
     publish(destination, excel_workbook_bytes(restored))
-    return sum(len(table.rows) for table in restored.values())
+    return sum(len(table.rows) for table in current_sources.values())
 
 
 def inspect_source(source: Path, sheet: str | tuple[str, ...] | None = None) -> dict:

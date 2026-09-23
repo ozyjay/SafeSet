@@ -30,6 +30,7 @@ from .ingestion import (
 from .mapping import MAP_LIMIT, _fernet, _unique_object
 from .policy import Policy, parse_policy
 from .pseudonyms import new_id, valid_id
+from .reconstruction import approved_analysis_sheets
 from .storage import check_map_read, map_destination, output_destination, private_directory, publish
 from .validation import ValidationReport, validate
 
@@ -675,6 +676,8 @@ def reconstruct_relational(
     returned: dict[str, Table],
     bundle: dict,
     approved_results: dict[str, tuple[str, ...]],
+    analysis_sheets: dict[str, Table] | None = None,
+    approved_sheets: tuple[str, ...] = (),
 ) -> dict[str, Table]:
     available = review_relational_reconstruction(sources, returned, bundle)
     if set(approved_results) != set(available) or any(
@@ -696,4 +699,12 @@ def reconstruct_relational(
                 }
             )
         result[sheet] = Table((*source.columns, *approved_results[sheet]), tuple(rows))
+    result.update(
+        approved_analysis_sheets(
+            analysis_sheets or {},
+            tuple(bundle["sheets"]),
+            approved_sheets,
+            sum(len(table.rows) for table in sources.values()),
+        )
+    )
     return result

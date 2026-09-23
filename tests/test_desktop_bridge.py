@@ -61,6 +61,7 @@ def test_protocol_rejects_malformed_and_secret_output():
             "Policy schema or safety constraints are invalid; see policy-format.md.",
             "policy_configuration",
         ),
+        ("Added analysis worksheet contains unsafe content.", "analysis_sheet"),
         ("private synthetic value must never cross", "safety_rejected"),
     ],
 )

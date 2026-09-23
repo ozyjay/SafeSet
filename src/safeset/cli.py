@@ -14,10 +14,22 @@ from .bundle import read_bundle
 from .classification import inspect_table
 from .diagnostics import log_path, record, record_reason
 from .errors import SafetyError
-from .ingestion import excel_bytes, read_excel, require_excel_path
+from .ingestion import (
+    excel_bytes,
+    excel_workbook_bytes,
+    list_excel_sheets,
+    read_excel,
+    read_excel_sheets,
+    require_excel_path,
+)
 from .mapping import read_mapping
 from .policy import load_policy
-from .reconstruction import reconstruct, review_reconstruction
+from .reconstruction import (
+    approved_analysis_sheets,
+    reconstruct,
+    review_analysis_sheets,
+    review_reconstruction,
+)
 from .relational import (
     publish_relational_candidate,
     read_relational_bundle,
@@ -269,6 +281,7 @@ def reconstruct_command(
     output: Annotated[Path, typer.Option()],
     authorise: Annotated[bool, typer.Option("--authorise")] = False,
     result_column: Annotated[list[str] | None, typer.Option("--result-column")] = None,
+    analysis_sheet: Annotated[list[str] | None, typer.Option("--analysis-sheet")] = None,
     sheet: Annotated[list[str] | None, typer.Option("--sheet")] = None,
     source_sheet: Annotated[list[str] | None, typer.Option("--source-sheet")] = None,
 ) -> None:
@@ -282,15 +295,28 @@ def reconstruct_command(
         allow_cached_formulas=True,
         allow_source_dates=True,
     )
+    returned_names = list_excel_sheets(input_path)
+    selected_names = tuple(sheet) if sheet else returned_names
     returned = read_excel(input_path, tuple(sheet) if sheet else None)
+    new_sheet_names = tuple(name for name in returned_names if name not in selected_names)
+    analysis_tables = read_excel_sheets(input_path, new_sheet_names) if new_sheet_names else {}
+    restored_sheet_name = selected_names[0] if len(selected_names) == 1 else "SafeSet"
+    review_analysis_sheets(analysis_tables, (restored_sheet_name,), len(source.rows))
     new_columns = review_reconstruction(source, returned, bundle)
     approved = tuple(result_column or ())
     if len(set(approved)) != len(approved) or set(approved) != set(new_columns):
         raise SafetyError("Every new result field needs explicit --result-column approval.")
+    approved_tables = approved_analysis_sheets(
+        analysis_tables,
+        (restored_sheet_name,),
+        tuple(analysis_sheet or ()),
+        len(source.rows),
+    )
     report(
         {
             "records": len(returned.rows),
             "new_result_columns": len(new_columns),
+            "new_analysis_worksheets": len(analysis_tables),
             "restored_source_columns": len(source.columns),
             "output": str(destination),
             "notice": "Reconstruction produces sensitive local plaintext.",
@@ -301,7 +327,12 @@ def reconstruct_command(
     ):
         raise SafetyError("Restoration declined; no artefact created.")
     restored = reconstruct(source, returned, bundle, approved)
-    publish(destination, excel_bytes(restored))
+    workbook = (
+        excel_workbook_bytes({restored_sheet_name: restored, **approved_tables})
+        if approved_tables
+        else excel_bytes(restored)
+    )
+    publish(destination, workbook)
     typer.echo("Reconstruction complete. Keep the restored workbook private.")
 
 
@@ -403,6 +434,7 @@ def reconstruct_relational_command(
     output: Annotated[Path, typer.Option()],
     authorise: Annotated[bool, typer.Option("--authorise")] = False,
     result_column: Annotated[list[str] | None, typer.Option("--result-column")] = None,
+    analysis_sheet: Annotated[list[str] | None, typer.Option("--analysis-sheet")] = None,
 ) -> None:
     """Reconstruct all worksheets from a version 3 relational bundle."""
     require_excel_path(output)
@@ -411,9 +443,8 @@ def reconstruct_relational_command(
         bundle_path, secret(bundle=True), input_path, original_source, output
     )
     sheets = tuple(bundle["sheets"])
-    from .ingestion import excel_workbook_bytes, list_excel_sheets, read_excel_sheets
-
-    if set(list_excel_sheets(input_path)) != set(sheets):
+    returned_names = list_excel_sheets(input_path)
+    if not set(sheets).issubset(returned_names):
         raise SafetyError(
             "Returned relational workbook worksheet coverage does not match the bundle."
         )
@@ -421,15 +452,28 @@ def reconstruct_relational_command(
         original_source, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
     returned = read_excel_sheets(input_path, sheets)
+    new_sheet_names = tuple(name for name in returned_names if name not in sheets)
+    analysis_tables = read_excel_sheets(input_path, new_sheet_names) if new_sheet_names else {}
+    review_analysis_sheets(
+        analysis_tables, sheets, sum(len(table.rows) for table in sources.values())
+    )
     available = review_relational_reconstruction(sources, returned, bundle)
     approved = _relational_result_columns(result_column or [], sheets)
     if any(set(approved[sheet]) != set(available[sheet]) for sheet in sheets):
         raise SafetyError("Every new relational result field needs explicit approval.")
+    approved_sheet_names = tuple(analysis_sheet or ())
+    approved_analysis_sheets(
+        analysis_tables,
+        sheets,
+        approved_sheet_names,
+        sum(len(table.rows) for table in sources.values()),
+    )
     report(
         {
             "worksheets": len(sheets),
             "records": sum(len(table.rows) for table in returned.values()),
             "new_result_columns": sum(len(columns) for columns in available.values()),
+            "new_analysis_worksheets": len(analysis_tables),
             "output": str(destination),
             "notice": "Reconstruction produces sensitive local plaintext.",
         }
@@ -438,7 +482,9 @@ def reconstruct_relational_command(
         "Authorise local re-identification and new workbook creation?", default=False
     ):
         raise SafetyError("Restoration declined; no artefact created.")
-    restored = reconstruct_relational(sources, returned, bundle, approved)
+    restored = reconstruct_relational(
+        sources, returned, bundle, approved, analysis_tables, approved_sheet_names
+    )
     publish(destination, excel_workbook_bytes(restored))
     typer.echo("Relational reconstruction complete. Keep the restored workbook private.")
 

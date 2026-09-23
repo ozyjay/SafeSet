@@ -370,12 +370,69 @@ def test_relational_reconstruction_rejects_changed_entity_link(tmp_path):
             }
         )
     )
-    with pytest.raises(SafetyError, match="worksheet coverage"):
+    restored = tmp_path / "private/extra-restored.xlsx"
+    extra_review = prepare_relational_reconstruction(
+        extra, source, bundle_path, restored, PASSPHRASE
+    )
+    assert tuple(extra_review.analysis_sheets) == ("Unapproved",)
+    with pytest.raises(SafetyError, match="explicit approval"):
+        approve_relational_reconstruction(
+            extra_review,
+            {"Enrolments": (), "Preferences": ()},
+            authorised=True,
+        )
+    assert not restored.exists()
+    assert (
+        approve_relational_reconstruction(
+            extra_review,
+            {"Enrolments": (), "Preferences": ()},
+            ("Unapproved",),
+            authorised=True,
+        )
+        == 4
+    )
+    restored_tables = read_excel_sheets(
+        restored, ("Enrolments", "Preferences", "Unapproved")
+    )
+    assert restored_tables["Unapproved"].rows == ({"note": "Synthetic only"},)
+
+
+def test_relational_reconstruction_rejects_unsafe_added_worksheet(tmp_path):
+    source = tmp_path / "synthetic-related.xlsx"
+    _write_source(source)
+    for name in ("exports", "maps", "private"):
+        (tmp_path / name).mkdir(mode=0o700)
+    protected = tmp_path / "exports/protected.xlsx"
+    bundle_path = tmp_path / "maps/related.enc"
+    review = prepare_relational_protection(
+        source,
+        ("Enrolments", "Preferences"),
+        _drafts(),
+        "2",
+        protected,
+        bundle_path,
+        "controlled_pseudonymisation",
+    )
+    approve_relational_protection(review, PASSPHRASE, approved=True)
+    tables = read_excel_sheets(protected, ("Enrolments", "Preferences"))
+    returned = tmp_path / "exports/unsafe-analysis.xlsx"
+    returned.write_bytes(
+        excel_workbook_bytes(
+            {
+                **tables,
+                "Analysis": Table(
+                    ("note",),
+                    ({"note": "This synthetic analysis text is deliberately too long"},),
+                ),
+            }
+        )
+    )
+    with pytest.raises(SafetyError, match="unsafe content"):
         prepare_relational_reconstruction(
-            extra,
+            returned,
             source,
             bundle_path,
-            tmp_path / "private/extra-restored.xlsx",
+            tmp_path / "private/restored.xlsx",
             PASSPHRASE,
         )
 

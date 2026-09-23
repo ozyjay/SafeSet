@@ -41,6 +41,10 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertFalse(model.canApproveRestoration)
         model.approvedResults.insert("Team")
         XCTAssertTrue(model.canApproveRestoration)
+        model.restorationReview?["new_sheets"] = ["Changes"]
+        XCTAssertFalse(model.canApproveRestoration)
+        model.approvedSheets.insert("Changes")
+        XCTAssertTrue(model.canApproveRestoration)
         model.invalidate()
         XCTAssertFalse(model.canApproveRestoration)
         XCTAssertNil(model.protectionReview)

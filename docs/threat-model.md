@@ -23,7 +23,10 @@ The protected working copy is untrusted after analysis. A version 2 encrypted
 bundle binds a canonical representation of the selected source table, exact random
 record IDs, policy decisions, schemas and observed category codebooks. A changed
 source, wrong bundle, changed protected source-derived value, extra unapproved
-column or incomplete ID set blocks reconstruction. The source digest is inside
+column, unapproved added worksheet or incomplete ID set blocks reconstruction.
+Approved added analysis worksheets are validated as static bounded tables and
+their cell text is copied without preserving formatting or drawings; they are not
+authenticated by the original bundle. The source digest is inside
 authenticated ciphertext; it is a compatibility check, not proof of origin or
 protection against a compromised local account. New result values are accepted
 only for explicitly approved headings and safe spreadsheet text. The reconstructed
@@ -70,7 +73,7 @@ real identities or credentials.
 | --- | --- | --- |
 | Accidental Git commit | Broad ignores; maps/outputs rejected in detected repositories | Git can force-add files; copies and unknown repositories evade detection |
 | Accidental source upload | Local workflow, no runtime networking; candidate held in memory | Cannot control manual uploads or editor/cloud backups |
-| Hidden/unexpected columns | Explicit worksheet selection, structured table bounds where present, matching headings, exact output schema, no passthrough | Incorrectly authored policy can still select inappropriate attributes or the wrong worksheets or tables |
+| Hidden/unexpected columns | Explicit worksheet selection, structured table bounds where present, matching headings, exact protected schema and separate approval for every added analysis worksheet | Incorrectly authored policy or approved analysis sheet can still contain inappropriate information |
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
@@ -83,6 +86,7 @@ real identities or credentials.
 | Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, cached-result checks for source formulas, source date/time conversion, formula and date/time rejection in returned files, link/hidden-content checks | Saved source formula results can be stale or inconsistent with the formula; exact source dates remain sensitive even when represented as text; no formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
 | Incorrect restoration | Authenticated map schema, exact ID coverage, no fuzzy joins | Cannot verify whether external analysis assigned the right result to an ID |
+| Added analysis worksheet | Static-table validation, short safe cells, explicit per-sheet approval and a stale-review recheck | Approved cell text is copied without formatting, is not authenticated by the original bundle and may still be analytically wrong |
 | Relational row confusion | Separate entity and record IDs, source-row bindings and exact worksheet coverage | An approved external result may still be analytically incorrect |
 | Incorrect legacy coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The version 1 map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |

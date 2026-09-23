@@ -45,6 +45,9 @@ PUBLIC_SAFETY_ERRORS = {
     "A numeric input cannot be binned.": "numeric_domain",
     "Non-finite numeric input is prohibited.": "numeric_domain",
     "Numeric input falls outside approved bins.": "numeric_domain",
+    "Added analysis worksheet structure is invalid.": "analysis_sheet",
+    "Added analysis worksheet contains unsafe content.": "analysis_sheet",
+    "Every added analysis worksheet requires explicit approval.": "analysis_sheet_approval",
     "Excel formula has no saved result. Recalculate and save locally.": "formula_result",
     "Excel data range contains hidden rows.": "hidden_data",
     "Excel data range contains hidden columns.": "hidden_data",
@@ -203,7 +206,9 @@ class Bridge:
             "approve_relational_reconstruction",
             "approve_export",
         }:
-            data = _payload(raw, {"review_id"}, {"passphrase", "approved_results"})
+            data = _payload(
+                raw, {"review_id"}, {"passphrase", "approved_results", "approved_sheets"}
+            )
             token = _string(data["review_id"])
             pending = self.pending
             self.pending = None
@@ -222,14 +227,21 @@ class Bridge:
                 _payload(data, {"review_id", "passphrase"})
                 approve_export(review, _string(data["passphrase"]), approved=True)
                 return {"created": True}
-            _payload(data, {"review_id", "approved_results"})
+            _payload(data, {"review_id", "approved_results"}, {"approved_sheets"})
+            approved_sheets = _columns(data.get("approved_sheets", []))
             if command == "approve_relational_reconstruction":
                 rows = approve_relational_reconstruction(
-                    review, _approved_results(data["approved_results"]), authorised=True
+                    review,
+                    _approved_results(data["approved_results"]),
+                    approved_sheets,
+                    authorised=True,
                 )
                 return {"created": True, "rows": rows}
             rows = approve_reconstruction(
-                review, _columns(data["approved_results"]), authorised=True
+                review,
+                _columns(data["approved_results"]),
+                approved_sheets,
+                authorised=True,
             )
             return {"created": True, "rows": rows}
         self.pending = None
@@ -353,6 +365,7 @@ class Bridge:
                 "review_id": token,
                 "rows": len(review.returned_table.rows),
                 "new_columns": list(review.new_columns),
+                "new_sheets": list(review.analysis_sheets),
                 "source_columns": list(review.source_table.columns),
                 "coded_columns": list(review.bundle["codebooks"]),
                 "output": str(review.output),
@@ -374,6 +387,7 @@ class Bridge:
                 "new_columns": {
                     sheet: list(columns) for sheet, columns in review.new_columns.items()
                 },
+                "new_sheets": list(review.analysis_sheets),
                 "output": str(review.output),
             }
         if command == "prepare_export":

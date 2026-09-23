@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from .bundle import source_digest, validate_bundle
 from .classification import canonical_numeric, formula_or_control, safe_category
 from .errors import SafetyError
-from .ingestion import MAX_COLUMNS, MAX_FIELD, Table, valid_heading
+from .ingestion import MAX_COLUMNS, MAX_FIELD, MAX_ROWS, MAX_TABLES, Table, valid_heading
 from .policy import parse_policy
 from .pseudonyms import valid_id
 
@@ -93,3 +93,43 @@ def reconstruct(
         for row in returned.rows
     )
     return Table((*source.columns, *approved_results), rows)
+
+
+def review_analysis_sheets(
+    sheets: dict[str, Table], reserved_names: tuple[str, ...], existing_rows: int = 0
+) -> tuple[str, ...]:
+    """Validate untrusted added worksheets without exposing their cell values."""
+    if (
+        len(sheets) > MAX_TABLES - len(reserved_names)
+        or set(sheets).intersection(reserved_names)
+        or any(not valid_heading(name) for name in sheets)
+        or existing_rows + sum(len(table.rows) for table in sheets.values()) > MAX_ROWS
+    ):
+        raise SafetyError("Added analysis worksheet structure is invalid.")
+    for table in sheets.values():
+        if (
+            not table.columns
+            or len(table.columns) > MAX_COLUMNS
+            or len(set(table.columns)) != len(table.columns)
+            or any(not valid_heading(name) for name in table.columns)
+            or any(set(row) != set(table.columns) for row in table.rows)
+            or any(
+                value != "" and (len(value) > MAX_FIELD or not safe_category(value))
+                for row in table.rows
+                for value in row.values()
+            )
+        ):
+            raise SafetyError("Added analysis worksheet contains unsafe content.")
+    return tuple(sheets)
+
+
+def approved_analysis_sheets(
+    sheets: dict[str, Table],
+    reserved_names: tuple[str, ...],
+    approved: tuple[str, ...],
+    existing_rows: int = 0,
+) -> dict[str, Table]:
+    available = review_analysis_sheets(sheets, reserved_names, existing_rows)
+    if len(set(approved)) != len(approved) or set(approved) != set(available):
+        raise SafetyError("Every added analysis worksheet requires explicit approval.")
+    return {name: sheets[name] for name in available}

@@ -122,8 +122,11 @@ the user must then approve the allowlist. An existing strict policy can prefill 
 form, but revisions publish to a new file. Saving a policy does not approve export.
 The desktop restoration flow reads returned headings and checks ID format before
 asking for the passphrase. The user explicitly approves every non-ID returned
-column; restoration still requires exact schema and mapping coverage. Its output
-picker selects a new filename rather than an existing file.
+column and every added analysis worksheet; restoration still requires exact schema
+and mapping coverage for the original protected worksheets. Added worksheets are
+validated as bounded static tables, rechecked after review and copied as cell text
+without formatting, drawings or pseudonymous-ID translation. Its output picker selects a new filename
+rather than an existing file.
 Optional coded-label restoration reads the original source workbook and policy
 locally after separate authorisation. It requires exact source-key coverage and
 matching coded-category groupings, replaces only approved `code` result columns,

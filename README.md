@@ -8,8 +8,8 @@ SafeSet is an offline desktop and CLI tool for creating a protected Excel workin
 2. Choose the original `.xlsx` workbook. SafeSet selects its only visible worksheet automatically. For a relational release, explicitly select every related worksheet and configure each one. The pseudonymised source-key fields form one shared entity domain, so equal source IDs receive the same random `entity_id`; every row also receives its own `record_id`. Inspection runs locally and shows counts and field hints, not cell samples.
 3. Give **every** field an action. Classify fields you keep or replace; **Remove** needs no classification choice. Use **Replace with anonymous ID** for exactly one source key, **Obfuscate values**, **Keep**, **Group into ranges** or **Keep exact number**. Review category allowlists and numeric settings explicitly. For a relational release, SafeSet offers same-named obfuscated fields for explicit shared-codebook confirmation; unconfirmed fields remain independently randomised. Heuristic hints do not make decisions for you.
 4. Choose **Strict** validation (the default) or explicitly choose **Controlled pseudonymisation**. Strict mode blocks rare groups. Controlled pseudonymisation keeps structural and integrity failures mandatory but presents rare per-sheet and linked groups as disclosure warnings. Review the status, warnings, field counts and destinations before approval. SafeSet writes a protected workbook and a separate encrypted version 2 single-sheet or version 3 relational restoration bundle. It never overwrites an existing file.
-5. Work with the protected workbook. You may append new result columns such as a synthetic `Team` field. Keep `record_id` and all original protected columns and values intact.
-6. Choose **Restore a workbook** and select **Multi-sheet relational bundle** for a version 3 release. Supply the modified protected workbook, original source and bundle. Unlock the bundle locally so SafeSet can verify every selected worksheet, source row, entity ID, record ID, schema and protected value. Review and explicitly approve each new result field per worksheet. Authorise creation of a **new** locally reidentified workbook. The original file is never modified.
+5. Work with the protected workbook. You may append new result columns such as a synthetic `Team` field and add separate analysis worksheets. Keep every original worksheet, `record_id`, `entity_id`, row, protected column and protected value intact.
+6. Choose **Restore a workbook** and select **Multi-sheet relational bundle** for a version 3 release. Supply the modified protected workbook, original source and bundle. Unlock the bundle locally so SafeSet can verify every selected worksheet, source row, entity ID, record ID, schema and protected value. Review and explicitly approve each new result field and added analysis worksheet. Authorise creation of a **new** locally reidentified workbook. Added worksheet cell text is copied into static tables without formatting, and IDs inside them are not translated. The original file is never modified.
 
 Classify a field according to what it contains, not according to the action you
 want SafeSet to permit. In particular, never relabel a direct identifier as a
@@ -84,7 +84,8 @@ The CLI reports validation before prompting for approval or publishing. Omit
 rare-group findings into warnings; it does not bypass schema or integrity failures.
 Repeat `--shared-code-field` only for same-named coded fields that genuinely use
 one category domain across worksheets. Without explicit confirmation, even
-same-named obfuscated fields receive independent random codes.
+same-named obfuscated fields receive independent random codes. During reconstruction,
+use repeatable `--analysis-sheet` options to approve every added analysis worksheet.
 
 See [HOWTO.md](HOWTO.md), [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [safety model](docs/data-safety-model.md), [policy format](docs/policy-format.md) and [verification](docs/verification.md).
 

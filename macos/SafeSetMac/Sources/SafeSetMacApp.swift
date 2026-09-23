@@ -14,8 +14,8 @@ private let classOptions: [(String, String)] = [
     ("Unknown", "unknown"), ("Existing pseudonym", "pseudonymous_identifier")
 ]
 
-let restorationAnalysisGuidance = "Ask the analysis tool to preserve every worksheet, row, heading, record_id, entity_id and protected value exactly. It should add a new short result column instead of changing fields such as campus."
-let restorationResultExample = "Give every row a short result such as Campus mismatch or No change; blank result cells are not supported. SafeSet restores identifiers locally only after you approve each new result field."
+let restorationAnalysisGuidance = "Ask the analysis tool to preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly. It may add short result columns or separate analysis worksheets instead of changing fields such as campus."
+let restorationResultExample = "For result columns, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Added worksheets may contain blank cells. After approval, SafeSet copies their cell text into new static tables; formatting and drawings are not preserved."
 
 enum BridgeFailure: Error {
     case unavailable
@@ -90,6 +90,8 @@ final class BackendBridge: @unchecked Sendable {
         case "empty_worksheet": message = "A selected worksheet has no data rows."
         case "category_domain": message = "A source category is outside the reviewed value list. Review the category values again."
         case "numeric_domain": message = "A non-blank numeric value does not fit the reviewed bounds, plain-number format or ranges. Genuine blank cells remain blank; whitespace-only cells are rejected."
+        case "analysis_sheet": message = "An added analysis worksheet is not a safe static table. Remove formulas, unsafe text, invalid headings or unsupported worksheet content, then try again."
+        case "analysis_sheet_approval": message = "Every added analysis worksheet must be explicitly approved before restoration."
         case "formula_result": message = "A source formula has no saved value. Recalculate and save the workbook locally, then try again."
         case "hidden_data": message = "A selected data range contains hidden rows or columns. Unhide them or select a clean table."
         case "merged_data": message = "A selected data range contains merged cells, which SafeSet cannot process safely."
@@ -176,6 +178,7 @@ struct CategorySheet: Identifiable {
     @Published var restoredOutput = ""
     @Published var restorationReview: [String: Any]?
     @Published var approvedResults: Set<String> = []
+    @Published var approvedSheets: Set<String> = []
     @Published var relationalRestore = false
     @Published var legacyPolicy = ""
     @Published var legacyMap = ""
@@ -256,6 +259,8 @@ struct CategorySheet: Identifiable {
 
     var canApproveRestoration: Bool {
         guard let review = restorationReview, review["review_id"] is String else { return false }
+        let sheets = Set(review["new_sheets"] as? [String] ?? [])
+        guard sheets == approvedSheets else { return false }
         if relationalRestore, let groups = review["new_columns"] as? [String: [String]] {
             let names = Set(groups.flatMap { sheet, columns in
                 columns.map { "\(sheet)::\($0)" }
@@ -465,6 +470,7 @@ struct CategorySheet: Identifiable {
         send(command, payload) { result in
             self.restorationReview = result
             self.approvedResults = []
+            self.approvedSheets = []
         }
     }
 
@@ -472,7 +478,7 @@ struct CategorySheet: Identifiable {
         guard canApproveRestoration,
               let review = restorationReview,
               let token = review["review_id"] as? String else {
-            alert = "Approve every new result field or remove it from the returned workbook."
+            alert = "Approve every new result field and added worksheet, or remove it from the returned workbook."
             return
         }
         let command: String
@@ -485,7 +491,11 @@ struct CategorySheet: Identifiable {
             command = "approve_reconstruction"
             approved = names
         }
-        send(command, ["review_id": token, "approved_results": approved]) { _ in
+        send(command, [
+            "review_id": token,
+            "approved_results": approved,
+            "approved_sheets": Array(approvedSheets).sorted()
+        ]) { _ in
             self.restorationReview = nil
             self.alert = "A new locally reidentified workbook was created. Keep it private."
             self.page = .home
@@ -1040,6 +1050,18 @@ struct RestoreView: View {
                                 ))
                             }
                         }
+                    }
+                    if let sheets = review["new_sheets"] as? [String], !sheets.isEmpty {
+                        Text("Approve each added analysis worksheet")
+                        ForEach(sheets, id: \.self) { sheet in
+                            Toggle(sheet, isOn: Binding(
+                                get: { model.approvedSheets.contains(sheet) },
+                                set: { if $0 { model.approvedSheets.insert(sheet) }
+                                       else { model.approvedSheets.remove(sheet) } }
+                            ))
+                        }
+                        Text("Approved worksheet cell text is copied into static tables; formatting and drawings are not preserved.")
+                            .foregroundStyle(.secondary)
                     }
                     Text("New sensitive workbook: \(review["output"] as? String ?? "")")
                     Button("Authorise local restoration") { showAuthorise = true }

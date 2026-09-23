@@ -4,11 +4,15 @@ For the protected working-copy workflow, the original source is the authority
 for all source fields during reconstruction. Every protected source-derived field
 must still equal its expected value under the bound policy and random codebook.
 New result columns need explicit heading allowlisting and safe cell text; they are
-added only to the new local sensitive workbook. This check prevents accidental
-source overwrite but cannot establish that an approved result is accurate or that
-the protected workbook is suitable for a recipient. The source-table fingerprint
-binds the selected data and order, so even benign source edits require a new
-protection run.
+added only to the new local sensitive workbook. Added analysis worksheets are
+separate untrusted results: each needs explicit approval, must be a bounded static
+table containing only short safe text or blank cells, and its cell text is copied
+into a new static table. Formatting and drawings are not preserved.
+Pseudonymous IDs in an added worksheet are not replaced with source identities.
+This check prevents accidental source overwrite but cannot establish that an
+approved result is accurate or that the protected workbook is suitable for a
+recipient. The source-table fingerprint binds the selected data and order, so even
+benign source edits require a new protection run.
 
 A **direct identifier** connects a record to a person; a **pseudonymous identifier**
 is the generated random `record_id`. A **quasi-identifier** may identify someone in

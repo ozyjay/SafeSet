@@ -59,7 +59,9 @@ compatibility, version 3 unlimited decimal places and normalisation, fresh
 per-export category codes and rejected unapproved source categories,
 duplicate/blank/unsafe source keys, direct/free-text retention, small joint groups,
 invalid/duplicate/missing/unmatched returned IDs, malformed map structures, result
-allowlists, identity-column collisions, formulas and control characters.
+allowlists, identity-column collisions, formulas and control characters. Restoration
+tests also cover approved added analysis worksheets, missing worksheet approval,
+blank analysis cells and unsafe worksheet content.
 
 Storage and CLI tests cover default map location, repository/symlink path rejection,
 map/export separation, POSIX permission checks, no-clobber writes, missing approval,

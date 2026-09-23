@@ -67,19 +67,29 @@ the need to minimise the released fields.
 
 ## Work with the protected copy
 
-Analyse or modify the protected workbook locally or in an environment you have separately decided is suitable. You can add new result fields, for example `Team`. Keep the original `record_id`, row coverage, original protected headings and their values intact. Current restoration accepts short safe categorical text in new fields. It blocks formula-like values and unsupported spreadsheet content.
+Analyse or modify the protected workbook locally or in an environment you have separately decided is suitable. You can add new result fields, for example `Team`, and separate analysis worksheets. Keep every original worksheet, `record_id`, `entity_id`, row, protected heading and protected value intact. Current restoration accepts short safe categorical text in new fields. Give every row a result such as `Campus mismatch` or `No change`; blank result cells are not supported. Added analysis worksheets may contain blank cells, but must be static tables with valid headings and short safe text. Formulas, unsafe text and unsupported spreadsheet content are blocked.
 
 ## Restore locally
 
 1. Choose **Restore a workbook** and select the modified protected copy, the exact original source workbook and the private bundle. Choose a new restored output filename.
 2. Enter the passphrase to unlock the bundle locally. SafeSet needs its encrypted binding and ID map to validate the returned workbook. It checks the selected source content and order, exact record coverage, schemas and all source-derived protected values. Any mismatch blocks restoration; no identity is guessed.
-3. Review the count, restored source fields and each new result heading. Approve every new field you intend to import. To omit a field, remove it from the returned workbook and repeat review.
+3. Review the count, restored source fields, each new result heading and every added analysis worksheet. Every detected result field and worksheet must be explicitly approved; remove unwanted items from the returned workbook and repeat review.
 4. Explicitly authorise restoration. SafeSet creates a **new** workbook with all original source fields and the approved new results. The original is never overwritten. This output contains identifiers and is sensitive plaintext.
 
 Editing source-derived protected fields is not yet supported. An altered code, original category, kept value or range label blocks restoration even if the change seems valid. Re-protect the source to start a new round trip after a source edit.
 
+Approved analysis worksheet cell text is copied into static tables in the new
+sensitive workbook. Formatting, drawings and charts are not preserved. SafeSet
+does not replace `record_id` or `entity_id` values inside those worksheets with
+source identities. Put row-level findings in new columns on the original protected
+worksheets when they need to appear beside restored source records.
+
 ## Advanced and CLI
 
 **Advanced tools** retain strict YAML policy authoring, detailed technical settings and the earlier version 1 identity-map result join. The CLI offers `protect` and `reconstruct` for the new version 2 round trip, alongside the legacy `inspect`, `sanitise`, `validate` and `restore` commands. A version 1 map cannot be used for full source reconstruction; there is no implicit conversion. See [README.md](README.md) for a synthetic CLI example and [policy format](docs/policy-format.md) for schema details.
+
+For CLI reconstruction, approve each added worksheet with a repeatable
+`--analysis-sheet 'Worksheet name'` option. Single-sheet reconstruction also needs
+`--sheet 'Protected worksheet'` when the returned workbook contains added sheets.
 
 The source format is bounded `.xlsx`: 10 MiB compressed, 50,000 rows, 128 columns and 4,096 characters per field. Structured Excel Tables are supported, with only their defined ranges read. Hidden content in a selected data range, external links, unsafe cells and ambiguous worksheet selection fail closed. Source formulas use saved scalar results and may be stale; recalculate and save locally before protection. Exact source identifiers needing leading zeros must be stored as text in Excel.
