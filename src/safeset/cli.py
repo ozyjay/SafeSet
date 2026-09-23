@@ -299,7 +299,16 @@ def reconstruct_command(
     selected_names = tuple(sheet) if sheet else returned_names
     returned = read_excel(input_path, tuple(sheet) if sheet else None)
     new_sheet_names = tuple(name for name in returned_names if name not in selected_names)
-    analysis_tables = read_excel_sheets(input_path, new_sheet_names) if new_sheet_names else {}
+    analysis_tables = (
+        read_excel_sheets(
+            input_path,
+            new_sheet_names,
+            allow_cached_formulas=True,
+            allow_cached_formula_blanks=True,
+        )
+        if new_sheet_names
+        else {}
+    )
     restored_sheet_name = selected_names[0] if len(selected_names) == 1 else "SafeSet"
     review_analysis_sheets(analysis_tables, (restored_sheet_name,), len(source.rows))
     new_columns = review_reconstruction(source, returned, bundle)
@@ -453,7 +462,16 @@ def reconstruct_relational_command(
     )
     returned = read_excel_sheets(input_path, sheets)
     new_sheet_names = tuple(name for name in returned_names if name not in sheets)
-    analysis_tables = read_excel_sheets(input_path, new_sheet_names) if new_sheet_names else {}
+    analysis_tables = (
+        read_excel_sheets(
+            input_path,
+            new_sheet_names,
+            allow_cached_formulas=True,
+            allow_cached_formula_blanks=True,
+        )
+        if new_sheet_names
+        else {}
+    )
     review_analysis_sheets(
         analysis_tables, sheets, sum(len(table.rows) for table in sources.values())
     )

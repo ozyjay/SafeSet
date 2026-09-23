@@ -124,8 +124,10 @@ The desktop restoration flow reads returned headings and checks ID format before
 asking for the passphrase. The user explicitly approves every non-ID returned
 column and every added analysis worksheet; restoration still requires exact schema
 and mapping coverage for the original protected worksheets. Added worksheets are
-validated as bounded static tables, rechecked after review and copied as cell text
-without formatting, drawings or pseudonymous-ID translation. Its output picker selects a new filename
+validated as bounded tables, rechecked after review and copied as static cell text
+without formatting, drawings or pseudonymous-ID translation. Formula cells are
+accepted only there and only through a saved scalar result; formulas are never
+calculated or copied. Its output picker selects a new filename
 rather than an existing file.
 Optional coded-label restoration reads the original source workbook and policy
 locally after separate authorisation. It requires exact source-key coverage and

@@ -52,7 +52,7 @@ the need to minimise the released fields.
 
 ## Work with the protected copy
 
-Analyse or modify the protected workbook locally or in an environment you have separately decided is suitable. You can add new result fields, for example `Team`, and separate analysis worksheets. Keep every original worksheet, `record_id`, `entity_id`, row, protected heading and protected value intact. Current restoration accepts short safe categorical text in new fields. Give every row a result such as `Campus mismatch` or `No change`; blank result cells are not supported. Added analysis worksheets may contain blank cells, but must be static tables with valid headings and short safe text. Formulas, unsafe text and unsupported spreadsheet content are blocked.
+Analyse or modify the protected workbook locally or in an environment you have separately decided is suitable. You can add new result fields, for example `Team`, and separate analysis worksheets. Keep every original worksheet, `record_id`, `entity_id`, row, protected heading and protected value intact. Current restoration accepts short safe categorical text in new fields. Give every row a result such as `Campus mismatch` or `No change`; blank result cells are not supported. Added analysis worksheets may contain blank cells and formulas with saved scalar results. SafeSet does not calculate or preserve formulas: it validates the saved results as short safe text and copies them into a static output table. Formulas in original protected worksheets, unsafe text and unsupported spreadsheet content are blocked.
 
 ## Restore locally
 
@@ -63,8 +63,9 @@ Analyse or modify the protected workbook locally or in an environment you have s
 
 Editing source-derived protected fields is not yet supported. An altered code, original category, kept value or range label blocks restoration even if the change seems valid. Re-protect the source to start a new round trip after a source edit.
 
-Approved analysis worksheet cell text is copied into static tables in the new
-sensitive workbook. Formatting, drawings and charts are not preserved. SafeSet
+Approved analysis worksheet cell text, including saved formula results, is copied
+into static tables in the new sensitive workbook. Formulas, formatting, drawings
+and charts are not preserved. SafeSet does not calculate formulas. SafeSet
 does not replace `record_id` or `entity_id` values inside those worksheets with
 source identities. Put row-level findings in new columns on the original protected
 worksheets when they need to appear beside restored source records.

@@ -248,7 +248,14 @@ def prepare_reconstruction(
     )
     new_sheet_names = tuple(name for name in returned_names if name not in selected_names)
     analysis_sheets = (
-        read_excel_sheets(returned_path, new_sheet_names) if new_sheet_names else {}
+        read_excel_sheets(
+            returned_path,
+            new_sheet_names,
+            allow_cached_formulas=True,
+            allow_cached_formula_blanks=True,
+        )
+        if new_sheet_names
+        else {}
     )
     restored_sheet_name = selected_names[0] if len(selected_names) == 1 else "SafeSet"
     review_analysis_sheets(analysis_sheets, (restored_sheet_name,), len(source.rows))
@@ -289,7 +296,12 @@ def approve_reconstruction(
     if set(current_names) != set(reviewed_names):
         raise SafetyError("A workbook changed after restoration review.")
     current_analysis = (
-        read_excel_sheets(review.returned_path, tuple(review.analysis_sheets))
+        read_excel_sheets(
+            review.returned_path,
+            tuple(review.analysis_sheets),
+            allow_cached_formulas=True,
+            allow_cached_formula_blanks=True,
+        )
         if review.analysis_sheets
         else {}
     )
@@ -340,7 +352,14 @@ def prepare_relational_reconstruction(
     returned = read_excel_sheets(returned_path, sheets)
     new_sheet_names = tuple(name for name in returned_names if name not in sheets)
     analysis_sheets = (
-        read_excel_sheets(returned_path, new_sheet_names) if new_sheet_names else {}
+        read_excel_sheets(
+            returned_path,
+            new_sheet_names,
+            allow_cached_formulas=True,
+            allow_cached_formula_blanks=True,
+        )
+        if new_sheet_names
+        else {}
     )
     review_analysis_sheets(
         analysis_sheets, sheets, sum(len(table.rows) for table in sources.values())
@@ -379,7 +398,12 @@ def approve_relational_reconstruction(
     )
     current_returned = read_excel_sheets(review.returned_path, sheets)
     current_analysis = (
-        read_excel_sheets(review.returned_path, tuple(review.analysis_sheets))
+        read_excel_sheets(
+            review.returned_path,
+            tuple(review.analysis_sheets),
+            allow_cached_formulas=True,
+            allow_cached_formula_blanks=True,
+        )
         if review.analysis_sheets
         else {}
     )

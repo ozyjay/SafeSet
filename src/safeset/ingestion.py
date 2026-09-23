@@ -127,6 +127,7 @@ def _read_region(
     last_data_row: int | None = None,
     cached_worksheet=None,
     allow_source_dates: bool = False,
+    allow_cached_formula_blanks: bool = False,
 ) -> Table:
     min_col, min_row, max_col, max_row = bounds
     if (
@@ -185,7 +186,9 @@ def _read_region(
         for cell in cells:
             if cell.data_type == "f" and cached_worksheet is not None:
                 value_cell = cached_worksheet[cell.coordinate]
-                if value_cell.value is None:
+                if value_cell.value is None and not (
+                    allow_cached_formula_blanks and value_cell.data_type == "str"
+                ):
                     raise SafetyError(
                         "Excel formula has no saved result. Recalculate and save locally."
                     )
@@ -204,7 +207,13 @@ def _read_region(
     return Table(header, tuple(rows), formula_cells, date_cells)
 
 
-def _read_worksheet(worksheet, cached_worksheet=None, *, allow_source_dates: bool = False) -> Table:
+def _read_worksheet(
+    worksheet,
+    cached_worksheet=None,
+    *,
+    allow_source_dates: bool = False,
+    allow_cached_formula_blanks: bool = False,
+) -> Table:
     if worksheet.tables:
         if len(worksheet.tables) > MAX_TABLES:
             raise SafetyError("Excel worksheet exceeds the supported table count.")
@@ -232,6 +241,7 @@ def _read_worksheet(worksheet, cached_worksheet=None, *, allow_source_dates: boo
                 last_data_row=bounds[3] - (structured.totalsRowCount or 0),
                 cached_worksheet=cached_worksheet,
                 allow_source_dates=allow_source_dates,
+                allow_cached_formula_blanks=allow_cached_formula_blanks,
             )
             if (
                 structured.tableColumns
@@ -268,6 +278,7 @@ def _read_worksheet(worksheet, cached_worksheet=None, *, allow_source_dates: boo
         (1, 1, last_column, last_row),
         cached_worksheet=cached_worksheet,
         allow_source_dates=allow_source_dates,
+        allow_cached_formula_blanks=allow_cached_formula_blanks,
     )
 
 
@@ -277,6 +288,7 @@ def read_excel(
     *,
     allow_cached_formulas: bool = False,
     allow_source_dates: bool = False,
+    allow_cached_formula_blanks: bool = False,
 ) -> Table:
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Only .xlsx Excel workbooks are supported.")
@@ -313,6 +325,7 @@ def read_excel(
                 workbook[name],
                 cached_workbook[name] if cached_workbook is not None else None,
                 allow_source_dates=allow_source_dates,
+                allow_cached_formula_blanks=allow_cached_formula_blanks,
             )
             for name in selected
         ]
@@ -339,6 +352,7 @@ def read_excel_sheets(
     *,
     allow_cached_formulas: bool = False,
     allow_source_dates: bool = False,
+    allow_cached_formula_blanks: bool = False,
 ) -> dict[str, Table]:
     """Read selected worksheets separately, preserving their distinct schemas."""
     if path.suffix.lower() != ".xlsx":
@@ -364,6 +378,7 @@ def read_excel_sheets(
                 workbook[name],
                 cached_workbook[name] if cached_workbook is not None else None,
                 allow_source_dates=allow_source_dates,
+                allow_cached_formula_blanks=allow_cached_formula_blanks,
             )
             for name in sheets
         }

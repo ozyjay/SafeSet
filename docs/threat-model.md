@@ -24,9 +24,11 @@ bundle binds a canonical representation of the selected source table, exact rand
 record IDs, policy decisions, schemas and observed category codebooks. A changed
 source, wrong bundle, changed protected source-derived value, extra unapproved
 column, unapproved added worksheet or incomplete ID set blocks reconstruction.
-Approved added analysis worksheets are validated as static bounded tables and
-their cell text is copied without preserving formatting or drawings; they are not
-authenticated by the original bundle. The source digest is inside
+Approved added analysis worksheets are validated as bounded tables and their cell
+text, or a formula's saved scalar result (including a saved empty string), is
+copied into a new static table without preserving formulas, formatting or drawings;
+they are not authenticated by the
+original bundle. SafeSet does not calculate formulas. The source digest is inside
 authenticated ciphertext; it is a compatibility check, not proof of origin or
 protection against a compromised local account. New result values are accepted
 only for explicitly approved headings and safe spreadsheet text. The reconstructed
@@ -83,10 +85,10 @@ real identities or credentials.
 | Exact numeric disclosure | Policy version 3 requires bounds and all-attribute group checks but has no precision limit; genuine blank numeric cells remain blank and enter those checks | Exact values, precision and missingness patterns remain visible and may be distinctive, even when category labels are coded |
 | Sensitive logging | Private local log accepts only fixed stage and reason codes; no values, headings, paths or exception text | Event timestamps reveal when operations were attempted; inspect output still displays escaped headings |
 | Schema drift | Missing/extra columns and duplicate headings rejected; literal headings matched exactly and bounded; Excel Table headers checked against metadata | Same heading can acquire a different meaning; similarly spelled headings remain distinct |
-| Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, cached-result checks for source formulas, source date/time conversion, formula and date/time rejection in returned files, link/hidden-content checks | Saved source formula results can be stale or inconsistent with the formula; exact source dates remain sensitive even when represented as text; no formal parser proof; resource bounds are conservative MVP limits |
+| Malformed/malicious Excel workbook | ZIP expansion and sheet/field bounds, strict shape, cached-result checks for source formulas, source date/time conversion, formula and date/time rejection in bundle-bound returned sheets, saved-result-only formula handling in added analysis sheets, link/hidden-content checks | Saved source or added-analysis formula results can be stale or inconsistent with the formula; exact source dates remain sensitive even when represented as text; no formal parser proof; resource bounds are conservative MVP limits |
 | Lost map/key | Explicit operational backup responsibility | No recovery mechanism; identities cannot be recovered from random IDs |
 | Incorrect restoration | Authenticated map schema, exact ID coverage, no fuzzy joins | Cannot verify whether external analysis assigned the right result to an ID |
-| Added analysis worksheet | Static-table validation, short safe cells, explicit per-sheet approval and a stale-review recheck | Approved cell text is copied without formatting, is not authenticated by the original bundle and may still be analytically wrong |
+| Added analysis worksheet | Bounded-table validation, short safe cells, saved scalar results required for formulas, explicit per-sheet approval and a stale-review recheck; output is always static | Approved cell text or a stale cached formula result is copied without formatting, is not authenticated by the original bundle and may still be analytically wrong |
 | Relational row confusion | Separate entity and record IDs, source-row bindings and exact worksheet coverage | An approved external result may still be analytically incorrect |
 | Incorrect legacy coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The version 1 map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |

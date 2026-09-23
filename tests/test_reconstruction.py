@@ -2,8 +2,12 @@
 
 import socket
 from copy import deepcopy
+from io import BytesIO
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 import pytest
+from openpyxl import load_workbook
 from typer.testing import CliRunner
 
 from safeset.bundle import decrypt_bundle, encrypt_bundle
@@ -27,6 +31,31 @@ from safeset.pseudonyms import new_id
 from safeset.reconstruction import reconstruct
 
 from .conftest import PASSPHRASE, ROOT
+
+
+def _set_formula_cache(
+    path, worksheet_entry: str, coordinate: str, result: str | None
+) -> None:
+    namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+    original = BytesIO(path.read_bytes())
+    updated = BytesIO()
+    with ZipFile(original) as source, ZipFile(updated, "w") as destination:
+        for entry in source.infolist():
+            data = source.read(entry.filename)
+            if entry.filename == worksheet_entry:
+                tree = ElementTree.fromstring(data)
+                cell = tree.find(f".//{{{namespace}}}c[@r='{coordinate}']")
+                assert cell is not None
+                value = cell.find(f"{{{namespace}}}v")
+                assert value is not None
+                if result is None:
+                    cell.set("t", "str")
+                    cell.remove(value)
+                else:
+                    value.text = result
+                data = ElementTree.tostring(tree, encoding="utf-8")
+            destination.writestr(entry, data)
+    path.write_bytes(updated.getvalue())
 
 
 def _prepared(destinations):
@@ -101,6 +130,85 @@ def test_reconstruction_copies_explicitly_approved_analysis_worksheet(destinatio
         {"Finding": "Campus mismatch", "Count": "1"},
         {"Finding": "No change", "Count": ""},
     )
+
+
+def test_reconstruction_copies_saved_analysis_formula_result_as_static_value(destinations):
+    source, output, bundle_path = _prepared(destinations)
+    returned = output.parent / "analysed-formula-sheet.xlsx"
+    workbook = load_workbook(output)
+    protected_name = workbook.active.title
+    analysis = workbook.create_sheet("Calculated")
+    analysis.append(("Finding", "Count"))
+    analysis.append(("Synthetic total", "=1+1"))
+    analysis.append(("Synthetic empty result", '=""'))
+    workbook.save(returned)
+    _set_formula_cache(returned, "xl/worksheets/sheet2.xml", "B2", "2")
+    _set_formula_cache(returned, "xl/worksheets/sheet2.xml", "B3", None)
+
+    restored = output.parent.parent / "private/restored-formula-sheet.xlsx"
+    review = prepare_reconstruction(
+        returned,
+        source,
+        bundle_path,
+        restored,
+        PASSPHRASE,
+        returned_sheet=protected_name,
+    )
+    assert review.analysis_sheets["Calculated"].formula_cells == 2
+    assert review.analysis_sheets["Calculated"].rows == (
+        {"Finding": "Synthetic total", "Count": "2"},
+        {"Finding": "Synthetic empty result", "Count": ""},
+    )
+
+    assert approve_reconstruction(review, (), ("Calculated",), authorised=True) == 4
+    restored_analysis = read_excel_sheets(restored, ("Calculated",))["Calculated"]
+    assert restored_analysis.formula_cells == 0
+    assert restored_analysis.rows == (
+        {"Finding": "Synthetic total", "Count": "2"},
+        {"Finding": "Synthetic empty result", "Count": ""},
+    )
+
+
+def test_reconstruction_rejects_formula_in_bound_returned_sheet(destinations):
+    source, output, bundle_path = _prepared(destinations)
+    returned = output.parent / "formula-in-protected-sheet.xlsx"
+    workbook = load_workbook(output)
+    worksheet = workbook.active
+    result_column = worksheet.max_column + 1
+    worksheet.cell(1, result_column, "Team")
+    for row in range(2, worksheet.max_row + 1):
+        worksheet.cell(row, result_column, '=CONCAT("Robot", " Team")')
+    workbook.save(returned)
+
+    with pytest.raises(SafetyError, match="unsupported cell type"):
+        prepare_reconstruction(
+            returned,
+            source,
+            bundle_path,
+            output.parent.parent / "private/rejected-formula.xlsx",
+            PASSPHRASE,
+        )
+
+
+def test_reconstruction_rejects_analysis_formula_without_saved_result(destinations):
+    source, output, bundle_path = _prepared(destinations)
+    returned = output.parent / "uncalculated-formula-sheet.xlsx"
+    workbook = load_workbook(output)
+    protected_name = workbook.active.title
+    analysis = workbook.create_sheet("Calculated")
+    analysis.append(("Finding", "Count"))
+    analysis.append(("Synthetic total", "=1+1"))
+    workbook.save(returned)
+
+    with pytest.raises(SafetyError, match="formula has no saved result"):
+        prepare_reconstruction(
+            returned,
+            source,
+            bundle_path,
+            output.parent.parent / "private/rejected-uncalculated.xlsx",
+            PASSPHRASE,
+            returned_sheet=protected_name,
+        )
 
 
 def test_analysis_worksheet_change_after_review_blocks_publication(destinations):

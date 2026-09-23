@@ -5,9 +5,14 @@ for all source fields during reconstruction. Every protected source-derived fiel
 must still equal its expected value under the bound policy and random codebook.
 New result columns need explicit heading allowlisting and safe cell text; they are
 added only to the new local sensitive workbook. Added analysis worksheets are
-separate untrusted results: each needs explicit approval, must be a bounded static
-table containing only short safe text or blank cells, and its cell text is copied
-into a new static table. Formatting and drawings are not preserved.
+separate untrusted results: each needs explicit approval and must be a bounded
+table containing only short safe text or blank cells. A formula is accepted only
+in an added analysis worksheet, only when the workbook contains a saved scalar
+result that passes the same cell checks. SafeSet does not calculate the formula
+and copies only that saved result into a new static table; a saved empty-string
+result becomes a blank cell. Formulas remain
+forbidden in bundle-bound returned worksheets. Formatting and drawings are not
+preserved.
 Pseudonymous IDs in an added worksheet are not replaced with source identities.
 This check prevents accidental source overwrite but cannot establish that an
 approved result is accurate or that the protected workbook is suitable for a
