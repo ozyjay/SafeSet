@@ -135,6 +135,9 @@ publication. Changing profiles invalidates the desktop review.
 The CLI and SwiftUI desktop helper delegate to typed Python domain modules.
 No domain module uses a network client, telemetry or remote classification.
 Installation may download dependencies; runtime does not need network access.
+The macOS frontend keeps the local JSON-line backend bridge, observable app
+model and SwiftUI views in separate Swift source files. The Xcode target lists
+each file explicitly, while the Swift package includes the `Sources` directory.
 
 `ingestion` reads selected bounded `.xlsx` worksheets into one string table. `policy`
 loads a strict YAML schema.
