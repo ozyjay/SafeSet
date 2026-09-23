@@ -11,6 +11,12 @@ SafeSet is an offline desktop and CLI tool for creating a protected Excel workin
 5. Work with the protected workbook. You may append new result columns such as a synthetic `Team` field. Keep `record_id` and all original protected columns and values intact.
 6. Choose **Restore a workbook** and select **Multi-sheet relational bundle** for a version 3 release. Supply the modified protected workbook, original source and bundle. Unlock the bundle locally so SafeSet can verify every selected worksheet, source row, entity ID, record ID, schema and protected value. Review and explicitly approve each new result field per worksheet. Authorise creation of a **new** locally reidentified workbook. The original file is never modified.
 
+Classify a field according to what it contains, not according to the action you
+want SafeSet to permit. In particular, never relabel a direct identifier as a
+quasi-identifier or analytical attribute merely to retain it. See the
+[field-classification guide](HOWTO.md#choose-field-classifications) for the full
+decision sequence and student-allocation examples.
+
 Reconstruction restores source fields from the exact original workbook, including fields removed from the protected copy. New result fields are imported only when approved. Changes to source-derived protected fields, including coded categories, are blocked. Result cells currently accept only short, safe categorical text. Editable source-derived fields are not supported in this version.
 
 The private bundle contains the selected source key map, observed category codebooks, policy decisions and a source binding, not whole source rows or dropped personal fields. It is encrypted with Argon2id and Fernet. Keep the passphrase and bundle separately and privately. The source workbook, bundle and restored output are sensitive and must stay outside repositories and cloud-synchronised folders. The protected workbook may still disclose information through attributes, equality and frequencies.

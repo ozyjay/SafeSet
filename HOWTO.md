@@ -27,6 +27,44 @@ Installation may need network access. Inspection, protection, validation and res
 
 The protected copy omits removed fields and the original source key. Obfuscated values use fresh random codes per field and export. Equal original categories receive equal codes within that export; equality and frequencies remain visible.
 
+## Choose field classifications
+
+Classify a field according to what it contains, not according to the action you
+want SafeSet to permit. Never relabel a direct identifier as a quasi-identifier
+or analytical attribute merely to retain it.
+
+| Classification | Use it for | Permitted treatment |
+| --- | --- | --- |
+| **Direct identifier** | A value that directly identifies or contacts someone, such as a student number, name, email address, phone number or username | **Remove**, or choose exactly one source identifier per worksheet for **Replace with anonymous ID** |
+| **Quasi-identifier** | A value that may distinguish someone when combined with other information, such as campus, cohort, course, year level, age band or postcode | Remove, keep, obfuscate, group into ranges or keep as a bounded exact number |
+| **Analytical attribute** | Information genuinely required to perform or interpret the analysis, such as preference rank, score, capacity, mark or allocation constraint | The same actions as a quasi-identifier |
+| **Free text** | Unconstrained notes, comments, feedback, explanations or descriptions | **Remove only** |
+| **Unknown** | A field whose meaning, necessity or sensitivity has not been established | **Remove only** until it has been assessed |
+| **Pseudonymous identifier** | An existing artificial identifier that still links records or may be mapped back elsewhere | Source fields should be removed; SafeSet creates fresh `record_id` and `entity_id` values where needed |
+
+Use this decision sequence for each source field:
+
+1. If it directly identifies or contacts the person, choose **Direct identifier**.
+2. If it contains unconstrained prose, choose **Free text** and remove it.
+3. If it is genuinely required to perform or interpret the allocation analysis,
+   choose **Analytical attribute**.
+4. If it may help distinguish a person, especially when combined with other
+   fields, choose **Quasi-identifier**.
+5. If its meaning or necessity is unclear, choose **Unknown** and remove it until
+   it has been assessed.
+
+Typical student-allocation examples are:
+
+- Student number, name and email address: **Direct identifier**.
+- Campus, cohort and year level: usually **Quasi-identifier**.
+- Preference rank, score and allocation outcome: usually **Analytical attribute**.
+- Adviser comments and student notes: **Free text**.
+
+Classification does not make a value safe or anonymous. Quasi-identifiers and
+analytical attributes both enter SafeSet's per-field and combined-group disclosure
+checks. An analytical classification is not an exemption from those checks or from
+the need to minimise the released fields.
+
 ## Work with the protected copy
 
 Analyse or modify the protected workbook locally or in an environment you have separately decided is suitable. You can add new result fields, for example `Team`. Keep the original `record_id`, row coverage, original protected headings and their values intact. Current restoration accepts short safe categorical text in new fields. It blocks formula-like values and unsupported spreadsheet content.
