@@ -16,6 +16,14 @@ final class SafeSetMacTests: XCTestCase {
         ])
     }
 
+    func testRestorationGuidancePreservesProtectedLinkageAndUsesPopulatedResults() {
+        XCTAssertTrue(restorationAnalysisGuidance.contains("record_id"))
+        XCTAssertTrue(restorationAnalysisGuidance.contains("entity_id"))
+        XCTAssertTrue(restorationAnalysisGuidance.contains("instead of changing"))
+        XCTAssertTrue(restorationResultExample.contains("No change"))
+        XCTAssertTrue(restorationResultExample.contains("blank result cells are not supported"))
+    }
+
     @MainActor func testWizardDecisionAndReviewGates() {
         let model = AppModel()
         var field = FieldDraft(id: "Synthetic ID")

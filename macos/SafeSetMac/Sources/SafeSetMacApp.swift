@@ -14,6 +14,9 @@ private let classOptions: [(String, String)] = [
     ("Unknown", "unknown"), ("Existing pseudonym", "pseudonymous_identifier")
 ]
 
+let restorationAnalysisGuidance = "Ask the analysis tool to preserve every worksheet, row, heading, record_id, entity_id and protected value exactly. It should add a new short result column instead of changing fields such as campus."
+let restorationResultExample = "Give every row a short result such as Campus mismatch or No change; blank result cells are not supported. SafeSet restores identifiers locally only after you approve each new result field."
+
 enum BridgeFailure: Error {
     case unavailable
     case rejected(String)
@@ -962,6 +965,14 @@ struct RestoreView: View {
                      ? "All worksheets bound by the version 3 bundle will be verified and reconstructed together."
                      : "Restore a single worksheet from a version 2 bundle.")
                     .foregroundStyle(.secondary)
+                GroupBox("Returning analysis findings") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(restorationAnalysisGuidance)
+                        Text(restorationResultExample)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(.secondary)
+                }
                 PathRow(title: "Modified protected copy", path: $model.returned,
                         save: false, fileExtension: "xlsx") {
                     model.chooseRestoreFile($0, sourceFile: false)
