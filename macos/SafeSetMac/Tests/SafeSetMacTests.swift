@@ -2,6 +2,43 @@ import XCTest
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    func testHelpIsAnExplicitNavigationDestination() {
+        XCTAssertEqual(AppModel.Page.help.rawValue, "help")
+    }
+
+    func testHelpMarkdownPreservesBlockStructure() {
+        let blocks = parseHelpMarkdown("""
+        # Guide
+
+        A **safe** paragraph.
+
+        1. First step
+        2. Second step
+
+        | Field | Action |
+        | --- | --- |
+        | Name | Remove |
+
+        ```pwsh
+        Get-Help SafeSet
+        ```
+        """)
+        XCTAssertEqual(blocks.count, 5)
+        if case .heading(1, "Guide") = blocks[0].kind {} else {
+            XCTFail("Expected a level-one heading")
+        }
+        if case .list(true, let items) = blocks[2].kind {
+            XCTAssertEqual(items, ["First step", "Second step"])
+        } else { XCTFail("Expected an ordered list") }
+        if case .table(let headers, let rows) = blocks[3].kind {
+            XCTAssertEqual(headers, ["Field", "Action"])
+            XCTAssertEqual(rows, [["Name", "Remove"]])
+        } else { XCTFail("Expected a table") }
+        if case .code("Get-Help SafeSet") = blocks[4].kind {} else {
+            XCTFail("Expected a code block")
+        }
+    }
+
     func testFieldDraftDefaultsRequireExplicitDecisions() {
         let draft = FieldDraft(id: "Invented Field")
         XCTAssertEqual(draft.action, "")

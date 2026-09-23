@@ -19,7 +19,7 @@ Installation may need network access. Inspection, protection, validation and res
 
 ## Protect a workbook
 
-1. Choose **Protect a workbook**, then the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. Choose a worksheet when several are visible. For multiple matching worksheets, use the advanced interface or CLI.
+1. Choose **Protect a workbook**, then the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. When several are visible, select every related worksheet that belongs to the release and configure each one separately. Selecting multiple worksheets creates a relational protected workbook and version 3 bundle with shared random entity IDs and separate row IDs.
 2. Inspect the local field summary. It shows names, types and cardinality; no cell samples. Every field needs an explicit action. Classify fields you keep or replace; removed fields need no classification choice. Heuristic hints are advisory.
 3. Choose one direct source identifier for **Replace with anonymous ID**. This creates a fresh cryptographically random `record_id`. Remove other direct identifiers, free text and unnecessary fields. **Keep** and **Obfuscate values** need an explicitly reviewed category allowlist. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds; it does not limit decimal places, and exact values may disclose information.
 4. Set the minimum group size to at least 2. Review the proposed protection. Failed mandatory validation blocks creation. Passing validation is not approval for a recipient. Choose a new protected workbook destination outside a repository.

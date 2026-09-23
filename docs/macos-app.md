@@ -30,9 +30,23 @@ student data. To request a development DMG, run
 `& ./scripts/build-macos-app.ps1 -CreateDmg` on a Mac whose disk-image service
 is available. A development DMG remains ad-hoc signed.
 
+To install an existing build for the current user, run:
+
+```pwsh
+& ./scripts/install-macos-app.ps1
+```
+
+This verifies the bundle identifier and code signature before installing to
+`~/Applications/SafeSet.app`. It will not replace an existing installation
+unless `-Force` is supplied. Use `-Build` to build immediately before installing,
+or `-SourceApp '/path/to/SafeSet.app'` to install a specific bundle. `-Build` and
+`-SourceApp` cannot be combined.
+
 The app can be moved as a single `.app` bundle. The helper executable lives in
 `Contents/Helpers/SafeSetBackend`; its dependency files live in
 `Contents/Resources/SafeSetBackend`. The helper has no port or network service.
+The sidebar Help view renders the bundled `Contents/Resources/HOWTO.md`, which is
+copied from the repository's `HOWTO.md` before the app is signed.
 Passphrases pass only through its local standard-input pipe. The protocol is
 versioned and rejects malformed requests, stale review tokens and oversized
 frames. Every publish operation remains subject to Python's validation and
@@ -60,4 +74,3 @@ claiming that minimum deployment target.
 This checkout has no Developer ID credentials. Notarisation and a macOS 14
 runtime check are release gates. The current host's disk-image service did not
 create a development DMG, so the local ZIP is the available test artefact.
-

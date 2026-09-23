@@ -34,10 +34,13 @@ if (-not (Test-Path $builtApp)) { throw 'Xcode did not produce the app.' }
 if (Test-Path $app) { Remove-Item -Recurse -Force $app }
 Copy-Item -LiteralPath $builtApp -Destination $app -Recurse
 $helpers = Join-Path $app 'Contents/Helpers/SafeSetBackend'
-$resources = Join-Path $app 'Contents/Resources/SafeSetBackend'
+$appResources = Join-Path $app 'Contents/Resources'
+$resources = Join-Path $appResources 'SafeSetBackend'
 New-Item -ItemType Directory -Force $helpers, $resources | Out-Null
 Copy-Item (Join-Path $build 'python/safeset-backend/safeset-backend') $helpers
 Copy-Item (Join-Path $build 'python/safeset-backend/_internal/*') $resources -Recurse
+Copy-Item -LiteralPath (Join-Path $repo 'HOWTO.md') `
+    -Destination (Join-Path $appResources 'HOWTO.md')
 New-Item -ItemType SymbolicLink -Path (Join-Path $helpers '_internal') `
     -Target '../../Resources/SafeSetBackend' | Out-Null
 

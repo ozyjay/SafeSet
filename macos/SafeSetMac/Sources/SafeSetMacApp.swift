@@ -151,7 +151,7 @@ struct CategorySheet: Identifiable {
 }
 
 @MainActor final class AppModel: ObservableObject {
-    enum Page: String { case home, protect, restore, advanced }
+    enum Page: String { case home, protect, restore, advanced, help }
     @Published var page: Page = .home
     @Published var busy = false
     @Published var alert = ""
@@ -709,6 +709,8 @@ struct RootView: View {
                 Label("Protect workbook", systemImage: "lock.doc").tag(AppModel.Page.protect)
                 Label("Restore workbook", systemImage: "lock.open.doc").tag(AppModel.Page.restore)
                 Label("Advanced", systemImage: "slider.horizontal.3").tag(AppModel.Page.advanced)
+                Divider()
+                Label("Help", systemImage: "questionmark.circle").tag(AppModel.Page.help)
             }
             .navigationTitle("SafeSet")
             .frame(minWidth: 190)
@@ -719,6 +721,7 @@ struct RootView: View {
                 case .protect: ProtectView()
                 case .restore: RestoreView()
                 case .advanced: AdvancedView()
+                case .help: HelpView()
                 }
             }
             .frame(minWidth: 680, minHeight: 540)
@@ -773,6 +776,222 @@ struct HomeView: View {
             Spacer()
         }
         .padding(28)
+    }
+}
+
+struct HelpBlock: Identifiable {
+    enum Kind {
+        case heading(Int, String)
+        case paragraph(String)
+        case list(Bool, [String])
+        case code(String)
+        case table([String], [[String]])
+    }
+
+    let id = UUID()
+    let kind: Kind
+}
+
+private func helpTableCells(_ line: String) -> [String] {
+    line.trimmingCharacters(in: .whitespaces)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "|"))
+        .split(separator: "|", omittingEmptySubsequences: false)
+        .map { $0.trimmingCharacters(in: .whitespaces) }
+}
+
+private func helpOrderedItem(_ line: String) -> String? {
+    let value = line.trimmingCharacters(in: .whitespaces)
+    guard let dot = value.firstIndex(of: "."), dot != value.startIndex,
+          value[..<dot].allSatisfy(\.isNumber) else { return nil }
+    let remainder = value[value.index(after: dot)...]
+    guard remainder.first == " " else { return nil }
+    return remainder.trimmingCharacters(in: .whitespaces)
+}
+
+private func helpBulletItem(_ line: String) -> String? {
+    let value = line.trimmingCharacters(in: .whitespaces)
+    guard value.hasPrefix("- ") else { return nil }
+    return String(value.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+}
+
+func parseHelpMarkdown(_ markdown: String) -> [HelpBlock] {
+    let lines = markdown.components(separatedBy: .newlines)
+    var blocks: [HelpBlock] = []
+    var index = 0
+
+    func isBlockStart(_ line: String) -> Bool {
+        let value = line.trimmingCharacters(in: .whitespaces)
+        return value.hasPrefix("#") || value.hasPrefix("```") ||
+            value.hasPrefix("|") || helpOrderedItem(value) != nil ||
+            helpBulletItem(value) != nil
+    }
+
+    while index < lines.count {
+        let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { index += 1; continue }
+
+        if trimmed.hasPrefix("```") {
+            index += 1
+            var code: [String] = []
+            while index < lines.count &&
+                    !lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                code.append(lines[index]); index += 1
+            }
+            if index < lines.count { index += 1 }
+            blocks.append(HelpBlock(kind: .code(code.joined(separator: "\n"))))
+            continue
+        }
+
+        if trimmed.hasPrefix("#") {
+            let level = min(trimmed.prefix(while: { $0 == "#" }).count, 3)
+            let title = trimmed.dropFirst(level).trimmingCharacters(in: .whitespaces)
+            blocks.append(HelpBlock(kind: .heading(level, title)))
+            index += 1
+            continue
+        }
+
+        if trimmed.hasPrefix("|"), index + 1 < lines.count,
+           lines[index + 1].contains("---") {
+            let headers = helpTableCells(trimmed)
+            index += 2
+            var rows: [[String]] = []
+            while index < lines.count &&
+                    lines[index].trimmingCharacters(in: .whitespaces).hasPrefix("|") {
+                rows.append(helpTableCells(lines[index])); index += 1
+            }
+            blocks.append(HelpBlock(kind: .table(headers, rows)))
+            continue
+        }
+
+        if let first = helpOrderedItem(trimmed) {
+            var items = [first]
+            index += 1
+            while index < lines.count {
+                if let item = helpOrderedItem(lines[index]) {
+                    items.append(item); index += 1
+                } else if !lines[index].trimmingCharacters(in: .whitespaces).isEmpty &&
+                            !isBlockStart(lines[index]) {
+                    items[items.count - 1] += " " + lines[index].trimmingCharacters(in: .whitespaces)
+                    index += 1
+                } else { break }
+            }
+            blocks.append(HelpBlock(kind: .list(true, items)))
+            continue
+        }
+
+        if let first = helpBulletItem(trimmed) {
+            var items = [first]
+            index += 1
+            while index < lines.count {
+                if let item = helpBulletItem(lines[index]) {
+                    items.append(item); index += 1
+                } else if !lines[index].trimmingCharacters(in: .whitespaces).isEmpty &&
+                            !isBlockStart(lines[index]) {
+                    items[items.count - 1] += " " + lines[index].trimmingCharacters(in: .whitespaces)
+                    index += 1
+                } else { break }
+            }
+            blocks.append(HelpBlock(kind: .list(false, items)))
+            continue
+        }
+
+        var paragraph = [trimmed]
+        index += 1
+        while index < lines.count &&
+                !lines[index].trimmingCharacters(in: .whitespaces).isEmpty &&
+                !isBlockStart(lines[index]) {
+            paragraph.append(lines[index].trimmingCharacters(in: .whitespaces)); index += 1
+        }
+        blocks.append(HelpBlock(kind: .paragraph(paragraph.joined(separator: " "))))
+    }
+    return blocks
+}
+
+private func helpInline(_ markdown: String) -> AttributedString {
+    let options = AttributedString.MarkdownParsingOptions(
+        interpretedSyntax: .inlineOnlyPreservingWhitespace
+    )
+    return (try? AttributedString(markdown: markdown, options: options)) ?? AttributedString(markdown)
+}
+
+struct HelpView: View {
+    private let blocks: [HelpBlock]
+
+    init(bundle: Bundle = .main) {
+        let fallback = "The SafeSet guide is unavailable in this build. See `HOWTO.md` in the project or rebuild the app with `scripts/build-macos-app.ps1`."
+        let markdown: String
+        if let url = bundle.url(forResource: "HOWTO", withExtension: "md"),
+           let bundled = try? String(contentsOf: url, encoding: .utf8) {
+            markdown = bundled
+        } else { markdown = fallback }
+        blocks = parseHelpMarkdown(markdown)
+    }
+
+    @ViewBuilder private func render(_ block: HelpBlock) -> some View {
+        switch block.kind {
+        case .heading(let level, let text):
+            Text(helpInline(text))
+                .font(level == 1 ? .largeTitle.bold() :
+                        level == 2 ? .title2.bold() : .headline)
+                .padding(.top, level == 1 ? 0 : 10)
+        case .paragraph(let text):
+            Text(helpInline(text)).lineSpacing(4)
+        case .list(let ordered, let items):
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(items.enumerated()), id: \.offset) { offset, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(ordered ? "\(offset + 1)." : "•")
+                            .frame(width: 24, alignment: .trailing)
+                            .foregroundStyle(.secondary)
+                        Text(helpInline(item)).lineSpacing(3)
+                    }
+                }
+            }
+        case .code(let code):
+            ScrollView(.horizontal) {
+                Text(verbatim: code)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(12)
+            }
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        case .table(let headers, let rows):
+            ScrollView(.horizontal) {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
+                    GridRow {
+                        ForEach(Array(headers.enumerated()), id: \.offset) { _, cell in
+                            Text(helpInline(cell)).fontWeight(.semibold)
+                        }
+                    }
+                    Divider()
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                        GridRow {
+                            ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                                Text(helpInline(cell))
+                                    .frame(maxWidth: 300, alignment: .leading)
+                            }
+                        }
+                    }
+                }
+                .padding(12)
+            }
+            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Label("Offline guide", systemImage: "book.closed")
+                    .font(.title2.bold())
+                Text("This guidance is stored inside SafeSet and does not require a network connection.")
+                    .foregroundStyle(.secondary)
+                Divider()
+                ForEach(blocks) { render($0) }
+            }
+            .padding(28)
+        }
+        .navigationTitle("Help")
     }
 }
 
