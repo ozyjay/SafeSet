@@ -505,7 +505,7 @@ struct FieldCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Decision details").font(.subheadline.weight(.semibold))
                 Text("Suggested classification: \(field.hint.replacingOccurrences(of: "_", with: " "))")
-                if !field.flags.isEmpty {
+                if field.action != "drop" && !field.flags.isEmpty {
                     Label("Warnings: \(field.flags.joined(separator: ", "))",
                           systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
