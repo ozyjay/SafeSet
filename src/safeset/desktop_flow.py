@@ -175,6 +175,7 @@ def prepare_relational_protection(
     output: Path,
     bundle_path: Path | None = None,
     validation_profile: str = "strict",
+    shared_code_fields: tuple[str, ...] = (),
 ) -> RelationalProtectionReview:
     if set(sheets) != set(drafts):
         raise SafetyError("Every selected worksheet needs explicit field decisions.")
@@ -184,7 +185,7 @@ def prepare_relational_protection(
         if set(sources[sheet].columns) != set(drafts[sheet]):
             raise SafetyError("Every source field needs an explicit protection decision.")
         policies[sheet] = parse_policy(policy_payload(drafts[sheet], threshold))
-    candidate = sanitise_relational(sources, policies)
+    candidate = sanitise_relational(sources, policies, shared_code_fields)
     validation = validate_relational(candidate, policies, validation_profile)
     require_excel_path(output)
     destination = output_destination(output, source)

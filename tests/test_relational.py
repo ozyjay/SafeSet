@@ -17,9 +17,11 @@ from safeset.ingestion import Table, excel_workbook_bytes, read_excel_sheets
 from safeset.policy import parse_policy
 from safeset.policy_authoring import RuleDraft
 from safeset.relational import (
+    create_relational_bundle,
     read_relational_bundle,
     sanitise_relational,
     validate_relational,
+    validate_relational_bundle,
 )
 
 from .conftest import PASSPHRASE
@@ -28,45 +30,30 @@ from .conftest import PASSPHRASE
 def _sources() -> dict[str, Table]:
     return {
         "Enrolments": Table(
-            ("student_key", "display_name", "campus"),
+            ("student_key", "display_name", "campus", "cohort"),
             (
                 {
                     "student_key": "SYNTH-001",
                     "display_name": "Invented Ada",
                     "campus": "North",
+                    "cohort": "Alpha",
                 },
                 {
                     "student_key": "SYNTH-002",
                     "display_name": "Invented Beau",
                     "campus": "South",
+                    "cohort": "Beta",
                 },
             ),
         ),
         "Preferences": Table(
-            ("person_ref", "stream"),
+            ("person_ref", "stream", "cohort"),
             (
-                {"person_ref": "SYNTH-002", "stream": "Robotics"},
-                {"person_ref": "SYNTH-001", "stream": "Design"},
+                {"person_ref": "SYNTH-002", "stream": "Robotics", "cohort": "Beta"},
+                {"person_ref": "SYNTH-001", "stream": "Design", "cohort": "Alpha"},
             ),
         ),
     }
-
-
-def _policy(key: str, attribute: str, values: list[str]):
-    return parse_policy(
-        {
-            "version": 2,
-            "min_group_size": 2,
-            "columns": {
-                key: {"action": "pseudonymise", "classification": "direct_identifier"},
-                attribute: {
-                    "action": "code",
-                    "classification": "quasi_identifier",
-                    "allowed_values": values,
-                },
-            },
-        }
-    )
 
 
 def _policies():
@@ -84,11 +71,37 @@ def _policies():
                 "classification": "quasi_identifier",
                 "allowed_values": ["North", "South"],
             },
+            "cohort": {
+                "action": "code",
+                "classification": "quasi_identifier",
+                "allowed_values": ["Alpha", "Beta"],
+            },
         },
     }
     return {
         "Enrolments": parse_policy(enrolments),
-        "Preferences": _policy("person_ref", "stream", ["Design", "Robotics"]),
+        "Preferences": parse_policy(
+            {
+                "version": 2,
+                "min_group_size": 2,
+                "columns": {
+                    "person_ref": {
+                        "action": "pseudonymise",
+                        "classification": "direct_identifier",
+                    },
+                    "stream": {
+                        "action": "code",
+                        "classification": "quasi_identifier",
+                        "allowed_values": ["Design", "Robotics"],
+                    },
+                    "cohort": {
+                        "action": "code",
+                        "classification": "quasi_identifier",
+                        "allowed_values": ["Alpha", "Beta"],
+                    },
+                },
+            }
+        ),
     }
 
 
@@ -98,10 +111,12 @@ def _drafts():
             "student_key": RuleDraft("pseudonymise", "direct_identifier"),
             "display_name": RuleDraft("drop", "direct_identifier"),
             "campus": RuleDraft("code", "quasi_identifier", ("North", "South")),
+            "cohort": RuleDraft("code", "quasi_identifier", ("Alpha", "Beta")),
         },
         "Preferences": {
             "person_ref": RuleDraft("pseudonymise", "direct_identifier"),
             "stream": RuleDraft("code", "quasi_identifier", ("Design", "Robotics")),
+            "cohort": RuleDraft("code", "quasi_identifier", ("Alpha", "Beta")),
         },
     }
 
@@ -153,6 +168,48 @@ def test_shared_entities_have_fresh_row_ids_and_controlled_warnings():
     assert controlled.linked_warnings
 
 
+def test_shared_obfuscation_requires_explicit_field_confirmation():
+    independent = sanitise_relational(_sources(), _policies())
+    assert (
+        independent.codebooks["Enrolments"]["cohort"]["Alpha"]
+        != independent.codebooks["Preferences"]["cohort"]["Alpha"]
+    )
+
+    shared = sanitise_relational(_sources(), _policies(), ("cohort",))
+    assert shared.shared_code_fields == ("cohort",)
+    assert (
+        shared.codebooks["Enrolments"]["cohort"]["Alpha"]
+        == shared.codebooks["Preferences"]["cohort"]["Alpha"]
+    )
+    validation = validate_relational(shared, _policies(), "controlled_pseudonymisation")
+    assert any("Shared obfuscation codebooks" in warning for warning in validation.linked_warnings)
+
+
+def test_shared_obfuscation_bundle_validation_and_legacy_compatibility():
+    shared = sanitise_relational(_sources(), _policies(), ("cohort",))
+    bundle = create_relational_bundle(
+        _sources(), _policies(), shared, "controlled_pseudonymisation"
+    )
+    assert validate_relational_bundle(bundle)["shared_code_fields"] == ["cohort"]
+    bundle["sheets"]["Preferences"]["codebooks"]["cohort"]["Alpha"] = (
+        "00000000-0000-4000-8000-000000000001"
+    )
+    with pytest.raises(SafetyError, match="shared category codebook"):
+        validate_relational_bundle(bundle)
+
+    independent = sanitise_relational(_sources(), _policies())
+    legacy = create_relational_bundle(
+        _sources(), _policies(), independent, "controlled_pseudonymisation"
+    )
+    legacy.pop("shared_code_fields")
+    assert validate_relational_bundle(legacy)["shared_code_fields"] == []
+
+
+def test_shared_obfuscation_rejects_unconfirmed_or_ineligible_fields():
+    with pytest.raises(SafetyError, match="shared obfuscation field"):
+        sanitise_relational(_sources(), _policies(), ("campus",))
+
+
 def test_relational_round_trip_and_minimal_bundle(tmp_path):
     source = tmp_path / "synthetic-related.xlsx"
     _write_source(source)
@@ -171,6 +228,7 @@ def test_relational_round_trip_and_minimal_bundle(tmp_path):
         protected,
         bundle_path,
         "controlled_pseudonymisation",
+        ("cohort",),
     )
     assert review.validation.passed
     approve_relational_protection(review, PASSPHRASE, approved=True)
@@ -181,6 +239,7 @@ def test_relational_round_trip_and_minimal_bundle(tmp_path):
     )
     bundle = read_relational_bundle(bundle_path, PASSPHRASE)
     assert bundle["version"] == 3
+    assert bundle["shared_code_fields"] == ["cohort"]
     assert set(bundle["entities"].values()) == {"SYNTH-001", "SYNTH-002"}
     assert "North" not in str(bundle["entities"])
     assert "Invented Ada" not in str(bundle)
@@ -217,9 +276,15 @@ def test_relational_round_trip_and_minimal_bundle(tmp_path):
         "student_key",
         "display_name",
         "campus",
+        "cohort",
         "Team",
     )
-    assert restored_tables["Preferences"].columns == ("person_ref", "stream", "Team")
+    assert restored_tables["Preferences"].columns == (
+        "person_ref",
+        "stream",
+        "cohort",
+        "Team",
+    )
 
 
 def test_relational_reconstruction_rejects_changed_entity_link(tmp_path):
@@ -294,11 +359,13 @@ def test_relational_desktop_bridge_review_and_publication(tmp_path):
             "drafts": _draft_payload(),
             "threshold": "2",
             "validation_profile": "controlled_pseudonymisation",
+            "shared_code_fields": ["cohort"],
         },
     )
     assert prepared["ok"]
     result = prepared["result"]
     assert result["worksheets"] == 2 and result["entities"] == 2
+    assert result["shared_code_fields"] == ["cohort"]
     assert result["validation"]["passed"]
     assert "SYNTH-001" not in json.dumps(prepared)
     approved = _call(

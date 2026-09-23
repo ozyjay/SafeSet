@@ -36,4 +36,20 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertFalse(model.canApproveRestoration)
         XCTAssertNil(model.protectionReview)
     }
+
+    @MainActor func testSharedCodeCandidatesRequireMatchingCodedHeadings() {
+        let model = AppModel()
+        model.selectedSourceSheets = ["Synthetic A", "Synthetic B"]
+        model.sourceSheet = "Synthetic A"
+        var first = FieldDraft(id: "Cohort")
+        first.action = "code"
+        var second = FieldDraft(id: "Cohort")
+        second.action = "code"
+        var unrelated = FieldDraft(id: "Campus")
+        unrelated.action = "code"
+        model.fields = [first, unrelated]
+        model.fieldsBySheet["Synthetic B"] = [second]
+
+        XCTAssertEqual(model.sharedCodeCandidates, ["Cohort"])
+    }
 }

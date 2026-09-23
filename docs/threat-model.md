@@ -37,7 +37,9 @@ necessary reversible secrets. Legacy version 1 maps cannot be used for this flow
 
 A version 3 bundle binds multiple selected worksheets, their distinct schemas and
 policies, one shared random entity map, globally unique random row IDs and per-sheet
-codebooks. Equal source-key text in the explicitly declared entity domain receives
+codebooks. The bundle also authenticates any explicitly confirmed same-heading
+category fields whose random codebooks are shared across sheets. Equal source-key
+text in the explicitly declared entity domain receives
 the same `entity_id`; no hash or deterministic pseudonym is used. A separate
 `record_id` identifies each row for exact restoration. Worksheet removal, addition,
 renaming, row reordering, entity-ID substitution, record-ID substitution and
@@ -49,6 +51,13 @@ categories that entity appears in. SafeSet evaluates linked frequency patterns b
 cannot prevent auxiliary-data re-identification, graph attacks or inference from
 participation. Only worksheets genuinely belonging to the same authorised entity
 domain may be grouped into one release.
+
+A shared category codebook is separate, optional intentional linkability. It lets
+a recipient recognise that the same coded category occurs in different worksheets
+and compare its frequency. Heading equality alone never enables this behaviour;
+the operator must confirm each eligible field. The control does not establish that
+same-named fields have the same semantics, so that remains an operator
+responsibility. Unconfirmed fields receive independent random codes.
 
 This is a conservative local tool, not an anonymity or compliance guarantee.
 Protect source identities, identity maps, passphrases and restored data. The
@@ -66,6 +75,7 @@ real identities or credentials.
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
 | Cross-sheet linkage | Explicit shared entity domain, fresh UUIDv4 entity IDs, linked-class review | Equality and participation across released worksheets are deliberately visible |
+| Cross-sheet category linkage | Explicit confirmation for same-heading coded fields; fresh shared random codebook; authenticated bundle declaration | Category equality and frequency become deliberately visible; matching headings can still have different meanings |
 | Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; the encrypted version 2 bundle stores observed codebooks |
 | Exact numeric disclosure | Version 2 requires bounds, precision and all-attribute group checks | Exact values remain visible and may be distinctive, even when category labels are coded |
 | Sensitive logging | Private local log accepts only fixed stage and reason codes; no values, headings, paths or exception text | Event timestamps reveal when operations were attempted; inspect output still displays escaped headings |

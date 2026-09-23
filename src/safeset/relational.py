@@ -43,6 +43,7 @@ class RelationalCandidate:
     records: dict[str, dict[str, dict[str, object]]]
     entities: dict[str, str]
     codebooks: dict[str, dict[str, dict[str, str]]]
+    shared_code_fields: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -139,19 +140,44 @@ def _transform_value(value: str, rule, codes: dict[str, str], issued: set[str]) 
     raise SafetyError("Unsupported relational transformation.")
 
 
+def _validated_shared_code_fields(
+    policies: dict[str, Policy], shared_code_fields: tuple[str, ...]
+) -> tuple[str, ...]:
+    if (
+        any(not isinstance(name, str) or not valid_heading(name) for name in shared_code_fields)
+        or len(shared_code_fields) != len(set(shared_code_fields))
+        or any(
+            sum(
+                name in policy.columns and policy.columns[name].action == "code"
+                for policy in policies.values()
+            )
+            < 2
+            for name in shared_code_fields
+        )
+    ):
+        raise SafetyError(
+            "Every shared obfuscation field must be coded in at least two selected worksheets."
+        )
+    return shared_code_fields
+
+
 def sanitise_relational(
-    sources: dict[str, Table], policies: dict[str, Policy]
+    sources: dict[str, Table],
+    policies: dict[str, Policy],
+    shared_code_fields: tuple[str, ...] = (),
 ) -> RelationalCandidate:
     if not sources or set(sources) != set(policies):
         raise SafetyError("Every selected worksheet needs an explicit policy.")
     if sum(len(table.rows) for table in sources.values()) > MAX_ROWS:
         raise SafetyError("Selected worksheets exceed the combined row limit.")
+    shared_code_fields = _validated_shared_code_fields(policies, shared_code_fields)
     issued: set[str] = set()
     source_to_entity: dict[str, str] = {}
     entities: dict[str, str] = {}
     tables: dict[str, Table] = {}
     records: dict[str, dict[str, dict[str, object]]] = {}
     codebooks: dict[str, dict[str, dict[str, str]]] = {}
+    shared_books: dict[str, dict[str, str]] = {name: {} for name in shared_code_fields}
     for sheet, source in sources.items():
         policy = policies[sheet]
         if set(source.columns) != set(policy.columns):
@@ -178,16 +204,23 @@ def sanitise_relational(
             result = {"record_id": record_id, "entity_id": entity_id}
             for name, rule in policy.columns.items():
                 if rule.action in {"keep", "code", "keep_numeric", "bin"}:
-                    result[name] = _transform_value(
-                        row[name], rule, sheet_books.setdefault(name, {}), issued
+                    codes = (
+                        shared_books[name]
+                        if rule.action == "code" and name in shared_books
+                        else sheet_books[name]
+                        if rule.action == "code"
+                        else {}
                     )
+                    result[name] = _transform_value(row[name], rule, codes, issued)
+                    if rule.action == "code":
+                        sheet_books[name][row[name]] = codes[row[name]]
             sheet_rows.append(result)
             sheet_records[record_id] = {"row": row_index, "entity_id": entity_id}
         columns = ("record_id", "entity_id", *policy.output_columns[1:])
         tables[sheet] = Table(columns, tuple(sheet_rows))
         records[sheet] = sheet_records
         codebooks[sheet] = sheet_books
-    return RelationalCandidate(tables, records, entities, codebooks)
+    return RelationalCandidate(tables, records, entities, codebooks, shared_code_fields)
 
 
 def validate_relational(
@@ -199,6 +232,7 @@ def validate_relational(
         raise SafetyError("Validation profile is unsupported.")
     if set(candidate.tables) != set(policies):
         raise SafetyError("Relational candidate and policies do not match.")
+    _validated_shared_code_fields(policies, candidate.shared_code_fields)
     reports = {}
     entity_features: dict[str, list[tuple[str, str, str]]] = {
         entity_id: [] for entity_id in candidate.entities
@@ -236,6 +270,10 @@ def validate_relational(
     warnings: list[str] = [
         "Shared entity IDs expose equality and participation patterns across worksheets."
     ]
+    if candidate.shared_code_fields:
+        warnings.append(
+            "Shared obfuscation codebooks expose cross-worksheet category equality and frequency."
+        )
     if small:
         finding = "Small linked equivalence classes fall below the release threshold."
         if profile == "strict":
@@ -286,6 +324,7 @@ def create_relational_bundle(
             "profile": profile,
             "workbook_digest": workbook_digest(sources),
             "entities": candidate.entities,
+            "shared_code_fields": list(candidate.shared_code_fields),
             "sheets": {
                 name: _bundle_sheet(sources[name], policies[name], candidate, name)
                 for name in sources
@@ -295,7 +334,10 @@ def create_relational_bundle(
 
 
 def validate_relational_bundle(value: object) -> dict:
-    keys = {"version", "export_id", "profile", "workbook_digest", "entities", "sheets"}
+    legacy_keys = {"version", "export_id", "profile", "workbook_digest", "entities", "sheets"}
+    keys = legacy_keys | {"shared_code_fields"}
+    if isinstance(value, dict) and set(value) == legacy_keys:
+        value = {**value, "shared_code_fields": []}
     if (
         not isinstance(value, dict)
         or set(value) != keys
@@ -308,6 +350,12 @@ def validate_relational_bundle(value: object) -> dict:
         or len(value["workbook_digest"]) != 64
         or any(character not in "0123456789abcdef" for character in value["workbook_digest"])
         or not isinstance(value["entities"], dict)
+        or not isinstance(value["shared_code_fields"], list)
+        or any(
+            not isinstance(name, str) or not valid_heading(name)
+            for name in value["shared_code_fields"]
+        )
+        or len(value["shared_code_fields"]) != len(set(value["shared_code_fields"]))
         or not isinstance(value["sheets"], dict)
         or not value["sheets"]
     ):
@@ -327,9 +375,9 @@ def validate_relational_bundle(value: object) -> dict:
         or len(set(entities.values())) != len(entities)
     ):
         raise SafetyError("Relational entity map is malformed or ambiguous.")
-    seen_records: set[str] = set()
-    all_codes = set(entities)
-    total_rows = 0
+    shared_code_fields = tuple(value["shared_code_fields"])
+    policies = {}
+    declared_record_ids = []
     for sheet, item in value["sheets"].items():
         item_keys = {
             "source_digest",
@@ -342,7 +390,30 @@ def validate_relational_bundle(value: object) -> dict:
         }
         if not valid_heading(sheet) or not isinstance(item, dict) or set(item) != item_keys:
             raise SafetyError("Relational worksheet bundle is malformed.")
-        policy = parse_policy(item["policy"])
+        policies[sheet] = parse_policy(item["policy"])
+        if not isinstance(item["records"], dict):
+            raise SafetyError("Relational row mapping is malformed or ambiguous.")
+        declared_record_ids.extend(item["records"])
+    _validated_shared_code_fields(policies, shared_code_fields)
+    if len(declared_record_ids) != len(set(declared_record_ids)) or any(
+        not valid_id(record_id) for record_id in declared_record_ids
+    ):
+        raise SafetyError("Relational row mapping is malformed or ambiguous.")
+    seen_records: set[str] = set()
+    all_codes = set(entities) | set(declared_record_ids)
+    shared_assignments: dict[tuple[str, str], str] = {}
+    total_rows = 0
+    for sheet, item in value["sheets"].items():
+        item_keys = {
+            "source_digest",
+            "source_column",
+            "source_columns",
+            "protected_columns",
+            "records",
+            "codebooks",
+            "policy",
+        }
+        policy = policies[sheet]
         source_columns = item["source_columns"]
         protected_columns = item["protected_columns"]
         records = item["records"]
@@ -383,21 +454,31 @@ def validate_relational_bundle(value: object) -> dict:
         if row_indexes != set(range(len(records))):
             raise SafetyError("Relational row mapping coverage is incomplete.")
         total_rows += len(records)
-        all_codes.update(records)
         for name, book in books.items():
             if (
                 not isinstance(book, dict)
                 or not book
                 or any(
-                    label not in policy.columns[name].allowed_values
-                    or not valid_id(code)
-                    or code in all_codes
+                    label not in policy.columns[name].allowed_values or not valid_id(code)
                     for label, code in book.items()
                 )
                 or len(set(book.values())) != len(book)
             ):
                 raise SafetyError("Relational category codebook is malformed.")
-            all_codes.update(book.values())
+            for label, code in book.items():
+                shared_key = (name, label)
+                previous = (
+                    shared_assignments.get(shared_key) if name in shared_code_fields else None
+                )
+                if previous is not None:
+                    if previous != code:
+                        raise SafetyError("Relational shared category codebook is inconsistent.")
+                    continue
+                if code in all_codes:
+                    raise SafetyError("Relational category codebook is malformed.")
+                all_codes.add(code)
+                if name in shared_code_fields:
+                    shared_assignments[shared_key] = code
     if total_rows > MAX_ROWS:
         raise SafetyError("Relational restoration bundle exceeds the row limit.")
     return value
@@ -444,13 +525,14 @@ def protect_relational(
     *,
     profile: str,
     approved: bool,
+    shared_code_fields: tuple[str, ...] = (),
 ) -> RelationalValidation:
     if not approved:
         raise SafetyError("Explicit relational protection approval is required.")
     sources = read_excel_sheets(
         source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
-    candidate = sanitise_relational(sources, policies)
+    candidate = sanitise_relational(sources, policies, shared_code_fields)
     validation = validate_relational(candidate, policies, profile)
     validation.require_pass()
     publish_relational_candidate(

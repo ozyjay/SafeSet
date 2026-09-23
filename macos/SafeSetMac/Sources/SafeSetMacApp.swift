@@ -97,6 +97,7 @@ final class BackendBridge: @unchecked Sendable {
         case "output_directory": message = "The selected output directory does not exist."
         case "repository_destination": message = "Operational data cannot be written inside a source-code repository."
         case "destination_separation": message = "The protected workbook and private bundle must use separate directories."
+        case "shared_code_configuration": message = "Each shared obfuscation field must have the same heading and use Obfuscate values on at least two selected worksheets."
         case "local_io_failure": message = "A local file operation failed."
         case "response_limit": message = "The local review is too large to display."
         default: message = "The local request was invalid."
@@ -156,6 +157,7 @@ struct CategorySheet: Identifiable {
     @Published var selectedSourceSheets: Set<String> = []
     @Published var fieldsBySheet: [String: [FieldDraft]] = [:]
     @Published var fields: [FieldDraft] = []
+    @Published var sharedCodeFields: Set<String> = []
     @Published var threshold = "2"
     @Published var validationProfile = "strict"
     @Published var protectedOutput = ""
@@ -240,6 +242,17 @@ struct CategorySheet: Identifiable {
         }
     }
 
+    var sharedCodeCandidates: [String] {
+        var counts: [String: Int] = [:]
+        for sheet in selectedSourceSheets {
+            let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
+            for field in configured where field.action == "code" {
+                counts[field.id, default: 0] += 1
+            }
+        }
+        return counts.filter { $0.value >= 2 }.map(\.key).sorted()
+    }
+
     var canApproveRestoration: Bool {
         guard let review = restorationReview, review["review_id"] is String else { return false }
         if relationalRestore, let groups = review["new_columns"] as? [String: [String]] {
@@ -286,7 +299,7 @@ struct CategorySheet: Identifiable {
     }
 
     func chooseSource(_ url: URL) {
-        source = url.path; fields = []; fieldsBySheet = [:]
+        source = url.path; fields = []; fieldsBySheet = [:]; sharedCodeFields = []
         selectedSourceSheets = []; invalidate()
         send("list_sheets", ["path": source]) { result in
             self.sourceSheets = result["sheets"] as? [String] ?? []
@@ -366,6 +379,7 @@ struct CategorySheet: Identifiable {
 
     func prepareProtection() {
         fieldsBySheet[sourceSheet] = fields
+        sharedCodeFields.formIntersection(sharedCodeCandidates)
         for sheet in selectedSourceSheets.sorted() {
             let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
             if let problem = decisionProblem(configured) { alert = problem; return }
@@ -383,7 +397,8 @@ struct CategorySheet: Identifiable {
             payload = [
                 "source": source, "sheets": selectedSourceSheets.sorted(), "output": output,
                 "drafts": drafts, "threshold": threshold,
-                "validation_profile": validationProfile
+                "validation_profile": validationProfile,
+                "shared_code_fields": sharedCodeFields.sorted()
             ]
         } else {
             payload = [
@@ -704,6 +719,7 @@ struct RootView: View {
         )) { Button("OK") { model.alert = "" } } message: { Text(model.alert) }
         .onChange(of: model.fields) {
             if !model.sourceSheet.isEmpty { model.fieldsBySheet[model.sourceSheet] = model.fields }
+            model.sharedCodeFields.formIntersection(model.sharedCodeCandidates)
             model.invalidate()
         }
         .onChange(of: model.source) { model.invalidate() }
@@ -711,6 +727,7 @@ struct RootView: View {
         .onChange(of: model.bundleOutput) { model.invalidate() }
         .onChange(of: model.threshold) { model.invalidate() }
         .onChange(of: model.validationProfile) { model.invalidate() }
+        .onChange(of: model.sharedCodeFields) { model.invalidate() }
         .onChange(of: model.returned) { model.invalidate() }
         .onChange(of: model.returnedSheet) { model.invalidate() }
         .onChange(of: model.original) { model.invalidate() }
@@ -804,6 +821,26 @@ struct ProtectView: View {
                          ? "Strict mode blocks small marginal and joint groups."
                          : "Controlled pseudonymisation keeps structural checks mandatory and requires explicit review of rare-group and linkage warnings.")
                         .foregroundStyle(.secondary)
+                    if model.selectedSourceSheets.count > 1,
+                       !model.sharedCodeCandidates.isEmpty {
+                        GroupBox("Shared obfuscation") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Confirm which same-named fields represent the same category domain. Matching source values will receive the same random code across selected worksheets.")
+                                    .foregroundStyle(.secondary)
+                                ForEach(model.sharedCodeCandidates, id: \.self) { field in
+                                    Toggle(field, isOn: Binding(
+                                        get: { model.sharedCodeFields.contains(field) },
+                                        set: { selected in
+                                            if selected { model.sharedCodeFields.insert(field) }
+                                            else { model.sharedCodeFields.remove(field) }
+                                        }
+                                    ))
+                                }
+                                Text("This deliberately exposes cross-worksheet category equality and frequency. Unconfirmed fields use independent codebooks, even when their headings match.")
+                                    .foregroundStyle(.orange)
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                     PathRow(title: "Protected workbook", path: $model.protectedOutput,
                             save: true, fileExtension: "xlsx")
                     DisclosureGroup("Advanced settings") {
@@ -819,6 +856,9 @@ struct ProtectView: View {
                     Text("Final review").font(.title2.bold())
                     if let worksheets = review["worksheets"] as? Int {
                         Text("\(review["rows"] as? Int ?? 0) records · \(worksheets) related worksheets · \(review["entities"] as? Int ?? 0) linked entities")
+                        if let shared = review["shared_code_fields"] as? [String], !shared.isEmpty {
+                            Text("Shared obfuscation codebooks: \(shared.joined(separator: ", "))")
+                        }
                     } else {
                         Text("\(review["rows"] as? Int ?? 0) records · \(review["removed"] as? Int ?? 0) removed · 1 identifier replaced · \(review["obfuscated"] as? Int ?? 0) obfuscated · \(review["retained"] as? Int ?? 0) retained")
                     }

@@ -329,6 +329,7 @@ def protect_relational_command(
     bundle_path: Annotated[Path | None, typer.Option("--bundle")] = None,
     approve_export: Annotated[bool, typer.Option("--approve-export")] = False,
     validation_profile: Annotated[str, typer.Option("--validation-profile")] = "strict",
+    shared_code_field: Annotated[list[str] | None, typer.Option("--shared-code-field")] = None,
 ) -> None:
     """Protect related worksheets with shared random entity IDs and separate row IDs."""
     if not create_bundle:
@@ -339,7 +340,7 @@ def protect_relational_command(
     sources = read_excel_sheets(
         input_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
-    candidate = sanitise_relational(sources, policies)
+    candidate = sanitise_relational(sources, policies, tuple(shared_code_field or ()))
     validation = validate_relational(candidate, policies, validation_profile)
     report(validation.summary())
     validation.require_pass()
@@ -354,6 +355,7 @@ def protect_relational_command(
         {
             "worksheets": len(sheets),
             "validation_profile": validation_profile,
+            "shared_code_fields": list(candidate.shared_code_fields),
             "protected_destination": str(destination),
             "private_bundle": str(private_bundle),
             "notice": "Shared entity IDs deliberately expose cross-sheet linkability.",

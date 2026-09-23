@@ -85,3 +85,12 @@ selected worksheet. Each policy must contain exactly one pseudonymised source ke
 those explicitly selected keys form one shared entity domain even when their
 headings differ. `record_id` and `entity_id` are reserved relational output
 headings and are rejected in relational source schemas.
+
+Shared obfuscation is also workflow configuration, not a policy key. A field may
+be explicitly selected for a shared random codebook only when the same literal
+heading uses `action: code` in at least two selected worksheet policies. Exact
+matching category labels then share a code across those sheets. Matching headings
+do not imply sharing: omitted fields keep independent codebooks. The desktop app
+offers eligible headings for confirmation; the CLI uses repeatable
+`--shared-code-field` options. Adding this setting to policy YAML remains an
+unknown-key error.

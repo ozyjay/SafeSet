@@ -58,7 +58,13 @@ unambiguous when an entity occurs in several worksheets or several rows.
 The protected workbook preserves selected worksheet names and contains both IDs.
 The encrypted version 3 bundle contains one `entity_id`-to-source-key map, per-sheet
 `record_id`-to-source-row-index maps, exact per-sheet schemas, policies, codebooks
-and source digests. It contains no dropped fields or whole source rows. All sheets
+and source digests. It also authenticates the explicitly confirmed list of shared
+obfuscation fields. A field is eligible only when its literal heading is present
+with the `code` action in at least two selected worksheets. Equal source labels in
+a confirmed field receive the same fresh random code across those worksheets;
+same-named fields that are not confirmed retain independent codebooks. This is
+workflow configuration rather than an inferred schema relationship. It contains
+no dropped fields or whole source rows. All sheets
 are reviewed and published as one release; a failure in any sheet or in linked
 validation blocks the workbook. Publication writes the authenticated private bundle
 before the protected workbook, so a failure may leave an orphan bundle but never a
@@ -73,7 +79,9 @@ envelopes are not reinterpreted or migrated implicitly.
 Shared entity IDs deliberately reveal equality, cross-sheet participation and
 frequency patterns. Validation therefore reports per-sheet marginal and joint
 groups plus linked entity fingerprints formed from every released source-derived
-attribute and worksheet participation pattern.
+attribute and worksheet participation pattern. Confirmed shared obfuscation
+codebooks additionally reveal cross-sheet category equality and frequency and are
+called out in the release review.
 
 ## Validation profiles
 

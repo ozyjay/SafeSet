@@ -57,6 +57,9 @@ PUBLIC_SAFETY_ERRORS = {
     "Output directory must already exist.": "output_directory",
     "Operational artefacts must be stored outside repositories.": "repository_destination",
     "Mapping and export must use separate storage directories.": "destination_separation",
+    "Every shared obfuscation field must be coded in at least two selected worksheets.": (
+        "shared_code_configuration"
+    ),
 }
 
 
@@ -300,7 +303,7 @@ class Bridge:
             data = _payload(
                 raw,
                 {"source", "sheets", "output", "drafts", "threshold", "validation_profile"},
-                {"bundle"},
+                {"bundle", "shared_code_fields"},
             )
             review = prepare_relational_protection(
                 _path(data["source"]),
@@ -310,6 +313,7 @@ class Bridge:
                 _path(data["output"]),
                 _path(data.get("bundle"), optional=True),
                 _string(data["validation_profile"]),
+                _columns(data.get("shared_code_fields", [])),
             )
             token = new_id()
             self.pending = ("approve_relational_protection", token, review)
@@ -318,6 +322,7 @@ class Bridge:
                 "rows": sum(len(table.rows) for table in review.source_tables.values()),
                 "worksheets": len(review.sheets),
                 "entities": len(review.candidate.entities),
+                "shared_code_fields": list(review.candidate.shared_code_fields),
                 "output": str(review.output),
                 "bundle": str(review.bundle_path),
                 "validation": review.validation.summary(),

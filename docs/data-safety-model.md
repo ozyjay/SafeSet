@@ -48,6 +48,14 @@ independently, then all retained source-derived values and worksheet participati
 are combined into an entity fingerprint for linked-class reporting. Reusing the
 entity ID exposes equality and participation by design.
 
+Same-named categorical fields configured with `code` remain independently
+randomised by default. In a relational release, the operator may explicitly
+confirm an eligible heading as one shared category domain. Exact matching source
+labels then receive the same fresh random code in every selected worksheet where
+that heading is coded. This exposes cross-worksheet category equality and
+frequency, is recorded in the authenticated bundle and produces a validation
+warning. SafeSet does not infer semantic equivalence from a heading.
+
 Categorical allowlists, numeric bounds and bin intervals are deliberate
 minimisation boundaries.
 Keep values must be non-empty short labels (at most 64 characters and four words),
