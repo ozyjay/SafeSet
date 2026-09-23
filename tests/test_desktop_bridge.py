@@ -62,6 +62,10 @@ def test_protocol_rejects_malformed_and_secret_output():
             "policy_configuration",
         ),
         ("Added analysis worksheet contains unsafe content.", "analysis_sheet"),
+        ("Original source does not match the restoration bundle.", "source_mismatch"),
+        ("A protected source field was changed.", "protected_value"),
+        ("Returned record coverage does not match the bundle.", "record_coverage"),
+        ("Restoration bundle could not be authenticated or decoded.", "bundle_authentication"),
         ("private synthetic value must never cross", "safety_rejected"),
     ],
 )
@@ -308,3 +312,9 @@ def test_bridge_rejects_changed_returned_workbook(destinations, change):
         },
     )
     assert not result["ok"]
+    assert result["error"] == {
+        "missing": "record_coverage",
+        "duplicate": "record_ids",
+        "unknown": "record_coverage",
+        "field": "protected_value",
+    }[change]

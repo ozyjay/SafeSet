@@ -176,6 +176,9 @@ outside repositories. It never accepts free-form event text. On POSIX, the log
 directory requires owner-only mode 0700 and the file mode 0600; symlinks and
 hard-linked log files are rejected. Logging is best effort and does not change
 validation, approval or publication outcomes. The log is truncated at 1 MiB.
+The desktop bridge also maps exact, fixed restoration failures to value-free
+error codes for local user guidance. Unknown failures remain generic; exception
+text, headings, cell values and paths do not cross this error boundary.
 
 Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
 50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per
