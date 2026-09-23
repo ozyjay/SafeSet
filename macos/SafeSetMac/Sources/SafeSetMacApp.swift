@@ -32,7 +32,7 @@ func plainLanguageSuggestion(_ classification: String) -> String {
     }
 }
 
-let restorationAnalysisGuidance = "Ask the analysis tool to preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly. It may add short result columns or separate analysis worksheets instead of changing fields such as campus."
+let restorationAnalysisGuidance = "Preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly. It may add short result columns or separate analysis worksheets instead of changing fields such as campus."
 let restorationResultExample = "For result columns, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Added worksheets may contain blank cells and formulas with saved results. SafeSet does not calculate or preserve formulas: after approval, it copies their saved results into new static tables. Formatting and drawings are not preserved."
 let restorationCopyText = "\(restorationAnalysisGuidance)\n\n\(restorationResultExample)"
 
