@@ -79,9 +79,11 @@ semantics; that judgement remains explicit operator responsibility.
 The desktop initially filters the editor to fields whose decisions or required
 category/numeric settings remain incomplete. Operators can show all fields to
 revisit decisions. Its bulk Remove action applies only to headings that have no
-action in every selected worksheet; any configured decision is left alone. Both
-controls change authoring convenience, while per-sheet policies and validation
-still require explicit decisions for every source field.
+action in every selected worksheet; any configured decision is left alone. Each
+field card also has an X that sets Remove directly. Removed cards are shown
+inactive in the all-fields view and can be restored to an undecided state there.
+These controls change authoring convenience, while per-sheet policies and
+validation still require explicit decisions for every source field.
 Remove and pseudonymise do not expose raw classification pickers: an unclassified
 removed field serialises as `unknown`, and the selected linking field serialises
 as `direct_identifier`. Retained and transformed fields use plain-language choices

@@ -933,98 +933,121 @@ struct FieldCard: View {
             HStack {
                 Text(field.id).appFont(13, weight: .semibold)
                 Spacer()
-                Text(metadata ?? "\(field.type) · \(field.cardinality) values")
-                    .foregroundStyle(.secondary)
+                if field.action == "drop" {
+                    Text("Removed").foregroundStyle(.secondary)
+                } else {
+                    Text(metadata ?? "\(field.type) · \(field.cardinality) values")
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    if field.action == "drop" {
+                        field.action = ""
+                    } else {
+                        field.action = "drop"
+                        field.classification = ""
+                    }
+                } label: {
+                    Image(systemName: field.action == "drop" ? "arrow.uturn.backward" : "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .background(.quaternary, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(field.action == "drop" ? "Undo remove" : "Remove field")
+                .help(field.action == "drop" ? "Undo removal of this field" : "Remove this field")
             }
             if let scope {
                 Text(scope).appFont(12).foregroundStyle(.secondary)
             }
-            if field.blankCount > 0 {
-                Label(
-                    "\(field.blankCount) blank or whitespace-only cells",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .appFont(13)
-                .foregroundStyle(.red)
-            }
-            HStack {
-                Picker("Appearance", selection: Binding(
-                    get: { field.action },
-                    set: { action in
-                        field.action = action
-                        if action == "pseudonymise" {
-                            field.classification = "direct_identifier"
-                        } else if action == "drop" {
-                            field.classification = ""
-                        } else if !["quasi_identifier", "analytical_attribute"]
-                            .contains(field.classification) {
-                            field.classification = ""
-                        }
-                    }
-                )) {
-                    Text("Choose…").tag("")
-                    ForEach(actionOptions, id: \.1) { item in Text(item.0).tag(item.1) }
+            if field.action != "drop" {
+                if field.blankCount > 0 {
+                    Label(
+                        "\(field.blankCount) blank or whitespace-only cells",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .appFont(13)
+                    .foregroundStyle(.red)
                 }
-                .appFont(13)
-                if ["keep", "code", "bin", "keep_numeric"].contains(field.action) {
-                    Picker("Why keep this field?", selection: $field.classification) {
-                        ForEach(retainedInformationOptions, id: \.1) { item in
-                            Text(item.0).tag(item.1)
+                HStack {
+                    Picker("Appearance", selection: Binding(
+                        get: { field.action },
+                        set: { action in
+                            field.action = action
+                            if action == "pseudonymise" {
+                                field.classification = "direct_identifier"
+                            } else if action == "drop" {
+                                field.classification = ""
+                            } else if !["quasi_identifier", "analytical_attribute"]
+                                .contains(field.classification) {
+                                field.classification = ""
+                            }
                         }
+                    )) {
+                        Text("Choose…").tag("")
+                        ForEach(actionOptions, id: \.1) { item in Text(item.0).tag(item.1) }
                     }
                     .appFont(13)
+                    if ["keep", "code", "bin", "keep_numeric"].contains(field.action) {
+                        Picker("Why keep this field?", selection: $field.classification) {
+                            ForEach(retainedInformationOptions, id: \.1) { item in
+                                Text(item.0).tag(item.1)
+                            }
+                        }
+                        .appFont(13)
+                    }
                 }
-            }
-            if field.action == "pseudonymise" {
-                Text("SafeSet will use this as the source identifier that links records. It is treated internally as a direct identifier and replaced with fresh random IDs.")
-                    .appFont(12)
-                    .foregroundStyle(.secondary)
-            }
-            if field.action == "keep" || field.action == "code" {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(field.action == "code"
-                         ? "Review the distinct source values before SafeSet replaces each one with a fresh random code."
-                         : "Review the distinct source values that will remain unchanged in the protected copy.")
+                if field.action == "pseudonymise" {
+                    Text("SafeSet will use this as the source identifier that links records. It is treated internally as a direct identifier and replaced with fresh random IDs.")
+                        .appFont(12)
+                        .foregroundStyle(.secondary)
+                }
+                if field.action == "keep" || field.action == "code" {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(field.action == "code"
+                             ? "Review the distinct source values before SafeSet replaces each one with a fresh random code."
+                             : "Review the distinct source values that will remain unchanged in the protected copy.")
+                            .appFont(12)
+                            .foregroundStyle(.secondary)
+                        HStack {
+                            Button("Review values found in this field…") { categories(field.id) }
+                                .appFont(13)
+                            Text("\(field.allowedValues.count) source values approved")
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                if field.action == "bin" {
+                    TextField("One lower,upper range per line", text: $field.binsText, axis: .vertical)
+                        .appFont(13)
+                        .lineLimit(2...5)
+                }
+                if field.action == "keep_numeric" {
+                    Text("Genuine blank cells remain blank and are included in the disclosure-risk checks.")
                         .appFont(12)
                         .foregroundStyle(.secondary)
                     HStack {
-                        Button("Review values found in this field…") { categories(field.id) }
-                            .appFont(13)
-                        Text("\(field.allowedValues.count) source values approved")
-                        .foregroundStyle(.secondary)
+                        TextField("Lower bound", text: $field.lower).appFont(13)
+                        TextField("Upper bound", text: $field.upper).appFont(13)
                     }
                 }
-            }
-            if field.action == "bin" {
-                TextField("One lower,upper range per line", text: $field.binsText, axis: .vertical)
-                    .appFont(13)
-                    .lineLimit(2...5)
-            }
-            if field.action == "keep_numeric" {
-                Text("Genuine blank cells remain blank and are included in the disclosure-risk checks.")
-                    .appFont(12)
-                    .foregroundStyle(.secondary)
-                HStack {
-                    TextField("Lower bound", text: $field.lower).appFont(13)
-                    TextField("Upper bound", text: $field.upper).appFont(13)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Decision details").appFont(11, weight: .semibold)
+                    Text("Local suggestion: \(plainLanguageSuggestion(field.hint))")
+                    Text("This suggestion is advisory only and never permits a field to be released.")
+                    if field.action != "drop" && !field.flags.isEmpty {
+                        Label("Warnings: \(field.flags.joined(separator: ", "))",
+                              systemImage: "exclamationmark.triangle")
+                            .appFont(13)
+                            .foregroundStyle(.orange)
+                    }
                 }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 4)
             }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Decision details").appFont(11, weight: .semibold)
-                Text("Local suggestion: \(plainLanguageSuggestion(field.hint))")
-                Text("This suggestion is advisory only and never permits a field to be released.")
-                if field.action != "drop" && !field.flags.isEmpty {
-                    Label("Warnings: \(field.flags.joined(separator: ", "))",
-                          systemImage: "exclamationmark.triangle")
-                        .appFont(13)
-                        .foregroundStyle(.orange)
-                }
-            }
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 4)
         }
         .padding(14)
+        .opacity(field.action == "drop" ? 0.55 : 1)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
     }
 }
