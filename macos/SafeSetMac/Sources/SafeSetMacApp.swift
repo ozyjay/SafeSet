@@ -945,7 +945,7 @@ struct RootView: View {
                 Label("Home", systemImage: "house").appFont(13).tag(AppModel.Page.home)
                 Label("Protect workbook", systemImage: "lock.doc")
                     .appFont(13).tag(AppModel.Page.protect)
-                Label("Restore workbook", systemImage: "lock.open.doc")
+                Label("Restore workbook", systemImage: "lock.open")
                     .appFont(13).tag(AppModel.Page.restore)
                 Label("Advanced", systemImage: "slider.horizontal.3")
                     .appFont(13).tag(AppModel.Page.advanced)
@@ -1019,7 +1019,7 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, minHeight: 100)
                 }.buttonStyle(.borderedProminent)
                 Button { model.page = .restore } label: {
-                    Label("Restore a workbook", systemImage: "lock.open.doc")
+                    Label("Restore a workbook", systemImage: "lock.open")
                         .appFont(13)
                         .frame(maxWidth: .infinity, minHeight: 100)
                 }.buttonStyle(.bordered)
@@ -1168,7 +1168,15 @@ private func helpInline(_ markdown: String) -> AttributedString {
 }
 
 struct HelpView: View {
+    @Environment(\.appTextScale) private var textScale
     private let blocks: [HelpBlock]
+
+    private var sections: [HelpBlock] {
+        blocks.filter {
+            if case .heading(2, _) = $0.kind { return true }
+            return false
+        }
+    }
 
     init(bundle: Bundle = .main) {
         let fallback = "The SafeSet guide is unavailable in this build. See `HOWTO.md` in the project or rebuild the app with `scripts/build-macos-app.ps1`."
@@ -1184,26 +1192,31 @@ struct HelpView: View {
         switch block.kind {
         case .heading(let level, let text):
             Text(helpInline(text))
-                .appFont(level == 1 ? 26 : level == 2 ? 18 : 13,
-                         weight: .bold)
-                .padding(.top, level == 1 ? 0 : 10)
+                .appFont(level == 1 ? 28 : level == 2 ? 21 : 17,
+                         weight: level == 3 ? .semibold : .bold)
+                .padding(.top, level == 1 ? 0 : level == 2 ? 16 : 8)
         case .paragraph(let text):
-            Text(helpInline(text)).lineSpacing(4)
+            Text(helpInline(text))
+                .appFont(15)
+                .lineSpacing(5 * textScale)
         case .list(let ordered, let items):
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12 * textScale) {
                 ForEach(Array(items.enumerated()), id: \.offset) { offset, item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(ordered ? "\(offset + 1)." : "•")
-                            .frame(width: 24, alignment: .trailing)
+                            .appFont(15, weight: .semibold)
+                            .frame(width: 28 * textScale, alignment: .trailing)
                             .foregroundStyle(.secondary)
-                        Text(helpInline(item)).lineSpacing(3)
+                        Text(helpInline(item))
+                            .appFont(15)
+                            .lineSpacing(5 * textScale)
                     }
                 }
             }
         case .code(let code):
             ScrollView(.horizontal) {
                 Text(verbatim: code)
-                    .appFont(13, design: .monospaced)
+                    .appFont(14, design: .monospaced)
                     .textSelection(.enabled)
                     .padding(12)
             }
@@ -1213,7 +1226,7 @@ struct HelpView: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
                     GridRow {
                         ForEach(Array(headers.enumerated()), id: \.offset) { _, cell in
-                            Text(helpInline(cell)).fontWeight(.semibold)
+                            Text(helpInline(cell)).appFont(15, weight: .semibold)
                         }
                     }
                     Divider()
@@ -1221,6 +1234,7 @@ struct HelpView: View {
                         GridRow {
                             ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                                 Text(helpInline(cell))
+                                    .appFont(15)
                                     .frame(maxWidth: 300, alignment: .leading)
                             }
                         }
@@ -1233,16 +1247,36 @@ struct HelpView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Label("Offline guide", systemImage: "book.closed")
-                    .appFont(18, weight: .bold)
-                Text("This guidance is stored inside SafeSet and does not require a network connection.")
-                    .foregroundStyle(.secondary)
-                Divider()
-                ForEach(blocks) { render($0) }
+        ScrollViewReader { reader in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20 * textScale) {
+                    if let first = blocks.first { render(first) }
+                    Text("Jump to a section")
+                        .appFont(13, weight: .semibold)
+                        .foregroundStyle(.secondary)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 280 * textScale),
+                                                   alignment: .leading)],
+                              alignment: .leading, spacing: 8) {
+                        ForEach(sections) { section in
+                            if case .heading(_, let title) = section.kind {
+                                Button(title) {
+                                    withAnimation { reader.scrollTo(section.id, anchor: .top) }
+                                }
+                                .appFont(13)
+                                .buttonStyle(.bordered)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    Divider()
+                    ForEach(Array(blocks.dropFirst())) { block in
+                        render(block).id(block.id)
+                    }
+                }
+                .frame(maxWidth: 680, alignment: .leading)
+                .padding(32)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(28)
         }
         .navigationTitle("Help")
     }

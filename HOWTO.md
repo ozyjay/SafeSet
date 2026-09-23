@@ -1,83 +1,77 @@
 # How to use SafeSet
 
-SafeSet runs locally. A passing validation report reduces some disclosure risks but does not prove anonymity or decide whether a protected copy may be shared. Keep source workbooks, bundles and reconstructed workbooks private, outside repositories and synchronised folders.
+SafeSet protects a working copy for analysis, then restores approved results locally. It runs without a network connection.
 
-In the macOS app, press **⌘+** or **⌘−** to increase or decrease the text size. Press **⌘0** to restore the default size. These controls are also in the **View** menu, and the chosen size is remembered.
+Passing validation reduces some disclosure risks. It does not prove anonymity or decide whether a copy is suitable to share. Keep source workbooks, private bundles and restored workbooks outside repositories and synchronised folders.
+
+In the macOS app, use **⌘+** and **⌘−** to change text size, or **⌘0** to reset it. The View menu has the same controls. SafeSet remembers your choice.
 
 ## Protect a workbook
 
-1. Choose **Protect a workbook**, then the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. When several are visible, select every related worksheet that belongs to the release. Selecting multiple worksheets creates a relational protected workbook and version 3 bundle with shared random entity IDs and separate row IDs.
-2. Inspect the consolidated local field summary. It shows all selected worksheets together, with a literal heading repeated across worksheets shown once and its scope listed. The single decision then applies to every listed occurrence, so confirm that same-named fields genuinely have the same meaning. Sheet-specific headings remain separate. Category review shows the combined labels while SafeSet retains exact per-worksheet allowlists. The summary shows names, types and cardinality; no cell samples. Every field needs an explicit action. Classify fields you keep or replace; removed fields need no classification choice. Heuristic hints are advisory.
-3. Choose one direct source identifier for **Replace with anonymous ID**. This creates a fresh cryptographically random `record_id`. Remove other direct identifiers, free text and unnecessary fields. **Keep** and **Obfuscate values** need an explicitly reviewed category allowlist. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds; it does not limit decimal places, and exact values may disclose information.
-4. Set the minimum group size to at least 2. Review the proposed protection. Failed mandatory validation blocks creation. Passing validation is not approval for a recipient. Choose a new protected workbook destination outside a repository.
-5. Approve creation and enter a confirmed passphrase of at least 16 characters. SafeSet creates the protected copy and encrypted version 2 restoration bundle. The bundle defaults to private local storage; its location can be set in Advanced settings. Existing files are never overwritten. Keep the passphrase separately; there is no recovery backdoor.
+1. Choose **Protect a workbook** and select the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. If several are visible, select every related worksheet in this release.
+2. Review the field summary. Choose an action for every field, and classify every field you keep or replace. Removed fields need no classification. The suggested classifications are only hints.
+3. Choose exactly one direct source identifier per worksheet for **Replace with random record ID**. Remove other direct identifiers, free text and fields the analysis does not need.
+4. Review the values for each **Keep** or **Obfuscate values** field and approve its exact category list. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds; exact values may still disclose information.
+5. Set the minimum group size to at least 2. Choose a new protected workbook destination outside a repository, then review the validation summary. Mandatory failures block creation.
+6. Approve creation and enter a confirmed passphrase of at least 16 characters. Keep the passphrase separately: there is no recovery backdoor. Existing files are never overwritten.
 
-The protected copy omits removed fields and the original source key. Obfuscated values use fresh random codes per field and export. Equal original categories receive equal codes within that export; equality and frequencies remain visible.
+When you select multiple worksheets, SafeSet creates a relational protected workbook and version 3 bundle. They use shared random entity IDs and separate row IDs. A repeated heading appears once in the summary, and its decision applies to every listed worksheet. Confirm that same-named fields really mean the same thing. Category review combines the labels but retains an exact allowlist for each worksheet. The summary shows names, types and cardinality, never cell samples.
+
+The protected copy omits removed fields and the source identifier. It uses a fresh cryptographically random `record_id`. Obfuscated fields receive fresh random codes per field and export. Equal source categories still have equal codes within that export, so equality and frequency remain visible.
+
+SafeSet also creates an encrypted version 2 restoration bundle for a single-sheet release. The bundle defaults to private local storage; you can set its location under Advanced settings. Keep the bundle separate from the protected copy.
 
 ## Choose field classifications
 
-Classify a field according to what it contains, not according to the action you
-want SafeSet to permit. Never relabel a direct identifier as a quasi-identifier
-or analytical attribute merely to retain it.
+Classify a field by its contents, not by the action you want to use. Never relabel a direct identifier merely to retain it.
 
-| Classification | Use it for | Permitted treatment |
-| --- | --- | --- |
-| **Direct identifier** | A value that directly identifies or contacts someone, such as a student number, name, email address, phone number or username | **Remove**, or choose exactly one source identifier per worksheet for **Replace with anonymous ID** |
-| **Quasi-identifier** | A value that may distinguish someone when combined with other information, such as campus, cohort, course, year level, age band or postcode | Remove, keep, obfuscate, group into ranges or keep as a bounded exact number |
-| **Analytical attribute** | Information genuinely required to perform or interpret the analysis, such as preference rank, score, capacity, mark or allocation constraint | The same actions as a quasi-identifier |
-| **Free text** | Unconstrained notes, comments, feedback, explanations or descriptions | **Remove only** |
-| **Unknown** | A field whose meaning, necessity or sensitivity has not been established | **Remove only** until it has been assessed |
-| **Pseudonymous identifier** | An existing artificial identifier that still links records or may be mapped back elsewhere | Source fields should be removed; SafeSet creates fresh `record_id` and `entity_id` values where needed |
+### Direct identifier
 
-Use this decision sequence for each source field:
+Names, student numbers, email addresses, phone numbers and usernames identify or contact someone. **Remove** them, except for exactly one source identifier per worksheet selected for **Replace with random record ID**.
 
-1. If it directly identifies or contacts the person, choose **Direct identifier**.
-2. If it contains unconstrained prose, choose **Free text** and remove it.
-3. If it is genuinely required to perform or interpret the allocation analysis,
-   choose **Analytical attribute**.
-4. If it may help distinguish a person, especially when combined with other
-   fields, choose **Quasi-identifier**.
-5. If its meaning or necessity is unclear, choose **Unknown** and remove it until
-   it has been assessed.
+### Quasi-identifier
 
-Typical student-allocation examples are:
+Campus, cohort, year level, age band and postcode can distinguish someone when combined with other fields. Remove, keep, obfuscate, group into ranges or keep as a bounded exact number only when the analysis needs them.
 
-- Student number, name and email address: **Direct identifier**.
-- Campus, cohort and year level: usually **Quasi-identifier**.
-- Preference rank, score and allocation outcome: usually **Analytical attribute**.
-- Adviser comments and student notes: **Free text**.
+### Analytical attribute
 
-Classification does not make a value safe or anonymous. Quasi-identifiers and
-analytical attributes both enter SafeSet's per-field and combined-group disclosure
-checks. An analytical classification is not an exemption from those checks or from
-the need to minimise the released fields.
+Preference rank, score, capacity, mark and allocation constraints help perform or interpret the analysis. They have the same available actions as quasi-identifiers.
+
+### Free text, unknown and existing pseudonyms
+
+Remove unconstrained notes, comments and feedback as **Free text**. Remove **Unknown** fields until their meaning and necessity are established. Remove existing pseudonymous source identifiers; SafeSet creates fresh `record_id` and, where needed, `entity_id` values.
+
+Classification does not make a value safe or anonymous. Both quasi-identifiers and analytical attributes enter per-field and combined-group disclosure checks. Keep only the fields the analysis needs.
 
 ## Work with the protected copy
 
-Analyse or modify the protected workbook locally or in an environment you have separately decided is suitable. You can add new result fields, for example `Team`, and separate analysis worksheets. Keep every original worksheet, `record_id`, `entity_id`, row, protected heading and protected value intact. Current restoration accepts short safe categorical text in new fields. Give every row a result such as `Campus mismatch` or `No change`; blank result cells are not supported. Added analysis worksheets may contain blank cells and formulas with saved scalar results. SafeSet does not calculate or preserve formulas: it validates the saved results as short safe text and copies them into a static output table. Formulas in original protected worksheets, unsafe text and unsupported spreadsheet content are blocked.
+Analyse the protected workbook locally or in an environment you have separately decided is suitable.
+
+- Preserve every original worksheet, row, heading, `record_id`, `entity_id` and protected value exactly.
+- Add short, safe categorical result fields, such as `Team`. Fill every row with a result such as `Campus mismatch` or `No change`; blank result cells are not supported.
+- You may add separate analysis worksheets. They may contain blank cells or formulas with saved scalar results. SafeSet reads saved results; it does not calculate or preserve formulas.
+
+Formulas in the original protected worksheets, unsafe text and unsupported spreadsheet content block restoration.
 
 ## Restore locally
 
-1. Choose **Restore a workbook** and select the modified protected copy, the exact original source workbook and the private bundle. For a version 2 bundle, select every same-schema protected and source worksheet used in that release; SafeSet preserves their workbook order. For a version 3 relational bundle, every bundle-bound worksheet is mandatory and selected automatically; you may deselect added analysis worksheets that should not enter the restored output. Choose a new restored output filename.
-2. Enter the passphrase to unlock the bundle locally. SafeSet needs its encrypted binding and ID map to validate the returned workbook. It checks the selected source content and order, exact record coverage, schemas and all source-derived protected values. Any mismatch blocks restoration; no identity is guessed.
-3. Review the count, restored source fields, each new result heading and every added analysis worksheet. Every detected result field and worksheet must be explicitly approved; remove unwanted items from the returned workbook and repeat review.
-4. Explicitly authorise restoration. SafeSet creates a **new** workbook with all original source fields and the approved new results. The original is never overwritten. This output contains identifiers and is sensitive plaintext.
+1. Choose **Restore a workbook**. Select the modified protected copy, the exact original source workbook and the private bundle. Choose a new restored output filename.
+2. Enter the passphrase. SafeSet unlocks the bundle locally and checks source content and order, exact record coverage, schemas and every source-derived protected value. A mismatch blocks restoration; SafeSet never guesses an identity.
+3. Review the record count, source fields to restore, new result headings and added analysis worksheets. Approve each new field and worksheet explicitly. To exclude one, remove it from the returned workbook and repeat the review.
+4. Authorise restoration. SafeSet creates a **new** workbook containing the source fields and approved results. The original is not overwritten. The restored workbook contains identifiers and is sensitive plaintext.
 
-Editing source-derived protected fields is not yet supported. An altered code, original category, kept value or range label blocks restoration even if the change seems valid. Re-protect the source to start a new round trip after a source edit.
+For a version 2 bundle, select every same-schema protected and source worksheet in the release; SafeSet preserves workbook order. For a version 3 relational bundle, every bundle-bound worksheet is mandatory and selected automatically. You may deselect added analysis worksheets you do not want in the output.
 
-Approved analysis worksheet cell text, including saved formula results, is copied
-into static tables in the new sensitive workbook. Formulas, formatting, drawings
-and charts are not preserved. SafeSet does not calculate formulas. SafeSet
-does not replace `record_id` or `entity_id` values inside those worksheets with
-source identities. Put row-level findings in new columns on the original protected
-worksheets when they need to appear beside restored source records.
+Do not edit source-derived protected fields. An altered code, original category, kept value or range label blocks restoration, even if the change seems valid. Re-protect the source to start a new round trip after a source edit.
+
+Approved analysis worksheets become static tables of cell text, including saved formula results. Formulas, formatting, drawings and charts are not preserved. IDs inside these added worksheets are not replaced with source identities. Put row-level findings in new columns on the original protected worksheets if they must appear beside restored source records.
 
 ## Advanced and CLI
 
-**Advanced tools** retain strict YAML policy authoring, detailed technical settings and the earlier version 1 identity-map result join. The CLI offers `protect` and `reconstruct` for the new version 2 round trip, alongside the legacy `inspect`, `sanitise`, `validate` and `restore` commands. A version 1 map cannot be used for full source reconstruction; there is no implicit conversion. See [README.md](README.md) for a synthetic CLI example and [policy format](docs/policy-format.md) for schema details.
+**Advanced tools** include strict YAML policy authoring, technical settings and the earlier version 1 identity-map result join. The CLI offers `protect` and `reconstruct` for version 2, plus legacy `inspect`, `sanitise`, `validate` and `restore`. A version 1 map cannot perform full source reconstruction; there is no implicit conversion.
 
-For CLI reconstruction, approve each added worksheet with a repeatable
-`--analysis-sheet 'Worksheet name'` option. Single-sheet reconstruction also needs
-`--sheet 'Protected worksheet'` when the returned workbook contains added sheets.
+See [README.md](README.md) for a synthetic CLI example and [policy format](docs/policy-format.md) for the schema. For CLI reconstruction, approve each added worksheet with a repeatable `--analysis-sheet 'Worksheet name'` option. Single-sheet reconstruction also needs `--sheet 'Protected worksheet'` when the returned workbook contains added sheets.
 
-The source format is bounded `.xlsx`: 10 MiB compressed, 50,000 rows, 128 columns and 4,096 characters per field. Structured Excel Tables are supported, with only their defined ranges read. Hidden content in a selected data range, external links, unsafe cells and ambiguous worksheet selection fail closed. Source formulas use saved scalar results and may be stale; recalculate and save locally before protection. Exact source identifiers needing leading zeros must be stored as text in Excel.
+The source format is bounded `.xlsx`: 10 MiB compressed, 50,000 rows, 128 columns and 4,096 characters per field. Structured Excel Tables are supported; SafeSet reads only their defined ranges. Hidden content in a selected range, external links, unsafe cells and ambiguous worksheet selection fail closed.
+
+Source formulas use saved scalar results that may be stale. Recalculate and save locally before protection. Store identifiers with leading zeros as text in Excel.
