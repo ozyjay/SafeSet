@@ -167,6 +167,8 @@ without formatting, drawings or pseudonymous-ID translation. Formula cells are
 accepted only there and only through a saved scalar result; formulas are never
 calculated or copied. Its output picker selects a new filename
 rather than an existing file.
+The static returning-analysis guidance has an explicit copy button; the action
+places only those fixed instructions on the clipboard.
 Optional coded-label restoration reads the original source workbook and policy
 locally after separate authorisation. It requires exact source-key coverage and
 matching coded-category groupings, replaces only approved `code` result columns,
