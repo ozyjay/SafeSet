@@ -10,6 +10,7 @@ from safeset.policy_authoring import (
     RuleDraft,
     load_drafts,
     local_categories,
+    local_category_review,
     parse_number,
     parse_pairs,
     policy_payload,
@@ -151,3 +152,25 @@ def test_local_category_review_is_bounded_and_value_free_on_error(tmp_path):
     with pytest.raises(SafetyError) as caught:
         local_categories(unsafe, "field")
     assert "synthetic@example.invalid" not in str(caught.value)
+
+
+def test_local_category_review_reports_blanks_without_returning_them(tmp_path):
+    source = tmp_path / "synthetic-blanks.xlsx"
+    source.write_bytes(
+        excel_bytes(
+            Table(
+                ("synthetic_key", "category"),
+                (
+                    {"synthetic_key": "SYNTH-001", "category": "Alpha"},
+                    {"synthetic_key": "SYNTH-002", "category": ""},
+                    {"synthetic_key": "SYNTH-003", "category": "   "},
+                ),
+            )
+        )
+    )
+    review = local_category_review(source, "category")
+    assert review.values == ("Alpha",)
+    assert review.blank_count == 2
+    assert "" not in review.values and "   " not in review.values
+    with pytest.raises(SafetyError):
+        local_categories(source, "category")

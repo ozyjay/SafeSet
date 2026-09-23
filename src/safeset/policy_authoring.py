@@ -23,17 +23,35 @@ class RuleDraft:
     max_decimal_places: int | None = None
 
 
+@dataclass(frozen=True)
+class CategoryReview:
+    values: tuple[str, ...]
+    blank_count: int
+
+
+def local_category_review(
+    source: Path, column: str, sheet: str | tuple[str, ...] | None = None
+) -> CategoryReview:
+    """Return safe distinct labels and an aggregate blank count without row values."""
+    table = read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
+    if column not in table.columns:
+        raise SafetyError("Source headings changed; load the Excel workbook headings again.")
+    observed = [row[column] for row in table.rows]
+    blank_count = sum(not value.strip() for value in observed)
+    values = set(value for value in observed if value.strip())
+    if len(values) > 1000 or any(not safe_category(value) for value in values):
+        raise SafetyError("Column has too many or unsafe distinct values for a category allowlist.")
+    return CategoryReview(tuple(sorted(values)), blank_count)
+
+
 def local_categories(
     source: Path, column: str, sheet: str | tuple[str, ...] | None = None
 ) -> tuple[str, ...]:
     """Return reviewed local labels only for bounded categorical domains."""
-    table = read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
-    if column not in table.columns:
-        raise SafetyError("Source headings changed; load the Excel workbook headings again.")
-    values = set(row[column] for row in table.rows)
-    if not values or len(values) > 1000 or any(not safe_category(value) for value in values):
+    review = local_category_review(source, column, sheet)
+    if review.blank_count or not review.values:
         raise SafetyError("Column has too many or unsafe distinct values for a category allowlist.")
-    return tuple(sorted(values))
+    return review.values
 
 
 def load_drafts(

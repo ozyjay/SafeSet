@@ -21,7 +21,7 @@ from .desktop_flow import (
 )
 from .errors import SafetyError
 from .ingestion import list_excel_sheets
-from .policy_authoring import RuleDraft, load_drafts, local_categories, save_policy
+from .policy_authoring import RuleDraft, load_drafts, local_category_review, save_policy
 from .pseudonyms import new_id
 
 PROTOCOL_VERSION = 1
@@ -243,12 +243,12 @@ class Bridge:
             return inspect_source(_path(data["source"]), _sheet(data["sheet"]))
         if command == "categories":
             data = _payload(raw, {"source", "sheet", "column"})
+            review = local_category_review(
+                _path(data["source"]), _string(data["column"]), _sheet(data["sheet"])
+            )
             return {
-                "values": list(
-                    local_categories(
-                        _path(data["source"]), _string(data["column"]), _sheet(data["sheet"])
-                    )
-                )
+                "values": list(review.values),
+                "blank_count": review.blank_count,
             }
         if command == "load_policy":
             data = _payload(raw, {"source", "sheet", "policy"})

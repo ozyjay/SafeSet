@@ -109,6 +109,7 @@ struct FieldDraft: Identifiable, Equatable {
     let id: String
     var type = ""
     var cardinality = 0
+    var blankCount = 0
     var hint = ""
     var flags: [String] = []
     var action = ""
@@ -141,6 +142,7 @@ struct CategorySheet: Identifiable {
     let field: String
     let action: String
     let values: [String]
+    let blankCount: Int
 }
 
 @MainActor final class AppModel: ObservableObject {
@@ -202,6 +204,9 @@ struct CategorySheet: Identifiable {
             }
             if ["keep", "code"].contains(field.action) && field.allowedValues.isEmpty {
                 return "Review and approve the source-value list for every kept or obfuscated field."
+            }
+            if ["keep", "code"].contains(field.action) && field.blankCount > 0 {
+                return "Remove blank categorical cells or drop the affected field before protection."
             }
             if field.action == "bin" {
                 let validPairs = field.binsText.split(separator: "\n").filter { line in
@@ -320,6 +325,7 @@ struct CategorySheet: Identifiable {
                 var field = FieldDraft(id: item["column"] as? String ?? "")
                 field.type = item["type"] as? String ?? ""
                 field.cardinality = item["cardinality"] as? Int ?? 0
+                field.blankCount = item["blank_count"] as? Int ?? 0
                 field.hint = item["inferred_classification"] as? String ?? ""
                 field.flags = item["flags"] as? [String] ?? []
                 return field
@@ -334,12 +340,19 @@ struct CategorySheet: Identifiable {
         send("categories", ["source": source, "sheet": sourceSheet, "column": field]) { result in
             let action = self.fields.first(where: { $0.id == field })?.action ?? ""
             self.categorySheet = CategorySheet(
-                field: field, action: action, values: result["values"] as? [String] ?? []
+                field: field,
+                action: action,
+                values: result["values"] as? [String] ?? [],
+                blankCount: result["blank_count"] as? Int ?? 0
             )
         }
     }
 
     func approveCategories(_ category: CategorySheet) {
+        guard category.blankCount == 0 else {
+            alert = "Blank categorical cells cannot be approved. Remove them or drop this field."
+            return
+        }
         if let index = fields.firstIndex(where: { $0.id == category.field }) {
             fields[index].allowedValues = category.values
             fieldsBySheet[sourceSheet] = fields
@@ -597,6 +610,13 @@ struct FieldCard: View {
                 Text("\(field.type) · \(field.cardinality) values")
                     .foregroundStyle(.secondary)
             }
+            if field.blankCount > 0 {
+                Label(
+                    "\(field.blankCount) blank or whitespace-only cells",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundStyle(.red)
+            }
             HStack {
                 Picker("Appearance", selection: $field.action) {
                     Text("Choose…").tag("")
@@ -838,6 +858,13 @@ struct ProtectView: View {
                 Text(category.field).font(.headline)
                 Text("SafeSet found \(category.values.count) distinct source values. Confirm that this is the complete set you expect in this field.")
                     .foregroundStyle(.secondary)
+                if category.blankCount > 0 {
+                    Label(
+                        "\(category.blankCount) blank or whitespace-only cells were found. Blank categories cannot be approved; correct the source workbook or remove this field.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(.red)
+                }
                 if category.action == "code" {
                     Text("After approval, SafeSet will replace each value below with a fresh random code. These are the original values, not the replacement codes.")
                 } else {
@@ -856,6 +883,7 @@ struct ProtectView: View {
                     Button("Approve this source-value list") {
                         model.approveCategories(category)
                     }
+                        .disabled(category.blankCount > 0 || category.values.isEmpty)
                         .buttonStyle(.borderedProminent)
                 }
             }.padding(24).frame(minWidth: 500, minHeight: 390)

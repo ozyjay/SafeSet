@@ -75,6 +75,28 @@ def test_bridge_returns_only_allowlisted_value_free_safety_codes(message, code):
     assert message not in json.dumps(result)
 
 
+def test_bridge_category_review_reports_blank_count_without_blank_values(tmp_path):
+    source = tmp_path / "synthetic-blanks.xlsx"
+    source.write_bytes(
+        excel_bytes(
+            Table(
+                ("synthetic_key", "category"),
+                (
+                    {"synthetic_key": "SYNTH-001", "category": "Alpha"},
+                    {"synthetic_key": "SYNTH-002", "category": ""},
+                ),
+            )
+        )
+    )
+    result = call(
+        Bridge(),
+        "categories",
+        {"source": str(source), "sheet": None, "column": "category"},
+    )
+    assert result["ok"]
+    assert result["result"] == {"values": ["Alpha"], "blank_count": 1}
+
+
 def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
     def denied(*_args, **_kwargs):
         raise AssertionError("Network access attempted")

@@ -112,7 +112,7 @@ def inspect_table(table: Table) -> dict:
                 "inferred_classification": inferred_classification(name),
                 "type": inferred_type(values),
                 "cardinality": len(counts),
-                "blank_count": values.count(""),
+                "blank_count": sum(not value.strip() for value in values),
                 "categories_below_2": sum(n < 2 for n in counts.values()),
                 "flags": flags,
             }
