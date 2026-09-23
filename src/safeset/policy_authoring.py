@@ -112,7 +112,10 @@ def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
         raise SafetyError("Enter a whole-number minimum group size of at least 2.")
     columns = {}
     for name, draft in drafts.items():
-        classification = draft.classification or ("unknown" if draft.action == "drop" else "")
+        if draft.action == "pseudonymise":
+            classification = "direct_identifier"
+        else:
+            classification = draft.classification or ("unknown" if draft.action == "drop" else "")
         config: dict = {"action": draft.action, "classification": classification}
         if draft.action in {"keep", "code"}:
             config["allowed_values"] = list(draft.allowed_values)

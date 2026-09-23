@@ -92,8 +92,12 @@ def _cell_text(cell, *, allow_dates: bool = False) -> str:
     raise SafetyError("Excel workbook contains an unsupported cell type.")
 
 
-def list_excel_sheets(path: Path) -> tuple[str, ...]:
-    """List visible worksheet names without reading cell values into the UI."""
+def list_excel_sheets(path: Path, *, reject_hidden: bool = False) -> tuple[str, ...]:
+    """List visible worksheet names without reading cell values into the UI.
+
+    Restoration callers can reject hidden worksheets so an unreviewed sheet cannot
+    sit outside the explicit added-analysis worksheet approval flow.
+    """
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Only .xlsx Excel workbooks are supported.")
     data = read_bounded(path)
@@ -102,6 +106,11 @@ def list_excel_sheets(path: Path) -> tuple[str, ...]:
         workbook = load_workbook(io.BytesIO(data), read_only=True, data_only=False)
         if workbook._external_links:
             raise SafetyError("Excel workbook contains external links.")
+        hidden = tuple(
+            sheet.title for sheet in workbook.worksheets if sheet.sheet_state != "visible"
+        )
+        if reject_hidden and hidden:
+            raise SafetyError("Returned workbook contains hidden worksheets.")
         names = tuple(
             sheet.title for sheet in workbook.worksheets if sheet.sheet_state == "visible"
         )

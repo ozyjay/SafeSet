@@ -13,6 +13,10 @@ and copies only that saved result into a new static table; a saved empty-string
 result becomes a blank cell. Formulas remain
 forbidden in bundle-bound returned worksheets. Formatting and drawings are not
 preserved.
+For relational restoration, the authenticated version 3 bundle—not a desktop
+checkbox selection—defines the required worksheet set. Every additional visible
+worksheet is treated as an added analysis worksheet. Hidden returned worksheets
+are rejected so content cannot evade the added-worksheet review.
 Pseudonymous IDs in an added worksheet are not replaced with source identities.
 This check prevents accidental source overwrite but cannot establish that an
 approved result is accurate or that the protected workbook is suitable for a
@@ -25,6 +29,10 @@ combination with other attributes. An **analytical attribute** serves an approve
 analysis but can still disclose information. **Free text** is unconstrained prose;
 **unknown** fields are unclassified. Unknown fields and free text cannot be retained.
 Direct identifiers must be dropped except the single source key used in the map.
+The guided desktop records that source-key choice as `direct_identifier`
+automatically. Its plain-language retained-information choices map to
+`analytical_attribute` and `quasi_identifier`; **I'm not sure** remains unresolved
+and blocks protection.
 
 Source Excel date/time cells are read as ISO text so they can be inspected and
 explicitly dropped or transformed under the policy. Exact date-shaped labels

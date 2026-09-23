@@ -55,6 +55,7 @@ REASON_CODES = {
     "Only .xlsx Excel workbooks are supported.": "input_type",
     "Excel workbook contains external links.": "active_content",
     "Excel workbook has no visible worksheet.": "sheet_selection",
+    "Returned workbook contains hidden worksheets.": "hidden_worksheet",
     "Select one or more worksheets from the Excel workbook.": "sheet_selection",
     "Worksheet selection is invalid.": "sheet_selection",
     "Selected worksheet is missing, hidden or repeated.": "sheet_selection",

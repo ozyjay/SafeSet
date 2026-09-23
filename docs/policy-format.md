@@ -34,6 +34,12 @@ The desktop form does not ask for a classification when an action is `drop`.
 When it creates a policy from an unclassified removed field, it writes
 `classification: unknown` to retain the strict YAML schema. Existing policies
 that classify dropped fields remain valid.
+The form also does not ask for a classification when an action is `pseudonymise`:
+that action selects the source field used to link records, and policy authoring
+always writes `classification: direct_identifier`. Retained and transformed
+fields use plain-language choices mapped to `analytical_attribute` or
+`quasi_identifier`. **I'm not sure** remains an unresolved UI state and cannot be
+serialised as an approved policy decision.
 
 | Action | Required configuration | Permitted classification |
 | --- | --- | --- |

@@ -51,6 +51,7 @@ PUBLIC_SAFETY_ERRORS = {
     "Excel formula has no saved result. Recalculate and save locally.": "formula_result",
     "Excel data range contains hidden rows.": "hidden_data",
     "Excel data range contains hidden columns.": "hidden_data",
+    "Returned workbook contains hidden worksheets.": "hidden_worksheet",
     "Excel data range contains merged cells.": "merged_data",
     "Excel workbook contains unsupported active content.": "active_content",
     "Excel workbook contains unsupported cell features.": "cell_features",
@@ -378,7 +379,6 @@ class Bridge:
             data = _payload(
                 raw,
                 {"returned", "source", "bundle", "output", "passphrase"},
-                {"selected_sheets"},
             )
             review = prepare_relational_reconstruction(
                 _path(data["returned"]),
@@ -386,9 +386,6 @@ class Bridge:
                 _path(data["bundle"]),
                 _path(data["output"]),
                 _string(data["passphrase"]),
-                _sheets(data["selected_sheets"])
-                if "selected_sheets" in data
-                else None,
             )
             token = new_id()
             self.pending = ("approve_relational_reconstruction", token, review)

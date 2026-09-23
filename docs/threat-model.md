@@ -50,6 +50,14 @@ the same `entity_id`; no hash or deterministic pseudonym is used. A separate
 renaming, row reordering, entity-ID substitution, record-ID substitution and
 protected-value changes block reconstruction.
 
+The desktop does not ask the operator to choose bundle-bound worksheets during
+relational restoration. It derives them only from the authenticated bundle,
+requires all of them to remain visible and valid, and treats every other visible
+worksheet as untrusted analysis requiring explicit approval. Hidden returned
+worksheets fail closed. Added worksheets are allowed only through this separate
+review path; their presence is not itself treated as a change to the bundle-bound
+worksheet set.
+
 The shared entity ID is intentional linkability. A recipient can learn that rows
 across worksheets concern the same entity and can observe which worksheets and
 categories that entity appears in. SafeSet evaluates linked frequency patterns but
@@ -75,7 +83,7 @@ real identities or credentials.
 | --- | --- | --- |
 | Accidental Git commit | Broad ignores; maps/outputs rejected in detected repositories | Git can force-add files; copies and unknown repositories evade detection |
 | Accidental source upload | Local workflow, no runtime networking; candidate held in memory | Cannot control manual uploads or editor/cloud backups |
-| Hidden/unexpected columns | Explicit worksheet selection, structured table bounds where present, matching headings, exact protected schema and separate approval for every added analysis worksheet | Incorrectly authored policy or approved analysis sheet can still contain inappropriate information |
+| Hidden/unexpected fields or sheets | Protection selection means protect-and-include; unselected source sheets are excluded; structured table bounds where present, matching headings, exact protected schema, rejection of hidden returned sheets and separate approval for every added analysis worksheet | Incorrectly authored policy or an explicitly approved analysis sheet can still contain inappropriate information |
 | Consolidated field authoring | Exact same-named headings appear once with their worksheet scope; decisions are copied to each per-sheet policy and categorical review retains exact per-sheet allowlists | Same-named fields can have different meanings, so an operator may apply an unsuitable common decision |
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
@@ -94,7 +102,7 @@ real identities or credentials.
 | Incorrect legacy coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The version 1 map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |
 | Remembered private-bundle path | Desktop preferences retain only the last existing `.enc` path, never the passphrase or bundle content; stale paths are removed and the user can forget the path explicitly | The local account, device backups or preference inspection may reveal the bundle filename and location |
-| Policy authoring exposure | Field choices are explicit; the desktop's bulk Remove action requires a selected source key and changes only wholly undecided headings; distinct category values appear only after a local review action; saved policies use private no-clobber storage outside repositories | A policy can contain sensitive headings and category labels; an incorrect classification may retain inappropriate data; bulk removal can omit fields needed for analysis |
+| Policy authoring exposure | Field choices are explicit; Remove hides classification, the linking identifier is internally fixed to `direct_identifier`, retained-information choices map to the two permitted retained classifications, and uncertainty remains blocking; the desktop's bulk Remove action requires a selected source key and changes only wholly undecided headings; distinct category values appear only after a local review action; saved policies use private no-clobber storage outside repositories | A policy can contain sensitive headings and category labels; an incorrect retained-information choice may retain inappropriate data; bulk removal can omit fields needed for analysis |
 
 ## Encryption and keys
 

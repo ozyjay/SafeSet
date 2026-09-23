@@ -63,6 +63,16 @@ def test_removed_field_needs_no_classification_choice():
     assert payload["columns"]["email"]["classification"] == "direct_identifier"
 
 
+def test_pseudonymised_source_key_classification_is_implicit():
+    drafts = example_drafts()
+    drafts["student_number"].classification = ""
+    payload = policy_payload(drafts, "2")
+    assert payload["columns"]["student_number"] == {
+        "action": "pseudonymise",
+        "classification": "direct_identifier",
+    }
+
+
 def test_policy_builder_uses_literal_source_headings(tmp_path):
     source = tmp_path / "synthetic.xlsx"
     source.write_bytes(

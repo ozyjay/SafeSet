@@ -8,9 +8,9 @@ In the macOS app, use **⌘+** and **⌘−** to change text size, or **⌘0** t
 
 ## Protect a workbook
 
-1. Choose **Protect a workbook** and select the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. If several are visible, select every related worksheet in this release.
-2. Review the field summary. It initially shows fields needing attention; turn off **Show only fields needing attention** to revisit completed decisions. Choose and classify one source identifier per worksheet, then use **Remove undecided fields** to remove all fields that have no action on any selected worksheet. Set actions for other fields needed for analysis before using that shortcut. Classify every field you keep or replace. Removed fields need no classification. The suggested classifications are only hints.
-3. Choose exactly one direct source identifier per worksheet for **Replace with random record ID**. Remove other direct identifiers, free text and fields the analysis does not need.
+1. Choose **Protect a workbook** and select the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. If several are visible, select every worksheet to protect and include in this release. Unselected worksheets are excluded; SafeSet never copies them through unchanged.
+2. Review the field summary. It initially shows fields needing attention; turn off **Show only fields needing attention** to revisit completed decisions. Choose one source identifier per worksheet, then use **Remove undecided fields** to remove all fields that have no action on any selected worksheet. Set actions for other fields needed for analysis before using that shortcut. Removed fields need no classification. Local suggestions explain possible concerns in ordinary language but remain hints only.
+3. Choose exactly one source identifier per worksheet for **Replace with random record ID**. SafeSet treats that field internally as a direct identifier used to link records; there is no separate classification picker. Remove other direct identifiers, free text and fields the analysis does not need.
 4. Review the values for each **Keep** or **Obfuscate values** field and approve its exact category list. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds; exact values may still disclose information.
 5. Set the minimum group size to at least 2. Choose a new protected workbook destination outside a repository, then review the validation summary. Mandatory failures block creation.
 6. Approve creation and enter a confirmed passphrase of at least 16 characters. Keep the passphrase separately: there is no recovery backdoor. Existing files are never overwritten.
@@ -24,6 +24,8 @@ SafeSet also creates an encrypted version 2 restoration bundle for a single-shee
 ## Choose field classifications
 
 Classify a field by its contents, not by the action you want to use. Never relabel a direct identifier merely to retain it.
+
+For fields you keep, obfuscate or transform, the guided desktop asks why the field is needed. Choose **Information useful for the analysis** for an analytical attribute, or **Information about the person or group that could distinguish them** for a quasi-identifier. **I'm not sure** deliberately remains unresolved and blocks review until you decide to remove the field or choose a supported retained-information role.
 
 ### Direct identifier
 
@@ -60,7 +62,7 @@ Formulas in the original protected worksheets, unsafe text and unsupported sprea
 3. Review the record count, source fields to restore, new result headings and added analysis worksheets. Approve each new field and worksheet explicitly. To exclude one, remove it from the returned workbook and repeat the review.
 4. Authorise restoration. SafeSet creates a **new** workbook containing the source fields and approved results. The original is not overwritten. The restored workbook contains identifiers and is sensitive plaintext.
 
-For a version 2 bundle, select every same-schema protected and source worksheet in the release; SafeSet preserves workbook order. For a version 3 relational bundle, every bundle-bound worksheet is mandatory and selected automatically. You may deselect added analysis worksheets you do not want in the output.
+For a version 2 bundle, select every same-schema protected and source worksheet in the release; SafeSet preserves workbook order. For a version 3 relational bundle, the authenticated bundle defines every mandatory worksheet automatically, so the desktop does not show a worksheet picker. After validation, added analysis worksheets appear separately and must each be approved for inclusion. Remove an unwanted added worksheet from the modified protected workbook and validate again. Hidden returned worksheets fail closed.
 
 Do not edit source-derived protected fields. An altered code, original category, kept value or range label blocks restoration, even if the change seems valid. Re-protect the source to start a new round trip after a source edit.
 

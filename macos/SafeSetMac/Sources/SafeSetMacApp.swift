@@ -9,11 +9,28 @@ let actionOptions: [(String, String)] = [
     ("Obfuscate values", "code"), ("Keep", "keep"),
     ("Group into ranges", "bin"), ("Keep exact number", "keep_numeric")
 ]
-private let classOptions: [(String, String)] = [
-    ("Direct identifier", "direct_identifier"), ("Quasi-identifier", "quasi_identifier"),
-    ("Analytical attribute", "analytical_attribute"), ("Free text", "free_text"),
-    ("Unknown", "unknown"), ("Existing pseudonym", "pseudonymous_identifier")
+let retainedInformationOptions: [(String, String)] = [
+    ("Information useful for the analysis", "analytical_attribute"),
+    ("Information about the person or group that could distinguish them", "quasi_identifier"),
+    ("I'm not sure", "")
 ]
+
+func plainLanguageSuggestion(_ classification: String) -> String {
+    switch classification {
+    case "direct_identifier":
+        return "This field may directly identify a person and would normally be removed or used as the one linking identifier."
+    case "quasi_identifier":
+        return "This field may distinguish a person or small group when combined with other information."
+    case "analytical_attribute":
+        return "This field may be useful for the analysis, but keeping it still contributes to disclosure risk."
+    case "free_text":
+        return "This looks like free text and would normally be removed because SafeSet does not redact it."
+    case "pseudonymous_identifier":
+        return "This looks like an existing identifier and should not be treated as automatically safe."
+    default:
+        return "SafeSet is not confident about this field. Choose based on its meaning and the intended analysis."
+    }
+}
 
 let restorationAnalysisGuidance = "Ask the analysis tool to preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly. It may add short result columns or separate analysis worksheets instead of changing fields such as campus."
 let restorationResultExample = "For result columns, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Added worksheets may contain blank cells and formulas with saved results. SafeSet does not calculate or preserve formulas: after approval, it copies their saved results into new static tables. Formatting and drawings are not preserved."
@@ -124,6 +141,7 @@ final class BackendBridge: @unchecked Sendable {
         case "analysis_sheet_approval": message = "Every added analysis worksheet must be explicitly approved before restoration."
         case "formula_result": message = "A source formula has no saved value. Recalculate and save the workbook locally, then try again."
         case "hidden_data": message = "A selected data range contains hidden rows or columns. Unhide them or select a clean table."
+        case "hidden_worksheet": message = "The returned workbook contains a hidden worksheet. Unhide or remove it so every worksheet can be reviewed explicitly."
         case "merged_data": message = "A selected data range contains merged cells, which SafeSet cannot process safely."
         case "active_content": message = "The workbook contains unsupported active or externally linked content."
         case "cell_features": message = "A selected data range contains unsupported comments or hyperlinks."
@@ -158,8 +176,7 @@ struct FieldDraft: Identifiable, Equatable {
     var needsAttention: Bool {
         if action.isEmpty { return true }
         if action == "drop" { return false }
-        if classification.isEmpty { return true }
-        if action == "pseudonymise" { return classification != "direct_identifier" }
+        if action == "pseudonymise" { return false }
         if !["quasi_identifier", "analytical_attribute"].contains(classification) { return true }
         if action == "keep" || action == "code" {
             return allowedValues.isEmpty || blankCount > 0
@@ -190,8 +207,13 @@ struct FieldDraft: Identifiable, Equatable {
         }
         let bounds: Any = (Double(lower) != nil && Double(upper) != nil)
             ? [Double(lower)!, Double(upper)!] : NSNull()
+        let policyClassification: String
+        if action == "pseudonymise" { policyClassification = "direct_identifier" }
+        else if action == "drop" && classification.isEmpty { policyClassification = "unknown" }
+        else { policyClassification = classification }
         return [
-            "action": action, "classification": classification, "allowed_values": allowedValues,
+            "action": action, "classification": policyClassification,
+            "allowed_values": allowedValues,
             "bins": bins, "bounds": bounds
         ]
     }
@@ -325,9 +347,7 @@ struct ConsolidatedField: Identifiable {
 
     var hasSourceKeySelections: Bool {
         !selectedSourceSheets.isEmpty && selectedSourceSheets.allSatisfy { sheet in
-            (fieldsBySheet[sheet] ?? []).filter {
-                $0.action == "pseudonymise" && $0.classification == "direct_identifier"
-            }.count == 1
+            (fieldsBySheet[sheet] ?? []).filter { $0.action == "pseudonymise" }.count == 1
         }
     }
 
@@ -359,15 +379,9 @@ struct ConsolidatedField: Identifiable {
             if field.action.isEmpty {
                 return "Choose an action for every field in every selected worksheet."
             }
-            if field.action != "drop" && field.classification.isEmpty {
-                return "Classify every field that is kept, transformed or replaced."
-            }
-            if field.action == "pseudonymise" && field.classification != "direct_identifier" {
-                return "The replaced source identifier must be classified as a direct identifier."
-            }
             if ["keep", "code", "bin", "keep_numeric"].contains(field.action)
                 && !["quasi_identifier", "analytical_attribute"].contains(field.classification) {
-                return "Retained and transformed fields must be quasi-identifiers or analytical attributes."
+                return "Choose why every retained or transformed field is needed. 'I'm not sure' still needs attention."
             }
             if ["keep", "code"].contains(field.action) && field.allowedValues.isEmpty {
                 return "Review and approve the source-value list for every kept or obfuscated field."
@@ -711,16 +725,14 @@ struct ConsolidatedField: Identifiable {
             } else {
                 self.returnedSheets = sheets
                 self.returnedSheet = sheets.count == 1 ? sheets[0] : ""
-                self.selectedReturnedSheets = Set(
-                    self.relationalRestore || sheets.count == 1 ? sheets : []
-                )
+                self.selectedReturnedSheets = Set(sheets.count == 1 ? sheets : [])
             }
         }
     }
 
     func prepareRestoration(passphrase: String) {
         guard !returned.isEmpty, !original.isEmpty, !restoreBundle.isEmpty,
-              !orderedReturnedRestoreSheets.isEmpty,
+              relationalRestore || !orderedReturnedRestoreSheets.isEmpty,
               relationalRestore || !orderedOriginalRestoreSheets.isEmpty
         else {
             alert = "Choose both workbooks, their worksheets and the private bundle."; return
@@ -735,8 +747,6 @@ struct ConsolidatedField: Identifiable {
         if !relationalRestore {
             payload["returned_sheet"] = orderedReturnedRestoreSheets
             payload["source_sheet"] = orderedOriginalRestoreSheets
-        } else {
-            payload["selected_sheets"] = orderedReturnedRestoreSheets
         }
         send(command, payload) { result in
             self.restorationReview = result
@@ -938,18 +948,37 @@ struct FieldCard: View {
                 .foregroundStyle(.red)
             }
             HStack {
-                Picker("Appearance", selection: $field.action) {
+                Picker("Appearance", selection: Binding(
+                    get: { field.action },
+                    set: { action in
+                        field.action = action
+                        if action == "pseudonymise" {
+                            field.classification = "direct_identifier"
+                        } else if action == "drop" {
+                            field.classification = ""
+                        } else if !["quasi_identifier", "analytical_attribute"]
+                            .contains(field.classification) {
+                            field.classification = ""
+                        }
+                    }
+                )) {
                     Text("Choose…").tag("")
                     ForEach(actionOptions, id: \.1) { item in Text(item.0).tag(item.1) }
                 }
                 .appFont(13)
-                if field.action != "drop" {
-                    Picker("Classification", selection: $field.classification) {
-                        Text("Choose…").tag("")
-                        ForEach(classOptions, id: \.1) { item in Text(item.0).tag(item.1) }
+                if ["keep", "code", "bin", "keep_numeric"].contains(field.action) {
+                    Picker("Why keep this field?", selection: $field.classification) {
+                        ForEach(retainedInformationOptions, id: \.1) { item in
+                            Text(item.0).tag(item.1)
+                        }
                     }
                     .appFont(13)
                 }
+            }
+            if field.action == "pseudonymise" {
+                Text("SafeSet will use this as the source identifier that links records. It is treated internally as a direct identifier and replaced with fresh random IDs.")
+                    .appFont(12)
+                    .foregroundStyle(.secondary)
             }
             if field.action == "keep" || field.action == "code" {
                 VStack(alignment: .leading, spacing: 5) {
@@ -982,7 +1011,8 @@ struct FieldCard: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Decision details").appFont(11, weight: .semibold)
-                Text("Suggested classification: \(field.hint.replacingOccurrences(of: "_", with: " "))")
+                Text("Local suggestion: \(plainLanguageSuggestion(field.hint))")
+                Text("This suggestion is advisory only and never permits a field to be released.")
                 if field.action != "drop" && !field.flags.isEmpty {
                     Label("Warnings: \(field.flags.joined(separator: ", "))",
                           systemImage: "exclamationmark.triangle")
@@ -1060,9 +1090,6 @@ struct RootView: View {
         .onChange(of: model.restoreBundle) { model.invalidate() }
         .onChange(of: model.restoredOutput) { model.invalidate() }
         .onChange(of: model.relationalRestore) {
-            if model.relationalRestore {
-                model.selectedReturnedSheets = Set(model.returnedSheets)
-            }
             model.invalidate()
         }
         .onChange(of: model.legacyPolicy) { model.invalidate() }
@@ -1362,9 +1389,9 @@ struct ProtectView: View {
                 PathRow(title: "Original workbook", path: $model.source, save: false,
                         fileExtension: "xlsx") { model.chooseSource($0) }
                 if model.sourceSheets.count > 1 {
-                    GroupBox("Related worksheets") {
+                    GroupBox("Worksheets in the protected release") {
                         VStack(alignment: .leading) {
-                            Text("Select every worksheet that belongs to this linked release.")
+                            Text("Selected worksheets are protected and included in the release. Unselected worksheets are excluded, not copied through.")
                                 .foregroundStyle(.secondary)
                             ForEach(model.sourceSheets, id: \.self) { sheet in
                                 Toggle(sheet, isOn: Binding(
@@ -1378,7 +1405,7 @@ struct ProtectView: View {
                 }
                 if !model.consolidatedFields.isEmpty {
                     Text("Review fields across selected worksheets").appFont(18, weight: .bold)
-                    Text("A repeated heading appears once and its decision applies to every listed worksheet. Sheet-specific headings remain separate. Classify fields you keep or replace; removed fields need no classification.")
+                    Text("A repeated heading appears once and its decision applies to every listed worksheet. Sheet-specific headings remain separate. For fields you retain or transform, choose why the information is needed. Removed fields need no classification, and the linking identifier is handled automatically.")
                         .foregroundStyle(.secondary)
                     let attentionCount = model.consolidatedFields.filter {
                         model.fieldNeedsAttention($0.id)
@@ -1400,7 +1427,7 @@ struct ProtectView: View {
                         .disabled(!model.hasSourceKeySelections)
                         .help("Applies Remove only to fields with no action on any selected worksheet. You can show all fields to change a decision.")
                         if !model.hasSourceKeySelections {
-                            Text("Choose and classify one source identifier per worksheet before removing the undecided fields.")
+                            Text("Choose one source identifier per worksheet before removing the undecided fields.")
                                 .appFont(12)
                                 .foregroundStyle(.secondary)
                         }
@@ -1591,7 +1618,7 @@ struct RestoreView: View {
                 Toggle("Multi-sheet relational bundle", isOn: $model.relationalRestore)
                     .appFont(13)
                 Text(model.relationalRestore
-                     ? "All bundle-bound worksheets are required. Select any added analysis worksheets to include."
+                     ? "The private bundle defines every required worksheet. SafeSet includes those automatically and presents added analysis worksheets separately for approval."
                      : "Restore one or more same-schema worksheets from a version 2 bundle.")
                     .foregroundStyle(.secondary)
                 GroupBox("Returning analysis findings") {
@@ -1606,11 +1633,14 @@ struct RestoreView: View {
                         save: false, fileExtension: "xlsx") {
                     model.chooseRestoreFile($0, sourceFile: false)
                 }
-                if model.returnedSheets.count > 1 {
+                if model.relationalRestore, !model.returned.isEmpty {
+                    Text("No worksheet selection is needed. Required worksheets are verified against the private bundle after it is unlocked; unexpected hidden worksheets are rejected.")
+                        .appFont(12)
+                        .foregroundStyle(.secondary)
+                }
+                if !model.relationalRestore && model.returnedSheets.count > 1 {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(model.relationalRestore
-                             ? "Worksheets to include"
-                             : "Protected worksheets")
+                        Text("Protected worksheets")
                             .appFont(13, weight: .semibold)
                         ForEach(model.returnedSheets, id: \.self) { sheet in
                             Toggle(sheet, isOn: Binding(

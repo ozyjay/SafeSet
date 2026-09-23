@@ -53,6 +53,26 @@ final class SafeSetMacTests: XCTestCase {
         ])
     }
 
+    func testFieldActionsHideTechnicalClassificationAndBuildSafePayloads() {
+        var identifier = FieldDraft(id: "Invented source key")
+        identifier.action = "pseudonymise"
+        XCTAssertFalse(identifier.needsAttention)
+        XCTAssertEqual(identifier.payload()["classification"] as? String, "direct_identifier")
+
+        var removed = FieldDraft(id: "Invented removed field")
+        removed.action = "drop"
+        XCTAssertFalse(removed.needsAttention)
+        XCTAssertEqual(removed.payload()["classification"] as? String, "unknown")
+
+        var uncertain = FieldDraft(id: "Invented retained field")
+        uncertain.action = "keep"
+        uncertain.classification = ""
+        uncertain.allowedValues = ["Synthetic A", "Synthetic B"]
+        XCTAssertTrue(uncertain.needsAttention)
+        XCTAssertEqual(retainedInformationOptions.last?.0, "I'm not sure")
+        XCTAssertEqual(retainedInformationOptions.last?.1, "")
+    }
+
     func testRestorationGuidancePreservesProtectedLinkageAndUsesPopulatedResults() {
         XCTAssertTrue(restorationAnalysisGuidance.contains("record_id"))
         XCTAssertTrue(restorationAnalysisGuidance.contains("entity_id"))
@@ -70,7 +90,6 @@ final class SafeSetMacTests: XCTestCase {
         model.fields = [field]
         XCTAssertFalse(model.canPrepareProtection)
         field.action = "pseudonymise"
-        field.classification = "direct_identifier"
         model.fields = [field]
         XCTAssertTrue(model.canPrepareProtection)
 

@@ -62,6 +62,12 @@ SafeSet never infers this relationship from similar headings. Each source row al
 receives a globally unique random `record_id`, so result restoration remains
 unambiguous when an entity occurs in several worksheets or several rows.
 
+Worksheet selection is a release role: selected worksheets are protected and
+included, while unselected worksheets are excluded rather than copied through.
+SafeSet has no copy-unchanged role. A future supporting/summary-sheet workflow
+would need its own explicit field review and allowlisting model; it is deliberately
+not inferred from a sheet being non-identifying or derived.
+
 The protected workbook preserves selected worksheet names and contains both IDs.
 The desktop inspects every selected worksheet and consolidates fields by exact
 literal heading for authoring. One visible decision is copied into each matching
@@ -76,6 +82,12 @@ revisit decisions. Its bulk Remove action applies only to headings that have no
 action in every selected worksheet; any configured decision is left alone. Both
 controls change authoring convenience, while per-sheet policies and validation
 still require explicit decisions for every source field.
+Remove and pseudonymise do not expose raw classification pickers: an unclassified
+removed field serialises as `unknown`, and the selected linking field serialises
+as `direct_identifier`. Retained and transformed fields use plain-language choices
+mapped to `analytical_attribute` or `quasi_identifier`; the uncertain choice is
+an unresolved, blocking authoring state. Local heuristics only explain a suggestion
+and never set an action or grant permission.
 The encrypted version 3 bundle contains one `entity_id`-to-source-key map, per-sheet
 `record_id`-to-source-row-index maps, exact per-sheet schemas, policies, codebooks
 and source digests. It also authenticates the explicitly confirmed list of shared
@@ -144,8 +156,10 @@ The desktop restoration flow reads returned headings and checks ID format before
 asking for the passphrase. The user explicitly approves every non-ID returned
 column and every added analysis worksheet; restoration still requires exact schema
 and mapping coverage for the original protected worksheets. In relational restore,
-the user may exclude added analysis worksheets before validation, but cannot omit
-any worksheet authenticated by the bundle. Included added worksheets are
+the authenticated bundle supplies the mandatory worksheet set automatically; the
+desktop sends no worksheet selection. Every other visible worksheet is discovered
+as added analysis and shown separately for approval, while any hidden returned
+worksheet blocks review. Included added worksheets are
 validated as bounded tables, rechecked after review and copied as static cell text
 without formatting, drawings or pseudonymous-ID translation. Formula cells are
 accepted only there and only through a saved scalar result; formulas are never

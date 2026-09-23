@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from openpyxl import load_workbook
 
 from safeset.desktop_bridge import Bridge
 from safeset.desktop_flow import (
@@ -436,23 +437,58 @@ def test_relational_reconstruction_rejects_unsafe_added_worksheet(tmp_path):
             PASSPHRASE,
         )
 
-    selected = prepare_relational_reconstruction(
-        returned,
+
+def test_relational_reconstruction_uses_bundle_sheets_and_rejects_missing_or_hidden(tmp_path):
+    source = tmp_path / "synthetic-related.xlsx"
+    _write_source(source)
+    for name in ("exports", "maps", "private"):
+        (tmp_path / name).mkdir(mode=0o700)
+    protected = tmp_path / "exports/protected.xlsx"
+    bundle_path = tmp_path / "maps/related.enc"
+    review = prepare_relational_protection(
+        source,
+        ("Enrolments", "Preferences"),
+        _drafts(),
+        "2",
+        protected,
+        bundle_path,
+        "controlled_pseudonymisation",
+    )
+    approve_relational_protection(review, PASSPHRASE, approved=True)
+    tables = read_excel_sheets(protected, ("Enrolments", "Preferences"))
+
+    automatic = prepare_relational_reconstruction(
+        protected,
         source,
         bundle_path,
-        tmp_path / "private/selected-restored.xlsx",
+        tmp_path / "private/automatic.xlsx",
         PASSPHRASE,
-        ("Enrolments", "Preferences"),
     )
-    assert selected.analysis_sheets == {}
+    assert tuple(automatic.returned_tables) == ("Enrolments", "Preferences")
+    assert automatic.analysis_sheets == {}
+
+    missing = tmp_path / "exports/missing-required.xlsx"
+    missing.write_bytes(excel_workbook_bytes({"Enrolments": tables["Enrolments"]}))
     with pytest.raises(SafetyError, match="coverage does not match"):
         prepare_relational_reconstruction(
-            returned,
+            missing,
             source,
             bundle_path,
             tmp_path / "private/missing-bound-sheet.xlsx",
             PASSPHRASE,
-            ("Enrolments",),
+        )
+
+    hidden = tmp_path / "exports/hidden-required.xlsx"
+    workbook = load_workbook(protected)
+    workbook["Preferences"].sheet_state = "hidden"
+    workbook.save(hidden)
+    with pytest.raises(SafetyError, match="hidden worksheets"):
+        prepare_relational_reconstruction(
+            hidden,
+            source,
+            bundle_path,
+            tmp_path / "private/hidden-bound-sheet.xlsx",
+            PASSPHRASE,
         )
 
 
