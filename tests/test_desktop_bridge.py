@@ -7,7 +7,7 @@ import pytest
 
 from safeset.desktop_bridge import Bridge
 from safeset.errors import SafetyError
-from safeset.ingestion import Table, excel_bytes, read_excel
+from safeset.ingestion import Table, excel_bytes, list_excel_sheets, read_excel
 from safeset.policy_authoring import load_drafts
 
 from .conftest import PASSPHRASE, ROOT
@@ -225,6 +225,33 @@ def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
         },
     )
     assert not again["ok"]
+
+    selected_review = call(
+        bridge,
+        "prepare_reconstruction",
+        {
+            **reconstruction,
+            "output": str(output.parent.parent / "private/selected-reconstructed.xlsx"),
+            "returned_sheet": list(list_excel_sheets(returned)),
+            "source_sheet": list(list_excel_sheets(source)),
+        },
+    )
+    assert selected_review["ok"]
+
+    repeated = call(
+        Bridge(),
+        "prepare_reconstruction",
+        {
+            **reconstruction,
+            "output": str(output.parent.parent / "private/repeated-reconstructed.xlsx"),
+            "returned_sheet": [
+                list_excel_sheets(returned)[0],
+                list_excel_sheets(returned)[0],
+            ],
+            "source_sheet": list(list_excel_sheets(source)),
+        },
+    )
+    assert not repeated["ok"]
 
 
 @pytest.mark.parametrize("change", ["missing", "duplicate", "unknown", "field"])

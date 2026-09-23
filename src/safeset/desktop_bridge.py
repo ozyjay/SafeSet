@@ -106,6 +106,10 @@ def _sheet(value: object) -> str | None:
     return _string(value, optional=True)
 
 
+def _sheet_selection(value: object) -> str | tuple[str, ...] | None:
+    return _sheets(value) if isinstance(value, list) else _sheet(value)
+
+
 def _drafts(value: object) -> dict[str, RuleDraft]:
     if not isinstance(value, dict) or not 1 <= len(value) <= 128:
         raise ValueError("drafts")
@@ -356,8 +360,8 @@ class Bridge:
                 _path(data["bundle"]),
                 _path(data["output"]),
                 _string(data["passphrase"]),
-                returned_sheet=_sheet(data["returned_sheet"]),
-                source_sheet=_sheet(data["source_sheet"]),
+                returned_sheet=_sheet_selection(data["returned_sheet"]),
+                source_sheet=_sheet_selection(data["source_sheet"]),
             )
             token = new_id()
             self.pending = ("approve_reconstruction", token, review)
@@ -371,13 +375,20 @@ class Bridge:
                 "output": str(review.output),
             }
         if command == "prepare_relational_reconstruction":
-            data = _payload(raw, {"returned", "source", "bundle", "output", "passphrase"})
+            data = _payload(
+                raw,
+                {"returned", "source", "bundle", "output", "passphrase"},
+                {"selected_sheets"},
+            )
             review = prepare_relational_reconstruction(
                 _path(data["returned"]),
                 _path(data["source"]),
                 _path(data["bundle"]),
                 _path(data["output"]),
                 _string(data["passphrase"]),
+                _sheets(data["selected_sheets"])
+                if "selected_sheets" in data
+                else None,
             )
             token = new_id()
             self.pending = ("approve_relational_reconstruction", token, review)

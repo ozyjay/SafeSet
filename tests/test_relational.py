@@ -436,6 +436,25 @@ def test_relational_reconstruction_rejects_unsafe_added_worksheet(tmp_path):
             PASSPHRASE,
         )
 
+    selected = prepare_relational_reconstruction(
+        returned,
+        source,
+        bundle_path,
+        tmp_path / "private/selected-restored.xlsx",
+        PASSPHRASE,
+        ("Enrolments", "Preferences"),
+    )
+    assert selected.analysis_sheets == {}
+    with pytest.raises(SafetyError, match="coverage does not match"):
+        prepare_relational_reconstruction(
+            returned,
+            source,
+            bundle_path,
+            tmp_path / "private/missing-bound-sheet.xlsx",
+            PASSPHRASE,
+            ("Enrolments",),
+        )
+
 
 def test_relational_desktop_bridge_review_and_publication(tmp_path):
     source = tmp_path / "synthetic-related.xlsx"

@@ -102,4 +102,15 @@ final class SafeSetMacTests: XCTestCase {
 
         XCTAssertEqual(model.sharedCodeCandidates, ["Cohort"])
     }
+
+    @MainActor func testRestoreWorksheetSelectionsPreserveWorkbookOrder() {
+        let model = AppModel()
+        model.returnedSheets = ["Later", "Earlier", "Analysis"]
+        model.selectedReturnedSheets = ["Earlier", "Later"]
+        model.originalSheets = ["Source B", "Source A", "Instructions"]
+        model.selectedOriginalSheets = ["Source A", "Source B"]
+
+        XCTAssertEqual(model.orderedReturnedRestoreSheets, ["Later", "Earlier"])
+        XCTAssertEqual(model.orderedOriginalRestoreSheets, ["Source B", "Source A"])
+    }
 }

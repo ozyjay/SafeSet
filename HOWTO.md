@@ -56,7 +56,7 @@ Analyse or modify the protected workbook locally or in an environment you have s
 
 ## Restore locally
 
-1. Choose **Restore a workbook** and select the modified protected copy, the exact original source workbook and the private bundle. Choose a new restored output filename.
+1. Choose **Restore a workbook** and select the modified protected copy, the exact original source workbook and the private bundle. For a version 2 bundle, select every same-schema protected and source worksheet used in that release; SafeSet preserves their workbook order. For a version 3 relational bundle, every bundle-bound worksheet is mandatory and selected automatically; you may deselect added analysis worksheets that should not enter the restored output. Choose a new restored output filename.
 2. Enter the passphrase to unlock the bundle locally. SafeSet needs its encrypted binding and ID map to validate the returned workbook. It checks the selected source content and order, exact record coverage, schemas and all source-derived protected values. Any mismatch blocks restoration; no identity is guessed.
 3. Review the count, restored source fields, each new result heading and every added analysis worksheet. Every detected result field and worksheet must be explicitly approved; remove unwanted items from the returned workbook and repeat review.
 4. Explicitly authorise restoration. SafeSet creates a **new** workbook with all original source fields and the approved new results. The original is never overwritten. This output contains identifiers and is sensitive plaintext.

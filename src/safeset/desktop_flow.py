@@ -123,6 +123,8 @@ class RelationalReconstructionReview:
     analysis_sheets: dict[str, object]
     bundle: dict
     new_columns: dict[str, tuple[str, ...]]
+    selected_returned_sheets: tuple[str, ...]
+    visible_returned_sheets: tuple[str, ...]
 
 
 def prepare_protection(
@@ -336,13 +338,21 @@ def prepare_relational_reconstruction(
     bundle_path: Path,
     output: Path,
     passphrase: str,
+    selected_sheets: tuple[str, ...] | None = None,
 ) -> RelationalReconstructionReview:
     require_excel_path(output)
     destination = output_destination(output, returned_path, source_path, bundle_path)
     bundle = read_relational_bundle(bundle_path, passphrase, returned_path, source_path, output)
     sheets = tuple(bundle["sheets"])
     returned_names = list_excel_sheets(returned_path)
-    if not set(sheets).issubset(returned_names):
+    chosen_names = selected_sheets if selected_sheets is not None else returned_names
+    if (
+        not chosen_names
+        or len(chosen_names) != len(set(chosen_names))
+        or any(name not in returned_names for name in chosen_names)
+    ):
+        raise SafetyError("Selected worksheet is missing, hidden or repeated.")
+    if not set(sheets).issubset(chosen_names):
         raise SafetyError(
             "Returned relational workbook worksheet coverage does not match the bundle."
         )
@@ -350,7 +360,7 @@ def prepare_relational_reconstruction(
         source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
     returned = read_excel_sheets(returned_path, sheets)
-    new_sheet_names = tuple(name for name in returned_names if name not in sheets)
+    new_sheet_names = tuple(name for name in chosen_names if name not in sheets)
     analysis_sheets = (
         read_excel_sheets(
             returned_path,
@@ -375,6 +385,8 @@ def prepare_relational_reconstruction(
         analysis_sheets,
         bundle,
         new_columns,
+        chosen_names,
+        returned_names,
     )
 
 
@@ -389,7 +401,7 @@ def approve_relational_reconstruction(
         raise SafetyError("Explicit relational restoration authorisation is required.")
     sheets = tuple(review.bundle["sheets"])
     returned_names = list_excel_sheets(review.returned_path)
-    if set(returned_names) != set(sheets).union(review.analysis_sheets):
+    if returned_names != review.visible_returned_sheets:
         raise SafetyError(
             "A workbook changed after relational restoration review."
         )

@@ -93,6 +93,71 @@ def test_reconstruction_round_trip(destinations):
         approve_reconstruction(review, ("Team",), authorised=True)
 
 
+def test_reconstruction_combines_selected_worksheets_in_workbook_order(
+    destinations, tmp_path
+):
+    original = read_excel(ROOT / "examples/synthetic_students.xlsx")
+    source = tmp_path / "synthetic-multi-source.xlsx"
+    source.write_bytes(
+        excel_workbook_bytes(
+            {
+                "Earlier": Table(original.columns, original.rows[:2]),
+                "Later": Table(original.columns, original.rows[2:]),
+            }
+        )
+    )
+    selected_source = ("Earlier", "Later")
+    drafts, threshold = load_drafts(
+        source, ROOT / "examples/example-policy.yaml", selected_source
+    )
+    output, bundle_path = destinations
+    protection = prepare_protection(
+        source,
+        drafts,
+        str(threshold),
+        output,
+        bundle_path,
+        sheet=selected_source,
+    )
+    assert protection.validation.passed
+    approve_protection(protection, PASSPHRASE, approved=True)
+
+    protected = read_excel(output)
+    result_columns = (*protected.columns, "Team")
+    returned = output.parent / "synthetic-multi-returned.xlsx"
+    returned.write_bytes(
+        excel_workbook_bytes(
+            {
+                "First results": Table(
+                    result_columns,
+                    tuple({**row, "Team": "Robot Team"} for row in protected.rows[:2]),
+                ),
+                "Second results": Table(
+                    result_columns,
+                    tuple({**row, "Team": "Robot Team"} for row in protected.rows[2:]),
+                ),
+            }
+        )
+    )
+    restored = output.parent.parent / "private/restored-multi-source.xlsx"
+    review = prepare_reconstruction(
+        returned,
+        source,
+        bundle_path,
+        restored,
+        PASSPHRASE,
+        returned_sheet=("First results", "Second results"),
+        source_sheet=selected_source,
+    )
+    assert review.new_columns == ("Team",)
+    assert approve_reconstruction(review, ("Team",), authorised=True) == 4
+    restored_table = read_excel(restored)
+    assert [row["student_number"] for row in restored_table.rows] == [
+        row["student_number"] for row in original.rows
+    ]
+    assert all(row["Team"] == "Robot Team" for row in restored_table.rows)
+
+
 def test_reconstruction_copies_explicitly_approved_analysis_worksheet(destinations):
     source, output, bundle_path = _prepared(destinations)
     protected = read_excel(output)

@@ -123,7 +123,9 @@ form, but revisions publish to a new file. Saving a policy does not approve expo
 The desktop restoration flow reads returned headings and checks ID format before
 asking for the passphrase. The user explicitly approves every non-ID returned
 column and every added analysis worksheet; restoration still requires exact schema
-and mapping coverage for the original protected worksheets. Added worksheets are
+and mapping coverage for the original protected worksheets. In relational restore,
+the user may exclude added analysis worksheets before validation, but cannot omit
+any worksheet authenticated by the bundle. Included added worksheets are
 validated as bounded tables, rechecked after review and copied as static cell text
 without formatting, drawings or pseudonymous-ID translation. Formula cells are
 accepted only there and only through a saved scalar result; formulas are never
@@ -141,10 +143,12 @@ validation, approval or publication outcomes. The log is truncated at 1 MiB.
 
 Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
 50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per
-field. A workbook may contain multiple worksheets. The desktop processes one
-selected worksheet or an explicitly linked relational set. The legacy CLI path can combine worksheets
-when their headings match in the same order. Their rows are appended in the supplied
-order, with the row limit applied to the combined table. Duplicate source keys
+field. A workbook may contain multiple worksheets. For a version 2 bundle, the
+desktop can combine explicitly selected worksheets when their headings match in
+the same order; it preserves their workbook order. A version 3 bundle processes
+its explicitly linked relational set automatically. The legacy CLI path has the
+same same-schema combining behaviour. Selected worksheet rows are appended in
+workbook or supplied order, with the row limit applied to the combined table. Duplicate source keys
 fail before export; no automatic choice is made between overlapping records. Only selected sheets enter
 inspection, sanitisation or restoration. Source data formulas use only scalar
 results saved in the workbook; SafeSet does not calculate formulas or verify that

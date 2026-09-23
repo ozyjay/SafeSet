@@ -171,9 +171,11 @@ struct CategorySheet: Identifiable {
     @Published var returned = ""
     @Published var returnedSheets: [String] = []
     @Published var returnedSheet = ""
+    @Published var selectedReturnedSheets: Set<String> = []
     @Published var original = ""
     @Published var originalSheets: [String] = []
     @Published var originalSheet = ""
+    @Published var selectedOriginalSheets: Set<String> = []
     @Published var restoreBundle = ""
     @Published var restoredOutput = ""
     @Published var restorationReview: [String: Any]?
@@ -189,6 +191,14 @@ struct CategorySheet: Identifiable {
     @Published var legacyReview: [String: Any]?
     private var bridge: BackendBridge?
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
+
+    var orderedReturnedRestoreSheets: [String] {
+        returnedSheets.filter { selectedReturnedSheets.contains($0) }
+    }
+
+    var orderedOriginalRestoreSheets: [String] {
+        originalSheets.filter { selectedOriginalSheets.contains($0) }
+    }
 
     func decisionProblem(_ configured: [FieldDraft]) -> String? {
         if configured.isEmpty { return "Inspect every selected worksheet before review." }
@@ -428,6 +438,7 @@ struct CategorySheet: Identifiable {
             self.original = self.source
             self.originalSheets = self.sourceSheets
             self.originalSheet = self.sourceSheet
+            self.selectedOriginalSheets = self.selectedSourceSheets
             self.restoreBundle = review["bundle"] as? String ?? ""
             self.protectionReview = nil
             self.alert = "Protected workbook and private restoration bundle created."
@@ -444,16 +455,22 @@ struct CategorySheet: Identifiable {
             if sourceFile {
                 self.originalSheets = sheets
                 self.originalSheet = sheets.count == 1 ? sheets[0] : ""
+                self.selectedOriginalSheets = Set(sheets.count == 1 ? sheets : [])
             } else {
                 self.returnedSheets = sheets
                 self.returnedSheet = sheets.count == 1 ? sheets[0] : ""
+                self.selectedReturnedSheets = Set(
+                    self.relationalRestore || sheets.count == 1 ? sheets : []
+                )
             }
         }
     }
 
     func prepareRestoration(passphrase: String) {
         guard !returned.isEmpty, !original.isEmpty, !restoreBundle.isEmpty,
-              relationalRestore || (!returnedSheet.isEmpty && !originalSheet.isEmpty) else {
+              !orderedReturnedRestoreSheets.isEmpty,
+              relationalRestore || !orderedOriginalRestoreSheets.isEmpty
+        else {
             alert = "Choose both workbooks, their worksheets and the private bundle."; return
         }
         let output = restoredOutput.isEmpty
@@ -464,8 +481,10 @@ struct CategorySheet: Identifiable {
             "output": output, "passphrase": passphrase
         ]
         if !relationalRestore {
-            payload["returned_sheet"] = returnedSheet
-            payload["source_sheet"] = originalSheet
+            payload["returned_sheet"] = orderedReturnedRestoreSheets
+            payload["source_sheet"] = orderedOriginalRestoreSheets
+        } else {
+            payload["selected_sheets"] = orderedReturnedRestoreSheets
         }
         send(command, payload) { result in
             self.restorationReview = result
@@ -743,11 +762,18 @@ struct RootView: View {
         .onChange(of: model.sharedCodeFields) { model.invalidate() }
         .onChange(of: model.returned) { model.invalidate() }
         .onChange(of: model.returnedSheet) { model.invalidate() }
+        .onChange(of: model.selectedReturnedSheets) { model.invalidate() }
         .onChange(of: model.original) { model.invalidate() }
         .onChange(of: model.originalSheet) { model.invalidate() }
+        .onChange(of: model.selectedOriginalSheets) { model.invalidate() }
         .onChange(of: model.restoreBundle) { model.invalidate() }
         .onChange(of: model.restoredOutput) { model.invalidate() }
-        .onChange(of: model.relationalRestore) { model.invalidate() }
+        .onChange(of: model.relationalRestore) {
+            if model.relationalRestore {
+                model.selectedReturnedSheets = Set(model.returnedSheets)
+            }
+            model.invalidate()
+        }
         .onChange(of: model.legacyPolicy) { model.invalidate() }
         .onChange(of: model.legacyMap) { model.invalidate() }
         .onChange(of: model.legacyOutput) { model.invalidate() }
@@ -1191,8 +1217,8 @@ struct RestoreView: View {
                 Text("Restore a workbook").font(.largeTitle.bold())
                 Toggle("Multi-sheet relational bundle", isOn: $model.relationalRestore)
                 Text(model.relationalRestore
-                     ? "All worksheets bound by the version 3 bundle will be verified and reconstructed together."
-                     : "Restore a single worksheet from a version 2 bundle.")
+                     ? "All bundle-bound worksheets are required. Select any added analysis worksheets to include."
+                     : "Restore one or more same-schema worksheets from a version 2 bundle.")
                     .foregroundStyle(.secondary)
                 GroupBox("Returning analysis findings") {
                     VStack(alignment: .leading, spacing: 8) {
@@ -1206,10 +1232,21 @@ struct RestoreView: View {
                         save: false, fileExtension: "xlsx") {
                     model.chooseRestoreFile($0, sourceFile: false)
                 }
-                if !model.relationalRestore && model.returnedSheets.count > 1 {
-                    Picker("Protected worksheet", selection: $model.returnedSheet) {
-                        Text("Choose…").tag("")
-                        ForEach(model.returnedSheets, id: \.self) { Text($0).tag($0) }
+                if model.returnedSheets.count > 1 {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(model.relationalRestore
+                             ? "Worksheets to include"
+                             : "Protected worksheets")
+                            .font(.headline)
+                        ForEach(model.returnedSheets, id: \.self) { sheet in
+                            Toggle(sheet, isOn: Binding(
+                                get: { model.selectedReturnedSheets.contains(sheet) },
+                                set: { selected in
+                                    if selected { model.selectedReturnedSheets.insert(sheet) }
+                                    else { model.selectedReturnedSheets.remove(sheet) }
+                                }
+                            ))
+                        }
                     }
                 }
                 PathRow(title: "Original source", path: $model.original,
@@ -1217,9 +1254,17 @@ struct RestoreView: View {
                     model.chooseRestoreFile($0, sourceFile: true)
                 }
                 if !model.relationalRestore && model.originalSheets.count > 1 {
-                    Picker("Source worksheet", selection: $model.originalSheet) {
-                        Text("Choose…").tag("")
-                        ForEach(model.originalSheets, id: \.self) { Text($0).tag($0) }
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Original source worksheets").font(.headline)
+                        ForEach(model.originalSheets, id: \.self) { sheet in
+                            Toggle(sheet, isOn: Binding(
+                                get: { model.selectedOriginalSheets.contains(sheet) },
+                                set: { selected in
+                                    if selected { model.selectedOriginalSheets.insert(sheet) }
+                                    else { model.selectedOriginalSheets.remove(sheet) }
+                                }
+                            ))
+                        }
                     }
                 }
                 PathRow(title: "Private bundle", path: $model.restoreBundle,
