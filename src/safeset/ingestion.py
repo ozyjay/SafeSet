@@ -3,6 +3,7 @@
 import io
 import stat
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from pathlib import Path
@@ -18,6 +19,7 @@ MAX_ROWS = 50_000
 MAX_COLUMNS = 128
 MAX_FIELD = 4096
 MAX_TABLES = 128
+CellObserver = Callable[[str, str, str], None]
 
 
 def valid_heading(name: object) -> bool:
@@ -137,6 +139,7 @@ def _read_region(
     cached_worksheet=None,
     allow_source_dates: bool = False,
     allow_cached_formula_blanks: bool = False,
+    observe_cell: CellObserver | None = None,
 ) -> Table:
     min_col, min_row, max_col, max_row = bounds
     if (
@@ -204,7 +207,10 @@ def _read_region(
                 formula_cells += 1
             else:
                 value_cell = cell
-            values.append(_cell_text(value_cell, allow_dates=allow_source_dates))
+            value = _cell_text(value_cell, allow_dates=allow_source_dates)
+            values.append(value)
+            if observe_cell is not None:
+                observe_cell(worksheet.title, cell.coordinate, value)
             if allow_source_dates and isinstance(value_cell.value, (date, datetime, time)):
                 date_cells += 1
         values = tuple(values)
@@ -222,6 +228,7 @@ def _read_worksheet(
     *,
     allow_source_dates: bool = False,
     allow_cached_formula_blanks: bool = False,
+    observe_cell: CellObserver | None = None,
 ) -> Table:
     if worksheet.tables:
         if len(worksheet.tables) > MAX_TABLES:
@@ -251,6 +258,7 @@ def _read_worksheet(
                 cached_worksheet=cached_worksheet,
                 allow_source_dates=allow_source_dates,
                 allow_cached_formula_blanks=allow_cached_formula_blanks,
+                observe_cell=observe_cell,
             )
             if (
                 structured.tableColumns
@@ -288,6 +296,7 @@ def _read_worksheet(
         cached_worksheet=cached_worksheet,
         allow_source_dates=allow_source_dates,
         allow_cached_formula_blanks=allow_cached_formula_blanks,
+        observe_cell=observe_cell,
     )
 
 
@@ -298,6 +307,7 @@ def read_excel(
     allow_cached_formulas: bool = False,
     allow_source_dates: bool = False,
     allow_cached_formula_blanks: bool = False,
+    observe_cell: CellObserver | None = None,
 ) -> Table:
     if path.suffix.lower() != ".xlsx":
         raise SafetyError("Only .xlsx Excel workbooks are supported.")
@@ -335,6 +345,7 @@ def read_excel(
                 cached_workbook[name] if cached_workbook is not None else None,
                 allow_source_dates=allow_source_dates,
                 allow_cached_formula_blanks=allow_cached_formula_blanks,
+                observe_cell=observe_cell,
             )
             for name in selected
         ]
@@ -362,6 +373,7 @@ def read_excel_sheets(
     allow_cached_formulas: bool = False,
     allow_source_dates: bool = False,
     allow_cached_formula_blanks: bool = False,
+    observe_cell: CellObserver | None = None,
 ) -> dict[str, Table]:
     """Read selected worksheets separately, preserving their distinct schemas."""
     if path.suffix.lower() != ".xlsx":
@@ -388,6 +400,7 @@ def read_excel_sheets(
                 cached_workbook[name] if cached_workbook is not None else None,
                 allow_source_dates=allow_source_dates,
                 allow_cached_formula_blanks=allow_cached_formula_blanks,
+                observe_cell=observe_cell,
             )
             for name in sheets
         }

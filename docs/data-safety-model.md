@@ -27,6 +27,9 @@ with formula-like prefixes or control characters before writing the restored
 workbook. Such cells can be in fields omitted from the protected copy. Correcting
 them requires a new source, protection run and matching private bundle; the bound
 source cannot be edited in place for an existing release.
+The local source-text locator verifies that source against the authenticated
+bundle and shows a count and up to 20 cell coordinates. It never sends cell
+contents to the desktop UI or changes the blocking restoration check.
 
 A **direct identifier** connects a record to a person; a **pseudonymous identifier**
 is the generated random `record_id`. A **quasi-identifier** may identify someone in

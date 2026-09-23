@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from .bundle import read_bundle
-from .classification import inspect_table
+from .bundle import read_bundle, source_digest
+from .classification import formula_or_control, inspect_table
 from .errors import SafetyError
 from .ingestion import (
     excel_bytes,
@@ -34,6 +34,7 @@ from .relational import (
     review_relational_reconstruction,
     sanitise_relational,
     validate_relational,
+    workbook_digest,
 )
 from .restoration import restore
 from .storage import default_map_path, map_destination, output_destination, publish
@@ -435,6 +436,52 @@ def inspect_source(source: Path, sheet: str | tuple[str, ...] | None = None) -> 
     return inspect_table(
         read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
     )
+
+
+def locate_unsafe_source_cells(
+    source: Path,
+    bundle_path: Path,
+    passphrase: str,
+    *,
+    relational: bool,
+    sheet: str | tuple[str, ...] | None = None,
+) -> dict:
+    """Return bounded cell coordinates only after authenticating the source binding."""
+    locations: list[dict[str, str]] = []
+    count = 0
+
+    def observe(worksheet: str, coordinate: str, value: str) -> None:
+        nonlocal count
+        if formula_or_control(value):
+            count += 1
+            if len(locations) < 20:
+                locations.append({"sheet": worksheet, "cell": coordinate})
+
+    if relational:
+        bundle = read_relational_bundle(bundle_path, passphrase, source)
+        sources = read_excel_sheets(
+            source,
+            tuple(bundle["sheets"]),
+            allow_cached_formulas=True,
+            allow_source_dates=True,
+            observe_cell=observe,
+        )
+        if workbook_digest(sources) != bundle["workbook_digest"]:
+            raise SafetyError("Original workbook does not match the relational restoration bundle.")
+    else:
+        bundle = read_bundle(bundle_path, passphrase, source)
+        table = read_excel(
+            source,
+            sheet,
+            allow_cached_formulas=True,
+            allow_source_dates=True,
+            observe_cell=observe,
+        )
+        if table.columns != tuple(bundle["source_columns"]) or source_digest(table) != bundle[
+            "source_digest"
+        ]:
+            raise SafetyError("Original source does not match the restoration bundle.")
+    return {"count": count, "cells": locations}
 
 
 def inspect_returned(path: Path, sheet: str | tuple[str, ...] | None = None) -> ReturnedReview:

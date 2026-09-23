@@ -12,6 +12,7 @@ from .desktop_flow import (
     approve_relational_reconstruction,
     inspect_returned,
     inspect_source,
+    locate_unsafe_source_cells,
     prepare_export,
     prepare_protection,
     prepare_reconstruction,
@@ -319,6 +320,17 @@ class Bridge:
         if command == "inspect":
             data = _payload(raw, {"source", "sheet"})
             return inspect_source(_path(data["source"]), _sheet(data["sheet"]))
+        if command == "locate_unsafe_source_cells":
+            data = _payload(raw, {"source", "bundle", "passphrase", "relational", "sheet"})
+            if type(data["relational"]) is not bool:
+                raise ValueError("relational")
+            return locate_unsafe_source_cells(
+                _path(data["source"]),
+                _path(data["bundle"]),
+                _string(data["passphrase"]),
+                relational=data["relational"],
+                sheet=_sheet_selection(data["sheet"]),
+            )
         if command == "categories":
             data = _payload(raw, {"source", "sheet", "column"})
             review = local_category_review(

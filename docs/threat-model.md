@@ -2,8 +2,9 @@
 
 ## macOS app boundary
 
-The SwiftUI process may display headings and explicitly requested category labels
-locally. It does not receive source rows, decrypted bundles or identity maps. The
+The SwiftUI process may display headings, explicitly requested category labels
+and source-cell coordinates from a separate local diagnostic action. It does not
+receive source rows, decrypted bundles or identity maps. The
 bundled Python helper reads bounded local JSON-line requests and replies with
 allowlisted review metadata or fixed error codes. It has no listener or network
 client. A passphrase travels through the local child-process pipe and is never

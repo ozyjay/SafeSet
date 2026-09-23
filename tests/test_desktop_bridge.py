@@ -318,3 +318,62 @@ def test_bridge_rejects_changed_returned_workbook(destinations, change):
         "unknown": "record_coverage",
         "field": "protected_value",
     }[change]
+
+
+def test_bridge_locates_unsafe_bound_source_cell_without_returning_its_value(destinations):
+    source = read_excel(ROOT / "examples/synthetic_students.xlsx")
+    rows = [dict(row) for row in source.rows]
+    rows[0]["student_name"] = "-SYNTHETIC-UNSAFE"
+    source_path = destinations[0].parent.parent / "private/synthetic-source.xlsx"
+    source_path.write_bytes(excel_bytes(Table(source.columns, tuple(rows))))
+    output, bundle = destinations
+    drafts, threshold = load_drafts(source_path, ROOT / "examples/example-policy.yaml")
+    payload = {
+        name: {
+            "action": draft.action,
+            "classification": draft.classification,
+            "allowed_values": list(draft.allowed_values),
+            "bins": [list(pair) for pair in draft.bins],
+            "bounds": list(draft.bounds) if draft.bounds is not None else None,
+        }
+        for name, draft in drafts.items()
+    }
+    bridge = Bridge()
+    prepared = call(
+        bridge,
+        "prepare_protection",
+        {
+            "source": str(source_path), "sheet": None, "output": str(output),
+            "bundle": str(bundle), "drafts": payload, "threshold": str(threshold),
+        },
+    )
+    assert prepared["ok"]
+    assert call(
+        bridge, "approve_protection",
+        {"review_id": prepared["result"]["review_id"], "passphrase": PASSPHRASE},
+    )["ok"]
+    located = call(
+        bridge,
+        "locate_unsafe_source_cells",
+        {
+            "source": str(source_path), "bundle": str(bundle),
+            "passphrase": PASSPHRASE, "relational": False, "sheet": None,
+        },
+    )
+    assert located["ok"]
+    assert located["result"] == {
+        "count": 1, "cells": [{"sheet": "SafeSet", "cell": "A2"}],
+    }
+    assert "SYNTHETIC-UNSAFE" not in json.dumps(located)
+    rows[1]["student_name"] = "@SYNTHETIC-CHANGED"
+    source_path.write_bytes(excel_bytes(Table(source.columns, tuple(rows))))
+    changed = call(
+        bridge,
+        "locate_unsafe_source_cells",
+        {
+            "source": str(source_path), "bundle": str(bundle),
+            "passphrase": PASSPHRASE, "relational": False, "sheet": None,
+        },
+    )
+    assert changed["error"] == "source_mismatch"
+    assert "result" not in changed

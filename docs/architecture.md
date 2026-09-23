@@ -184,6 +184,10 @@ validation, approval or publication outcomes. The log is truncated at 1 MiB.
 The desktop bridge also maps exact, fixed restoration failures to value-free
 error codes for local user guidance. Unknown failures remain generic; exception
 text, headings, cell values and paths do not cross this error boundary.
+The separate, user-invoked source-text locator reuses bounded Excel ingestion,
+authenticates the private bundle and verifies the source binding before returning
+only a count and at most 20 worksheet names and cell coordinates to the local UI.
+It does not return cell values or change export and restoration decisions.
 
 Inputs must be regular files. Excel workbook limits are 10 MiB compressed,
 50 MiB uncompressed, 50,000 data rows, 128 columns and 4,096 characters per

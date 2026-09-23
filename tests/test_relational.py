@@ -10,6 +10,7 @@ from safeset.desktop_bridge import Bridge
 from safeset.desktop_flow import (
     approve_relational_protection,
     approve_relational_reconstruction,
+    locate_unsafe_source_cells,
     prepare_relational_protection,
     prepare_relational_reconstruction,
 )
@@ -249,6 +250,30 @@ def test_shared_obfuscation_bundle_validation_and_legacy_compatibility():
 def test_shared_obfuscation_rejects_unconfirmed_or_ineligible_fields():
     with pytest.raises(SafetyError, match="shared obfuscation field"):
         sanitise_relational(_sources(), _policies(), ("campus",))
+
+
+def test_relational_source_text_locator_reports_only_bound_cell_coordinates(tmp_path):
+    tables = _sources()
+    rows = [dict(row) for row in tables["Enrolments"].rows]
+    rows[0]["display_name"] = "-SYNTHETIC-UNSAFE"
+    tables["Enrolments"] = Table(tables["Enrolments"].columns, tuple(rows))
+    source = tmp_path / "synthetic-related.xlsx"
+    source.write_bytes(excel_workbook_bytes(tables))
+    for name in ("exports", "maps"):
+        (tmp_path / name).mkdir(mode=0o700)
+    protected = tmp_path / "exports/protected.xlsx"
+    bundle_path = tmp_path / "maps/related.enc"
+    review = prepare_relational_protection(
+        source, ("Enrolments", "Preferences"), _drafts(), "2", protected,
+        bundle_path, "controlled_pseudonymisation",
+    )
+    assert review.validation.passed
+    approve_relational_protection(review, PASSPHRASE, approved=True)
+    located = locate_unsafe_source_cells(
+        source, bundle_path, PASSPHRASE, relational=True
+    )
+    assert located == {"count": 1, "cells": [{"sheet": "Enrolments", "cell": "B2"}]}
+    assert "SYNTHETIC-UNSAFE" not in str(located)
 
 
 def test_relational_round_trip_and_minimal_bundle(tmp_path):

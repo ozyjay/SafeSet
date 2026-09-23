@@ -79,6 +79,12 @@ struct ConsolidatedField: Identifiable {
     let metadata: String
 }
 
+struct SourceCellLocation: Identifiable {
+    let sheet: String
+    let cell: String
+    var id: String { sheet + ":" + cell }
+}
+
 @MainActor final class AppModel: ObservableObject {
     private static let recentRestoreBundleKey = "recentRestoreBundlePath"
     enum Page: String { case home, protect, restore, advanced, help }
@@ -109,6 +115,8 @@ struct ConsolidatedField: Identifiable {
     @Published var restoreBundle = ""
     @Published var restoredOutput = ""
     @Published var restorationReview: [String: Any]?
+    @Published var unsafeSourceCount: Int?
+    @Published var unsafeSourceLocations: [SourceCellLocation] = []
     @Published var approvedResults: Set<String> = []
     @Published var approvedSheets: Set<String> = []
     @Published var relationalRestore = false
@@ -309,6 +317,7 @@ struct ConsolidatedField: Identifiable {
 
     func rememberRestoreBundle(_ path: String) {
         guard Self.isUsableRestoreBundlePath(path) else { return }
+        invalidate()
         restoreBundle = path
         preferences.set(path, forKey: Self.recentRestoreBundleKey)
     }
@@ -340,6 +349,8 @@ struct ConsolidatedField: Identifiable {
         protectionReview = nil
         restorationReview = nil
         legacyReview = nil
+        unsafeSourceCount = nil
+        unsafeSourceLocations = []
     }
 
     func cancelReview() {
@@ -598,6 +609,29 @@ struct ConsolidatedField: Identifiable {
         }
     }
 
+    func locateUnsafeSourceCells(passphrase: String) {
+        guard !original.isEmpty, !restoreBundle.isEmpty,
+              relationalRestore || !orderedOriginalRestoreSheets.isEmpty else {
+            alert = "Choose the original source, its worksheets and the private bundle."
+            return
+        }
+        unsafeSourceCount = nil
+        unsafeSourceLocations = []
+        send("locate_unsafe_source_cells", [
+            "source": original,
+            "bundle": restoreBundle,
+            "passphrase": passphrase,
+            "relational": relationalRestore,
+            "sheet": relationalRestore ? NSNull() : orderedOriginalRestoreSheets
+        ]) { result in
+            self.unsafeSourceCount = result["count"] as? Int
+            self.unsafeSourceLocations = (result["cells"] as? [[String: String]] ?? []).compactMap {
+                guard let sheet = $0["sheet"], let cell = $0["cell"] else { return nil }
+                return SourceCellLocation(sheet: sheet, cell: cell)
+            }
+        }
+    }
+
     func approveRestoration() {
         guard canApproveRestoration,
               let review = restorationReview,
@@ -702,4 +736,3 @@ struct ConsolidatedField: Identifiable {
         ]) { _ in self.alert = "Legacy results restored locally. Keep the output private." }
     }
 }
-

@@ -843,7 +843,10 @@ struct RestoreView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Restore a workbook").appFont(26, weight: .bold)
-                Toggle("Multi-sheet relational bundle", isOn: $model.relationalRestore)
+                Toggle("Multi-sheet relational bundle", isOn: Binding(
+                    get: { model.relationalRestore },
+                    set: { model.relationalRestore = $0; model.invalidate() }
+                ))
                     .appFont(13)
                 Text(model.relationalRestore
                      ? "The private bundle defines every required worksheet. SafeSet includes those automatically and presents added analysis worksheets separately for approval."
@@ -882,6 +885,7 @@ struct RestoreView: View {
                                 set: { selected in
                                     if selected { model.selectedReturnedSheets.insert(sheet) }
                                     else { model.selectedReturnedSheets.remove(sheet) }
+                                    model.invalidate()
                                 }
                             ))
                             .appFont(13)
@@ -901,6 +905,7 @@ struct RestoreView: View {
                                 set: { selected in
                                     if selected { model.selectedOriginalSheets.insert(sheet) }
                                     else { model.selectedOriginalSheets.remove(sheet) }
+                                    model.invalidate()
                                 }
                             ))
                             .appFont(13)
@@ -926,10 +931,28 @@ struct RestoreView: View {
                 Text("Unlocking the private bundle is required to validate exact record coverage.")
                     .foregroundStyle(.secondary)
                 SecureField("Restoration passphrase", text: $passphrase).appFont(13)
-                Button("Validate and review") {
-                    let secret = passphrase; passphrase = ""
-                    model.prepareRestoration(passphrase: secret)
-                }.appFont(13).buttonStyle(.borderedProminent)
+                HStack {
+                    Button("Validate and review") {
+                        let secret = passphrase; passphrase = ""
+                        model.prepareRestoration(passphrase: secret)
+                    }.appFont(13).buttonStyle(.borderedProminent)
+                    Button("Locate unsafe source cells") {
+                        let secret = passphrase; passphrase = ""
+                        model.locateUnsafeSourceCells(passphrase: secret)
+                    }.appFont(13).buttonStyle(.bordered)
+                }
+                if let count = model.unsafeSourceCount {
+                    Text("Unsafe source cells: \(count)").appFont(13, weight: .semibold)
+                    ForEach(model.unsafeSourceLocations) { location in
+                        Text("\(location.sheet) — \(location.cell)").appFont(13)
+                    }
+                    if count > model.unsafeSourceLocations.count {
+                        Text("Showing the first 20 locations.")
+                            .appFont(12).foregroundStyle(.secondary)
+                    }
+                    Text("Only worksheet names and cell coordinates are shown; no cell values are copied or logged.")
+                        .appFont(12).foregroundStyle(.secondary)
+                }
                 if let review = model.restorationReview {
                     Divider()
                     Text("Restoration review").appFont(18, weight: .bold)

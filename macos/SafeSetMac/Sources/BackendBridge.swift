@@ -99,7 +99,7 @@ final class BackendBridge: @unchecked Sendable {
         case "entity_linkage": message = "A returned entity ID or its record linkage changed. Restore the original entity IDs."
         case "protected_value": message = "A protected source value changed in the returned workbook. Restore the original protected values."
         case "result_text": message = "A new result cell is blank, too long or contains unsupported text. Use short, safe categorical labels."
-        case "source_text": message = "The original source matches the private bundle, but a cell contains text unsafe for a restored workbook. Text beginning with =, +, - or @, or containing control characters, is blocked. Correct the source locally and create a new protected release and bundle before restoring."
+        case "source_text": message = "The original source matches the private bundle, but a cell contains text unsafe for a restored workbook. Use Locate unsafe source cells to see its worksheet and cell coordinate. Correct the source locally and create a new protected release and bundle before restoring."
         case "stale_review": message = "A workbook changed after the restoration review. Review the current files again before authorising restoration."
         case "result_approval": message = "Every new result field needs explicit approval before restoration."
         case "input_unavailable": message = "SafeSet could not read a selected local file. Check that it still exists and is a regular file."
@@ -118,4 +118,3 @@ final class BackendBridge: @unchecked Sendable {
         throw BridgeFailure.rejected(message)
     }
 }
-
