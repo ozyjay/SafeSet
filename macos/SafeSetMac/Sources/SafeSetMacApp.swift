@@ -86,7 +86,7 @@ final class BackendBridge: @unchecked Sendable {
         case "reserved_heading": message = "A selected worksheet already uses record_id or entity_id, which are reserved output headings."
         case "empty_worksheet": message = "A selected worksheet has no data rows."
         case "category_domain": message = "A source category is outside the reviewed value list. Review the category values again."
-        case "numeric_domain": message = "A numeric value does not fit the reviewed bounds, precision or ranges."
+        case "numeric_domain": message = "A non-blank numeric value does not fit the reviewed bounds, precision or ranges. Genuine blank cells remain blank; whitespace-only cells are rejected."
         case "formula_result": message = "A source formula has no saved value. Recalculate and save the workbook locally, then try again."
         case "hidden_data": message = "A selected data range contains hidden rows or columns. Unhide them or select a clean table."
         case "merged_data": message = "A selected data range contains merged cells, which SafeSet cannot process safely."
@@ -663,6 +663,9 @@ struct FieldCard: View {
                     .lineLimit(2...5)
             }
             if field.action == "keep_numeric" {
+                Text("Genuine blank cells remain blank and are included in the disclosure-risk checks.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 HStack {
                     TextField("Lower bound", text: $field.lower)
                     TextField("Upper bound", text: $field.upper)

@@ -168,6 +168,48 @@ def test_shared_entities_have_fresh_row_ids_and_controlled_warnings():
     assert controlled.linked_warnings
 
 
+def test_relational_exact_numeric_field_preserves_blanks():
+    sources = {
+        "Marks": Table(
+            ("student_key", "score"),
+            (
+                {"student_key": "SYNTH-001", "score": ""},
+                {"student_key": "SYNTH-002", "score": ""},
+                {"student_key": "SYNTH-003", "score": "4.20"},
+                {"student_key": "SYNTH-004", "score": "4.20"},
+            ),
+        )
+    }
+    policies = {
+        "Marks": parse_policy(
+            {
+                "version": 2,
+                "min_group_size": 2,
+                "columns": {
+                    "student_key": {
+                        "action": "pseudonymise",
+                        "classification": "direct_identifier",
+                    },
+                    "score": {
+                        "action": "keep_numeric",
+                        "classification": "analytical_attribute",
+                        "bounds": [0, 10],
+                        "max_decimal_places": 2,
+                    },
+                },
+            }
+        )
+    }
+    candidate = sanitise_relational(sources, policies)
+    assert [row["score"] for row in candidate.tables["Marks"].rows] == [
+        "",
+        "",
+        "4.2",
+        "4.2",
+    ]
+    assert validate_relational(candidate, policies, "controlled_pseudonymisation").passed
+
+
 def test_shared_obfuscation_requires_explicit_field_confirmation():
     independent = sanitise_relational(_sources(), _policies())
     assert (

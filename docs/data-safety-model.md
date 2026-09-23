@@ -60,7 +60,10 @@ Categorical allowlists, numeric bounds and bin intervals are deliberate
 minimisation boundaries.
 Keep values must be non-empty short labels (at most 64 characters and four words),
 with no identifier/date/formula shapes. This sacrifices flexibility to avoid silent
-free-text passthrough. Blank retained values and out-of-range numeric values fail.
+free-text passthrough. Blank categorical values and out-of-range numeric values fail.
+For `keep_numeric`, a genuinely blank source cell remains blank; whitespace-only
+text still fails. Blank numeric cells participate in per-field and joint group
+checks because the missingness pattern can itself disclose information.
 Finite bins are contiguous, increasing and non-overlapping: left-inclusive and
 right-exclusive except that the final upper endpoint is included. Labels are
 `[lower, upper)` and `[lower, upper]` respectively.

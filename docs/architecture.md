@@ -185,8 +185,8 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   Codes are random per distinct observed category, column and run. The category
   codebook exists only in memory and is not added to the encrypted identity map.
   Bins generate labels under the original column heading. Version 2 numeric keep
-  requires bounds and precision and preserves exact numeric text. No inferred
-  text redaction.
+  requires bounds and precision, preserves genuine blank cells, and preserves
+  normalised exact numeric text. No inferred text redaction.
 - Every retained attribute participates in the joint equivalence-class check,
   including analytical attributes; no silent risk exemption via classification.
 - Candidate data stays in memory until validation and explicit export approval.

@@ -21,6 +21,7 @@ from safeset.ingestion import (
 )
 from safeset.policy import load_policy, parse_policy
 from safeset.transform import sanitise
+from safeset.validation import validate
 
 from .conftest import ROOT
 
@@ -387,15 +388,25 @@ def test_policy_rejects_unsafe_or_reserved_headings(heading):
 
 @pytest.mark.parametrize(
     "value",
-    ["", "NaN", "Infinity", "-1", "7.1", "secret-nonnumeric", "4.123", "4e0", "+4.2"],
+    [" ", "NaN", "Infinity", "-1", "7.1", "secret-nonnumeric", "4.123", "4e0", "+4.2"],
 )
 def test_invalid_numeric_values_do_not_leak(source, policy, value):
     rows = deepcopy(source.rows)
     rows[0]["gpa"] = value
     with pytest.raises(SafetyError) as caught:
         sanitise(Table(source.columns, rows), policy)
-    if value:
+    if value.strip():
         assert value not in str(caught.value)
+
+
+def test_blank_numeric_value_is_preserved(source, policy, tmp_path):
+    rows = tuple({**row, "gpa": ""} for row in source.rows)
+    candidate = sanitise(Table(source.columns, rows), policy)
+    assert [row["gpa"] for row in candidate.table.rows] == [""] * len(rows)
+    assert validate(candidate.table, policy).passed
+    output = tmp_path / "protected.xlsx"
+    output.write_bytes(excel_bytes(candidate.table))
+    assert [row["gpa"] for row in read_excel(output).rows] == [""] * len(rows)
 
 
 def test_numeric_value_is_preserved_without_formatting(source, policy):

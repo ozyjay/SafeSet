@@ -55,14 +55,16 @@ changed source workbook with the same keys and grouping cannot be ruled out beca
 the map contains no source snapshot. The encrypted map still contains only
 `record_id` to source-key pairs.
 
-`keep_numeric` preserves the exact numeric value of a plain non-negative decimal
-within inclusive finite bounds. Leading and trailing zeros are normalised (for
-example, `04.20` becomes `4.2`); signs, whitespace and exponent notation are
-rejected. `max_decimal_places` is a mandatory integer from 0 to 6; the source
-string is limited to 64 characters. This action exposes the exact numeric values
-in the export. All retained fields, including coded categories and exact numeric
-values, participate in per-field and joint group checks. A passing check is not
-an anonymity or recipient-suitability decision.
+`keep_numeric` preserves a genuinely blank cell as blank. Otherwise, it preserves
+the exact numeric value of a plain non-negative decimal within inclusive finite
+bounds. Leading and trailing zeros are normalised (for example, `04.20` becomes
+`4.2`); signs, whitespace (including whitespace-only cells) and exponent notation
+are rejected. `max_decimal_places` is a mandatory integer from 0 to 6; a non-blank
+source string is limited to 64 characters. This action exposes the exact numeric
+values and missingness pattern in the export. All retained fields, including blank
+numeric cells, coded categories and exact numeric values, participate in per-field
+and joint group checks. A passing check is not an anonymity or recipient-suitability
+decision.
 
 A heading detected as a direct identifier cannot be kept even if classified as an
 analytical attribute. A heading detected as free text must be dropped. For these

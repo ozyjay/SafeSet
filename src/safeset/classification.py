@@ -65,7 +65,9 @@ def safe_category(value: str) -> bool:
 def canonical_numeric(
     value: str, bounds: tuple[Decimal, Decimal] | None, max_decimal_places: int
 ) -> str | None:
-    """Check a bounded number and discard non-analytical text formatting."""
+    """Preserve a blank or check a bounded number, normalising numeric formatting."""
+    if value == "":
+        return ""
     if bounds is None or len(value) > 64 or not PLAIN_NUMBER.fullmatch(value):
         return None
     if "." in value and len(value.partition(".")[2]) > max_decimal_places:
