@@ -76,6 +76,7 @@ real identities or credentials.
 | Accidental Git commit | Broad ignores; maps/outputs rejected in detected repositories | Git can force-add files; copies and unknown repositories evade detection |
 | Accidental source upload | Local workflow, no runtime networking; candidate held in memory | Cannot control manual uploads or editor/cloud backups |
 | Hidden/unexpected columns | Explicit worksheet selection, structured table bounds where present, matching headings, exact protected schema and separate approval for every added analysis worksheet | Incorrectly authored policy or approved analysis sheet can still contain inappropriate information |
+| Consolidated field authoring | Exact same-named headings appear once with their worksheet scope; decisions are copied to each per-sheet policy and categorical review retains exact per-sheet allowlists | Same-named fields can have different meanings, so an operator may apply an unsuitable common decision |
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
@@ -92,6 +93,7 @@ real identities or credentials.
 | Relational row confusion | Separate entity and record IDs, source-row bindings and exact worksheet coverage | An approved external result may still be analytically incorrect |
 | Incorrect legacy coded-label restoration | Explicit source and policy selection, exact source-key coverage, approved coded columns only, category/code grouping check | The version 1 map has no source snapshot or category codebook; a changed workbook with the same keys and grouping cannot be detected |
 | Desktop display or clipboard exposure | Aggregate inspection, no cell preview, masked passphrase fields, no network service | Paths and validation summaries are visible on screen; the OS may retain password entry in process memory |
+| Remembered private-bundle path | Desktop preferences retain only the last existing `.enc` path, never the passphrase or bundle content; stale paths are removed and the user can forget the path explicitly | The local account, device backups or preference inspection may reveal the bundle filename and location |
 | Policy authoring exposure | Field choices are explicit; distinct category values appear only after a local review action; saved policies use private no-clobber storage outside repositories | A policy can contain sensitive headings and category labels; an incorrect classification may retain inappropriate data |
 
 ## Encryption and keys

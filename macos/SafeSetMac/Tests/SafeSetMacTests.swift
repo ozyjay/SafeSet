@@ -103,6 +103,76 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertEqual(model.sharedCodeCandidates, ["Cohort"])
     }
 
+    @MainActor func testConsolidatedFieldsShowRepeatedHeadingsOnceAndPropagateDecisions() {
+        let model = AppModel()
+        model.sourceSheets = ["Synthetic A", "Synthetic B"]
+        model.selectedSourceSheets = ["Synthetic A", "Synthetic B"]
+        model.sourceSheet = "Synthetic A"
+        var sharedA = FieldDraft(id: "Cohort")
+        sharedA.type = "categorical"
+        sharedA.cardinality = 3
+        let onlyA = FieldDraft(id: "Tutorial")
+        var sharedB = FieldDraft(id: "Cohort")
+        sharedB.type = "categorical"
+        sharedB.cardinality = 4
+        let onlyB = FieldDraft(id: "Placement")
+        model.fieldsBySheet = [
+            "Synthetic A": [sharedA, onlyA],
+            "Synthetic B": [sharedB, onlyB]
+        ]
+        model.fields = [sharedA, onlyA]
+
+        XCTAssertEqual(model.consolidatedFields.map(\.id), ["Cohort", "Tutorial", "Placement"])
+        XCTAssertEqual(model.consolidatedFields[0].sheets, ["Synthetic A", "Synthetic B"])
+        XCTAssertEqual(model.consolidatedFields[1].sheets, ["Synthetic A"])
+        XCTAssertEqual(model.consolidatedFields[2].sheets, ["Synthetic B"])
+
+        var decision = model.consolidatedFields[0].draft
+        decision.action = "code"
+        decision.classification = "quasi_identifier"
+        model.updateConsolidatedField("Cohort", with: decision)
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[0].action, "code")
+        XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[0].action, "code")
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[0].classification, "quasi_identifier")
+        XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[0].classification, "quasi_identifier")
+    }
+
+    @MainActor func testConsolidatedCategoryApprovalPreservesPerSheetAllowlists() {
+        let model = AppModel()
+        model.sourceSheet = "Synthetic A"
+        model.sourceSheets = ["Synthetic A", "Synthetic B"]
+        model.selectedSourceSheets = ["Synthetic A", "Synthetic B"]
+        var shared = FieldDraft(id: "Cohort")
+        shared.action = "code"
+        shared.classification = "quasi_identifier"
+        model.fieldsBySheet = ["Synthetic A": [shared], "Synthetic B": [shared]]
+        model.fields = [shared]
+        let category = CategorySheet(
+            field: "Cohort",
+            sheets: ["Synthetic A", "Synthetic B"],
+            action: "code",
+            values: ["Alpha", "Beta"],
+            valuesBySheet: ["Synthetic A": ["Alpha"], "Synthetic B": ["Beta"]],
+            blankCount: 0
+        )
+
+        model.approveCategories(category)
+
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[0].allowedValues, ["Alpha"])
+        XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[0].allowedValues, ["Beta"])
+
+        var decision = model.consolidatedFields[0].draft
+        decision.classification = "analytical_attribute"
+        model.updateConsolidatedField("Cohort", with: decision)
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[0].allowedValues, ["Alpha"])
+        XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[0].allowedValues, ["Beta"])
+
+        decision.action = "keep"
+        model.updateConsolidatedField("Cohort", with: decision)
+        XCTAssertEqual(model.fieldsBySheet["Synthetic A"]?[0].allowedValues, [])
+        XCTAssertEqual(model.fieldsBySheet["Synthetic B"]?[0].allowedValues, [])
+    }
+
     @MainActor func testRestoreWorksheetSelectionsPreserveWorkbookOrder() {
         let model = AppModel()
         model.returnedSheets = ["Later", "Earlier", "Analysis"]
@@ -112,5 +182,40 @@ final class SafeSetMacTests: XCTestCase {
 
         XCTAssertEqual(model.orderedReturnedRestoreSheets, ["Later", "Earlier"])
         XCTAssertEqual(model.orderedOriginalRestoreSheets, ["Source B", "Source A"])
+    }
+
+    @MainActor func testRecentPrivateBundlePathIsRememberedAndCanBeForgotten() throws {
+        let suite = "org.ozyjay.SafeSet.tests.\(UUID().uuidString)"
+        guard let preferences = UserDefaults(suiteName: suite) else {
+            return XCTFail("Could not create isolated preferences")
+        }
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SafeSet-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bundle = directory.appendingPathComponent("synthetic-private-bundle.enc")
+        try Data().write(to: bundle)
+
+        let first = AppModel(preferences: preferences)
+        first.rememberRestoreBundle(bundle.path)
+        let relaunched = AppModel(preferences: preferences)
+        XCTAssertEqual(relaunched.restoreBundle, bundle.path)
+
+        relaunched.forgetRestoreBundle()
+        XCTAssertEqual(relaunched.restoreBundle, "")
+        XCTAssertEqual(AppModel(preferences: preferences).restoreBundle, "")
+    }
+
+    @MainActor func testMissingRememberedPrivateBundleIsDiscarded() {
+        let suite = "org.ozyjay.SafeSet.tests.\(UUID().uuidString)"
+        guard let preferences = UserDefaults(suiteName: suite) else {
+            return XCTFail("Could not create isolated preferences")
+        }
+        defer { preferences.removePersistentDomain(forName: suite) }
+        preferences.set("/synthetic/missing/private-bundle.enc", forKey: "recentRestoreBundlePath")
+
+        XCTAssertEqual(AppModel(preferences: preferences).restoreBundle, "")
+        XCTAssertNil(preferences.string(forKey: "recentRestoreBundlePath"))
     }
 }

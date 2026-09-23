@@ -11,6 +11,13 @@ Responses contain only aggregate inspection, local category values after an
 explicit request, fixed error codes and review metadata. Source rows, maps,
 bundle payloads and passphrases never enter protocol responses or logs.
 
+For restoration convenience, the SwiftUI process stores only the path of the
+most recently created or selected encrypted private bundle in its local app
+preferences. It prefills that path only while it still names an existing `.enc`
+file, removes stale preferences and provides an explicit forget control. The
+passphrase and decrypted bundle content are never stored in preferences, and the
+bundle is not opened until the user requests validation.
+
 The helper stores one pending review in memory under a random opaque token. A new
 operation invalidates that review; approval consumes the token before publication.
 Protection and reconstruction still recheck their inputs and use the existing
@@ -56,6 +63,13 @@ receives a globally unique random `record_id`, so result restoration remains
 unambiguous when an entity occurs in several worksheets or several rows.
 
 The protected workbook preserves selected worksheet names and contains both IDs.
+The desktop inspects every selected worksheet and consolidates fields by exact
+literal heading for authoring. One visible decision is copied into each matching
+per-sheet policy, while the interface displays the affected worksheet names.
+Categorical review presents the union of labels to the operator but retains each
+worksheet's exact observed allowlist in its own policy. Sheet-specific headings
+remain separate. Consolidation does not infer that same-named fields have the same
+semantics; that judgement remains explicit operator responsibility.
 The encrypted version 3 bundle contains one `entity_id`-to-source-key map, per-sheet
 `record_id`-to-source-row-index maps, exact per-sheet schemas, policies, codebooks
 and source digests. It also authenticates the explicitly confirmed list of shared

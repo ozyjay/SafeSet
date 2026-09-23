@@ -145,12 +145,22 @@ struct FieldDraft: Identifiable, Equatable {
 struct CategorySheet: Identifiable {
     let id = UUID()
     let field: String
+    let sheets: [String]
     let action: String
     let values: [String]
+    let valuesBySheet: [String: [String]]
     let blankCount: Int
 }
 
+struct ConsolidatedField: Identifiable {
+    let id: String
+    let sheets: [String]
+    let draft: FieldDraft
+    let metadata: String
+}
+
 @MainActor final class AppModel: ObservableObject {
+    private static let recentRestoreBundleKey = "recentRestoreBundlePath"
     enum Page: String { case home, protect, restore, advanced, help }
     @Published var page: Page = .home
     @Published var busy = false
@@ -190,6 +200,7 @@ struct CategorySheet: Identifiable {
     @Published var legacyApproved: Set<String> = []
     @Published var legacyReview: [String: Any]?
     private var bridge: BackendBridge?
+    private let preferences: UserDefaults
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
 
     var orderedReturnedRestoreSheets: [String] {
@@ -198,6 +209,49 @@ struct CategorySheet: Identifiable {
 
     var orderedOriginalRestoreSheets: [String] {
         originalSheets.filter { selectedOriginalSheets.contains($0) }
+    }
+
+    var orderedSelectedSourceSheets: [String] {
+        sourceSheets.filter { selectedSourceSheets.contains($0) }
+    }
+
+    var consolidatedFields: [ConsolidatedField] {
+        var headings: [String] = []
+        var occurrences: [String: [(String, FieldDraft)]] = [:]
+        for sheet in orderedSelectedSourceSheets {
+            for field in fieldsBySheet[sheet] ?? [] {
+                if occurrences[field.id] == nil { headings.append(field.id) }
+                occurrences[field.id, default: []].append((sheet, field))
+            }
+        }
+        return headings.compactMap { heading in
+            guard let matches = occurrences[heading], var draft = matches.first?.1 else { return nil }
+            let types = Set(matches.map { $0.1.type })
+            let cardinalities = matches.map { $0.1.cardinality }
+            let hints = Set(matches.map { $0.1.hint })
+            draft.type = types.count == 1 ? (types.first ?? "") : "mixed types"
+            draft.cardinality = cardinalities.max() ?? 0
+            draft.blankCount = matches.reduce(0) { $0 + $1.1.blankCount }
+            draft.hint = hints.count == 1 ? (hints.first ?? "") : "mixed — review carefully"
+            draft.flags = Array(Set(matches.flatMap { $0.1.flags })).sorted()
+            draft.allowedValues = matches.allSatisfy { !$0.1.allowedValues.isEmpty }
+                ? Array(Set(matches.flatMap { $0.1.allowedValues })).sorted()
+                : []
+            let metadata: String
+            if matches.count == 1 {
+                metadata = "\(draft.type) · \(draft.cardinality) values"
+            } else if Set(cardinalities).count == 1 {
+                metadata = "\(matches.count) worksheets · \(draft.type) · \(draft.cardinality) values per sheet"
+            } else {
+                metadata = "\(matches.count) worksheets · \(draft.type) · \(cardinalities.min() ?? 0)–\(cardinalities.max() ?? 0) values per sheet"
+            }
+            return ConsolidatedField(
+                id: heading,
+                sheets: matches.map(\.0),
+                draft: draft,
+                metadata: metadata
+            )
+        }
     }
 
     func decisionProblem(_ configured: [FieldDraft]) -> String? {
@@ -281,9 +335,35 @@ struct CategorySheet: Identifiable {
         return Set(names) == approvedResults
     }
 
-    init() {
+    init(preferences: UserDefaults = .standard) {
+        self.preferences = preferences
+        if let remembered = preferences.string(forKey: Self.recentRestoreBundleKey),
+           Self.isUsableRestoreBundlePath(remembered) {
+            restoreBundle = remembered
+        } else {
+            preferences.removeObject(forKey: Self.recentRestoreBundleKey)
+        }
         do { bridge = try BackendBridge() }
         catch { alert = "The bundled SafeSet engine could not start." }
+    }
+
+    private static func isUsableRestoreBundlePath(_ path: String) -> Bool {
+        guard URL(fileURLWithPath: path).pathExtension.lowercased() == "enc" else { return false }
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
+    }
+
+    func rememberRestoreBundle(_ path: String) {
+        guard Self.isUsableRestoreBundlePath(path) else { return }
+        restoreBundle = path
+        preferences.set(path, forKey: Self.recentRestoreBundleKey)
+    }
+
+    func forgetRestoreBundle() {
+        restoreBundle = ""
+        preferences.removeObject(forKey: Self.recentRestoreBundleKey)
+        invalidate()
     }
 
     func send(_ command: String, _ payload: [String: Any],
@@ -327,11 +407,22 @@ struct CategorySheet: Identifiable {
 
     func toggleSourceSheet(_ sheet: String, selected: Bool) {
         if !sourceSheet.isEmpty { fieldsBySheet[sourceSheet] = fields }
-        if selected { selectedSourceSheets.insert(sheet) }
-        else { selectedSourceSheets.remove(sheet); fieldsBySheet.removeValue(forKey: sheet) }
-        if selected && sourceSheet.isEmpty { selectSourceSheet(sheet) }
-        else if !selectedSourceSheets.contains(sourceSheet) {
-            selectSourceSheet(selectedSourceSheets.sorted().first ?? "")
+        if selected {
+            selectedSourceSheets.insert(sheet)
+        } else {
+            selectedSourceSheets.remove(sheet)
+            fieldsBySheet.removeValue(forKey: sheet)
+            if sourceSheet == sheet {
+                sourceSheet = ""
+                fields = []
+            }
+        }
+        if selected && sourceSheet.isEmpty {
+            selectSourceSheet(sheet)
+        } else if selected && fieldsBySheet[sheet] == nil {
+            inspect(sheet: sheet)
+        } else if sourceSheet.isEmpty, let next = orderedSelectedSourceSheets.first {
+            selectSourceSheet(next)
         }
         invalidate()
     }
@@ -346,11 +437,15 @@ struct CategorySheet: Identifiable {
 
     func inspect() {
         guard !source.isEmpty, !sourceSheet.isEmpty else { return }
-        let inspectedSheet = sourceSheet
+        inspect(sheet: sourceSheet)
+    }
+
+    func inspect(sheet inspectedSheet: String) {
+        guard !source.isEmpty, !inspectedSheet.isEmpty else { return }
         invalidate()
         send("inspect", ["source": source, "sheet": inspectedSheet]) { result in
             let data = result["columns"] as? [[String: Any]] ?? []
-            let inspectedFields = data.map { item in
+            var inspectedFields = data.map { item in
                 var field = FieldDraft(id: item["column"] as? String ?? "")
                 field.type = item["type"] as? String ?? ""
                 field.cardinality = item["cardinality"] as? Int ?? 0
@@ -359,22 +454,79 @@ struct CategorySheet: Identifiable {
                 field.flags = item["flags"] as? [String] ?? []
                 return field
             }
+            for index in inspectedFields.indices {
+                guard let existing = self.fieldsBySheet
+                    .filter({ $0.key != inspectedSheet })
+                    .compactMap({ $0.value.first(where: { $0.id == inspectedFields[index].id }) })
+                    .first else { continue }
+                inspectedFields[index].action = existing.action
+                inspectedFields[index].classification = existing.classification
+                inspectedFields[index].binsText = existing.binsText
+                inspectedFields[index].lower = existing.lower
+                inspectedFields[index].upper = existing.upper
+                if !existing.allowedValues.isEmpty {
+                    for sheet in self.selectedSourceSheets {
+                        guard var sheetFields = self.fieldsBySheet[sheet],
+                              let match = sheetFields.firstIndex(where: {
+                                  $0.id == inspectedFields[index].id
+                              }) else { continue }
+                        sheetFields[match].allowedValues = []
+                        self.fieldsBySheet[sheet] = sheetFields
+                    }
+                }
+            }
             self.fieldsBySheet[inspectedSheet] = inspectedFields
             if self.sourceSheet == inspectedSheet { self.fields = inspectedFields }
         }
     }
 
-    func categories(for field: String) {
-        invalidate()
-        send("categories", ["source": source, "sheet": sourceSheet, "column": field]) { result in
-            let action = self.fields.first(where: { $0.id == field })?.action ?? ""
-            self.categorySheet = CategorySheet(
-                field: field,
-                action: action,
-                values: result["values"] as? [String] ?? [],
-                blankCount: result["blank_count"] as? Int ?? 0
-            )
+    func updateConsolidatedField(_ heading: String, with decision: FieldDraft) {
+        for sheet in selectedSourceSheets {
+            guard var sheetFields = fieldsBySheet[sheet],
+                  let index = sheetFields.firstIndex(where: { $0.id == heading }) else { continue }
+            let actionChanged = sheetFields[index].action != decision.action
+            sheetFields[index].action = decision.action
+            sheetFields[index].classification = decision.classification
+            if actionChanged { sheetFields[index].allowedValues = [] }
+            sheetFields[index].binsText = decision.binsText
+            sheetFields[index].lower = decision.lower
+            sheetFields[index].upper = decision.upper
+            fieldsBySheet[sheet] = sheetFields
+            if sheet == sourceSheet { fields = sheetFields }
         }
+        sharedCodeFields.formIntersection(sharedCodeCandidates)
+        invalidate()
+    }
+
+    func categories(for field: String, sheets: [String]) {
+        invalidate()
+        let orderedSheets = orderedSelectedSourceSheets.filter { sheets.contains($0) }
+        let action = consolidatedFields.first(where: { $0.id == field })?.draft.action ?? ""
+        func collect(_ index: Int, valuesBySheet: [String: [String]], blankCount: Int) {
+            guard index < orderedSheets.count else {
+                let values = Set(valuesBySheet.values.flatMap { $0 })
+                self.categorySheet = CategorySheet(
+                    field: field,
+                    sheets: orderedSheets,
+                    action: action,
+                    values: values.sorted(),
+                    valuesBySheet: valuesBySheet,
+                    blankCount: blankCount
+                )
+                return
+            }
+            let sheet = orderedSheets[index]
+            send("categories", ["source": source, "sheet": sheet, "column": field]) { result in
+                var collected = valuesBySheet
+                collected[sheet] = result["values"] as? [String] ?? []
+                collect(
+                    index + 1,
+                    valuesBySheet: collected,
+                    blankCount: blankCount + (result["blank_count"] as? Int ?? 0)
+                )
+            }
+        }
+        collect(0, valuesBySheet: [:], blankCount: 0)
     }
 
     func approveCategories(_ category: CategorySheet) {
@@ -382,11 +534,15 @@ struct CategorySheet: Identifiable {
             alert = "Blank categorical cells cannot be approved. Remove them or drop this field."
             return
         }
-        if let index = fields.firstIndex(where: { $0.id == category.field }) {
-            fields[index].allowedValues = category.values
-            fieldsBySheet[sourceSheet] = fields
+        for sheet in category.sheets {
+            guard var sheetFields = fieldsBySheet[sheet],
+                  let index = sheetFields.firstIndex(where: { $0.id == category.field }) else { continue }
+            sheetFields[index].allowedValues = category.valuesBySheet[sheet] ?? []
+            fieldsBySheet[sheet] = sheetFields
+            if sheet == sourceSheet { fields = sheetFields }
         }
         categorySheet = nil
+        invalidate()
     }
 
     func draftPayload() -> [String: Any] {
@@ -439,7 +595,7 @@ struct CategorySheet: Identifiable {
             self.originalSheets = self.sourceSheets
             self.originalSheet = self.sourceSheet
             self.selectedOriginalSheets = self.selectedSourceSheets
-            self.restoreBundle = review["bundle"] as? String ?? ""
+            self.rememberRestoreBundle(review["bundle"] as? String ?? "")
             self.protectionReview = nil
             self.alert = "Protected workbook and private restoration bundle created."
             self.page = .home
@@ -642,6 +798,8 @@ struct PathRow: View {
 
 struct FieldCard: View {
     @Binding var field: FieldDraft
+    var scope: String? = nil
+    var metadata: String? = nil
     let categories: (String) -> Void
 
     var body: some View {
@@ -649,8 +807,11 @@ struct FieldCard: View {
             HStack {
                 Text(field.id).font(.headline)
                 Spacer()
-                Text("\(field.type) · \(field.cardinality) values")
+                Text(metadata ?? "\(field.type) · \(field.cardinality) values")
                     .foregroundStyle(.secondary)
+            }
+            if let scope {
+                Text(scope).font(.callout).foregroundStyle(.secondary)
             }
             if field.blankCount > 0 {
                 Label(
@@ -1046,22 +1207,25 @@ struct ProtectView: View {
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Picker("Configure worksheet", selection: Binding(
-                        get: { model.sourceSheet },
-                        set: { model.selectSourceSheet($0) }
-                    )) {
-                        Text("Choose…").tag("")
-                        ForEach(model.selectedSourceSheets.sorted(), id: \.self) {
-                            Text($0).tag($0)
-                        }
-                    }
                 }
-                if !model.fields.isEmpty {
-                    Text("Review every field in \(model.sourceSheet)").font(.title2.bold())
-                    Text("Choose an action for every field. Classify fields you keep or replace; removed fields need no classification.")
+                if !model.consolidatedFields.isEmpty {
+                    Text("Review fields across selected worksheets").font(.title2.bold())
+                    Text("A repeated heading appears once and its decision applies to every listed worksheet. Sheet-specific headings remain separate. Classify fields you keep or replace; removed fields need no classification.")
                         .foregroundStyle(.secondary)
-                    ForEach($model.fields) { field in
-                        FieldCard(field: field) { model.categories(for: $0) }
+                    ForEach(model.consolidatedFields) { item in
+                        FieldCard(
+                            field: Binding(
+                                get: {
+                                    model.consolidatedFields.first(where: { $0.id == item.id })?.draft
+                                        ?? item.draft
+                                },
+                                set: { model.updateConsolidatedField(item.id, with: $0) }
+                            ),
+                            scope: item.sheets.count == model.selectedSourceSheets.count
+                                ? "All selected worksheets"
+                                : "Worksheet\(item.sheets.count == 1 ? "" : "s"): \(item.sheets.joined(separator: ", "))",
+                            metadata: item.metadata
+                        ) { model.categories(for: $0, sheets: item.sheets) }
                     }
                     HStack {
                         Text("Minimum group size")
@@ -1151,6 +1315,8 @@ struct ProtectView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Review values found in this field").font(.title2.bold())
                 Text(category.field).font(.headline)
+                Text("Worksheet\(category.sheets.count == 1 ? "" : "s"): \(category.sheets.joined(separator: ", "))")
+                    .foregroundStyle(.secondary)
                 Text("SafeSet found \(category.values.count) distinct source values. Confirm that this is the complete set you expect in this field.")
                     .foregroundStyle(.secondary)
                 if category.blankCount > 0 {
@@ -1268,7 +1434,18 @@ struct RestoreView: View {
                     }
                 }
                 PathRow(title: "Private bundle", path: $model.restoreBundle,
-                        save: false, fileExtension: "enc")
+                        save: false, fileExtension: "enc") {
+                    model.rememberRestoreBundle($0.path)
+                }
+                HStack {
+                    Text("SafeSet remembers the most recently created or selected bundle on this Mac.")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if !model.restoreBundle.isEmpty {
+                        Button("Forget remembered bundle") { model.forgetRestoreBundle() }
+                            .buttonStyle(.link)
+                    }
+                }
                 PathRow(title: "New restored workbook", path: $model.restoredOutput,
                         save: true, fileExtension: "xlsx")
                 Text("Unlocking the private bundle is required to validate exact record coverage.")

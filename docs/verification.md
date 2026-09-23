@@ -13,10 +13,11 @@ baseline unless repeated in this iteration.
 
 ## Executed checks
 
-- `.venv/bin/python -m pytest`: **195 passed** (including six bridge tests and
-  the removed-field authoring check).
+- `.venv/bin/python -m pytest`: **218 passed**.
 - `ruff check .`: passed.
-- `swift test --disable-sandbox --package-path macos/SafeSetMac`: **3 passed**.
+- `swift test --disable-sandbox --package-path macos/SafeSetMac`: **12 passed**,
+  including consolidated cross-sheet field decisions, exact per-sheet categorical
+  allowlists, and remembered, forgotten and stale private-bundle path cases.
 - Xcode Release build for Apple Silicon: passed.
 - Relocated `SafeSet.app` bundled-helper synthetic protect/reconstruct smoke: passed.
 - `codesign --verify --strict dist/SafeSet.app`: passed for the local ad-hoc signature.
