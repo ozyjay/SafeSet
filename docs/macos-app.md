@@ -48,6 +48,8 @@ The app can be moved as a single `.app` bundle. The helper executable lives in
 `Contents/Resources/SafeSetBackend`. The helper has no port or network service.
 The sidebar Help view renders the bundled `Contents/Resources/HOWTO.md`, which is
 copied from the repository's `HOWTO.md` before the app is signed.
+The View menu provides persistent text-size controls: Command-Plus increases,
+Command-Minus decreases and Command-0 restores the default size.
 Passphrases pass only through its local standard-input pipe. The protocol is
 versioned and rejects malformed requests, stale review tokens and oversized
 frames. Every publish operation remains subject to Python's validation and

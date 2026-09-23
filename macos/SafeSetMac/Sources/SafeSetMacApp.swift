@@ -18,6 +18,35 @@ private let classOptions: [(String, String)] = [
 let restorationAnalysisGuidance = "Ask the analysis tool to preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly. It may add short result columns or separate analysis worksheets instead of changing fields such as campus."
 let restorationResultExample = "For result columns, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Added worksheets may contain blank cells and formulas with saved results. SafeSet does not calculate or preserve formulas: after approval, it copies their saved results into new static tables. Formatting and drawings are not preserved."
 
+private struct AppTextScaleKey: EnvironmentKey {
+    static let defaultValue = 1.0
+}
+
+private extension EnvironmentValues {
+    var appTextScale: Double {
+        get { self[AppTextScaleKey.self] }
+        set { self[AppTextScaleKey.self] = newValue }
+    }
+}
+
+private struct AppFont: ViewModifier {
+    @Environment(\.appTextScale) private var scale
+    let size: Double
+    var weight: Font.Weight = .regular
+    var design: Font.Design = .default
+
+    func body(content: Content) -> some View {
+        content.font(.system(size: size * scale, weight: weight, design: design))
+    }
+}
+
+private extension View {
+    func appFont(_ size: Double, weight: Font.Weight = .regular,
+                 design: Font.Design = .default) -> some View {
+        modifier(AppFont(size: size, weight: weight, design: design))
+    }
+}
+
 enum BridgeFailure: Error {
     case unavailable
     case rejected(String)
@@ -786,6 +815,7 @@ private func present(_ panel: NSSavePanel, completion: @escaping (URL?) -> Void)
 }
 
 struct PathRow: View {
+    @Environment(\.appTextScale) private var textScale
     let title: String
     @Binding var path: String
     let save: Bool
@@ -794,8 +824,9 @@ struct PathRow: View {
 
     var body: some View {
         HStack {
-            Text(title).frame(width: 180, alignment: .leading)
+            Text(title).frame(width: 180 * textScale, alignment: .leading)
             TextField("Choose a local file", text: $path)
+                .appFont(13)
                 .textFieldStyle(.roundedBorder)
                 .disabled(!save)
             Button("Choose…") {
@@ -810,6 +841,7 @@ struct PathRow: View {
                     chooseOpen(extension: fileExtension, completion: selected)
                 }
             }
+            .appFont(13)
         }
     }
 }
@@ -823,19 +855,20 @@ struct FieldCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(field.id).font(.headline)
+                Text(field.id).appFont(13, weight: .semibold)
                 Spacer()
                 Text(metadata ?? "\(field.type) · \(field.cardinality) values")
                     .foregroundStyle(.secondary)
             }
             if let scope {
-                Text(scope).font(.callout).foregroundStyle(.secondary)
+                Text(scope).appFont(12).foregroundStyle(.secondary)
             }
             if field.blankCount > 0 {
                 Label(
                     "\(field.blankCount) blank or whitespace-only cells",
                     systemImage: "exclamationmark.triangle.fill"
                 )
+                .appFont(13)
                 .foregroundStyle(.red)
             }
             HStack {
@@ -843,11 +876,13 @@ struct FieldCard: View {
                     Text("Choose…").tag("")
                     ForEach(actionOptions, id: \.1) { item in Text(item.0).tag(item.1) }
                 }
+                .appFont(13)
                 if field.action != "drop" {
                     Picker("Classification", selection: $field.classification) {
                         Text("Choose…").tag("")
                         ForEach(classOptions, id: \.1) { item in Text(item.0).tag(item.1) }
                     }
+                    .appFont(13)
                 }
             }
             if field.action == "keep" || field.action == "code" {
@@ -855,10 +890,11 @@ struct FieldCard: View {
                     Text(field.action == "code"
                          ? "Review the distinct source values before SafeSet replaces each one with a fresh random code."
                          : "Review the distinct source values that will remain unchanged in the protected copy.")
-                        .font(.callout)
+                        .appFont(12)
                         .foregroundStyle(.secondary)
                     HStack {
                         Button("Review values found in this field…") { categories(field.id) }
+                            .appFont(13)
                         Text("\(field.allowedValues.count) source values approved")
                         .foregroundStyle(.secondary)
                     }
@@ -866,23 +902,25 @@ struct FieldCard: View {
             }
             if field.action == "bin" {
                 TextField("One lower,upper range per line", text: $field.binsText, axis: .vertical)
+                    .appFont(13)
                     .lineLimit(2...5)
             }
             if field.action == "keep_numeric" {
                 Text("Genuine blank cells remain blank and are included in the disclosure-risk checks.")
-                    .font(.callout)
+                    .appFont(12)
                     .foregroundStyle(.secondary)
                 HStack {
-                    TextField("Lower bound", text: $field.lower)
-                    TextField("Upper bound", text: $field.upper)
+                    TextField("Lower bound", text: $field.lower).appFont(13)
+                    TextField("Upper bound", text: $field.upper).appFont(13)
                 }
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("Decision details").font(.subheadline.weight(.semibold))
+                Text("Decision details").appFont(11, weight: .semibold)
                 Text("Suggested classification: \(field.hint.replacingOccurrences(of: "_", with: " "))")
                 if field.action != "drop" && !field.flags.isEmpty {
                     Label("Warnings: \(field.flags.joined(separator: ", "))",
                           systemImage: "exclamationmark.triangle")
+                        .appFont(13)
                         .foregroundStyle(.orange)
                 }
             }
@@ -897,21 +935,28 @@ struct FieldCard: View {
 
 struct RootView: View {
     @EnvironmentObject var model: AppModel
+    @Environment(\.appTextScale) private var textScale
 
     var body: some View {
         NavigationSplitView {
             List(selection: Binding(
                 get: { model.page }, set: { model.page = $0 ?? .home; model.invalidate() }
             )) {
-                Label("Home", systemImage: "house").tag(AppModel.Page.home)
-                Label("Protect workbook", systemImage: "lock.doc").tag(AppModel.Page.protect)
-                Label("Restore workbook", systemImage: "lock.open.doc").tag(AppModel.Page.restore)
-                Label("Advanced", systemImage: "slider.horizontal.3").tag(AppModel.Page.advanced)
+                Label("Home", systemImage: "house").appFont(13).tag(AppModel.Page.home)
+                Label("Protect workbook", systemImage: "lock.doc")
+                    .appFont(13).tag(AppModel.Page.protect)
+                Label("Restore workbook", systemImage: "lock.open.doc")
+                    .appFont(13).tag(AppModel.Page.restore)
+                Label("Advanced", systemImage: "slider.horizontal.3")
+                    .appFont(13).tag(AppModel.Page.advanced)
                 Divider()
-                Label("Help", systemImage: "questionmark.circle").tag(AppModel.Page.help)
+                Label("Help", systemImage: "questionmark.circle")
+                    .appFont(13).tag(AppModel.Page.help)
             }
             .navigationTitle("SafeSet")
-            .frame(minWidth: 190)
+            .frame(minWidth: 190 * textScale)
+            .navigationSplitViewColumnWidth(min: 190 * textScale,
+                                            ideal: 220 * textScale)
         } detail: {
             Group {
                 switch model.page {
@@ -925,6 +970,7 @@ struct RootView: View {
             .frame(minWidth: 680, minHeight: 540)
             .overlay { if model.busy { ProgressView().padding().background(.regularMaterial) } }
         }
+        .font(.system(size: 13 * textScale))
         .alert("SafeSet", isPresented: Binding(
             get: { !model.alert.isEmpty }, set: { if !$0 { model.alert = "" } }
         )) { Button("OK") { model.alert = "" } } message: { Text(model.alert) }
@@ -963,16 +1009,18 @@ struct HomeView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            Text("Protect, work, restore").font(.largeTitle.bold())
+            Text("Protect, work, restore").appFont(26, weight: .bold)
             Text("Create a protected working copy, analyse it, then reconstruct a new identifiable workbook locally.")
-                .font(.title3).foregroundStyle(.secondary)
+                .appFont(16).foregroundStyle(.secondary)
             HStack(spacing: 16) {
                 Button { model.page = .protect } label: {
                     Label("Protect a workbook", systemImage: "lock.doc")
+                        .appFont(13)
                         .frame(maxWidth: .infinity, minHeight: 100)
                 }.buttonStyle(.borderedProminent)
                 Button { model.page = .restore } label: {
                     Label("Restore a workbook", systemImage: "lock.open.doc")
+                        .appFont(13)
                         .frame(maxWidth: .infinity, minHeight: 100)
                 }.buttonStyle(.bordered)
             }
@@ -1136,8 +1184,8 @@ struct HelpView: View {
         switch block.kind {
         case .heading(let level, let text):
             Text(helpInline(text))
-                .font(level == 1 ? .largeTitle.bold() :
-                        level == 2 ? .title2.bold() : .headline)
+                .appFont(level == 1 ? 26 : level == 2 ? 18 : 13,
+                         weight: .bold)
                 .padding(.top, level == 1 ? 0 : 10)
         case .paragraph(let text):
             Text(helpInline(text)).lineSpacing(4)
@@ -1155,7 +1203,7 @@ struct HelpView: View {
         case .code(let code):
             ScrollView(.horizontal) {
                 Text(verbatim: code)
-                    .font(.system(.body, design: .monospaced))
+                    .appFont(13, design: .monospaced)
                     .textSelection(.enabled)
                     .padding(12)
             }
@@ -1188,7 +1236,7 @@ struct HelpView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Label("Offline guide", systemImage: "book.closed")
-                    .font(.title2.bold())
+                    .appFont(18, weight: .bold)
                 Text("This guidance is stored inside SafeSet and does not require a network connection.")
                     .foregroundStyle(.secondary)
                 Divider()
@@ -1209,7 +1257,7 @@ struct ProtectView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Protect a workbook").font(.largeTitle.bold())
+                Text("Protect a workbook").appFont(26, weight: .bold)
                 PathRow(title: "Original workbook", path: $model.source, save: false,
                         fileExtension: "xlsx") { model.chooseSource($0) }
                 if model.sourceSheets.count > 1 {
@@ -1222,12 +1270,13 @@ struct ProtectView: View {
                                     get: { model.selectedSourceSheets.contains(sheet) },
                                     set: { model.toggleSourceSheet(sheet, selected: $0) }
                                 ))
+                                .appFont(13)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 if !model.consolidatedFields.isEmpty {
-                    Text("Review fields across selected worksheets").font(.title2.bold())
+                    Text("Review fields across selected worksheets").appFont(18, weight: .bold)
                     Text("A repeated heading appears once and its decision applies to every listed worksheet. Sheet-specific headings remain separate. Classify fields you keep or replace; removed fields need no classification.")
                         .foregroundStyle(.secondary)
                     ForEach(model.consolidatedFields) { item in
@@ -1247,13 +1296,15 @@ struct ProtectView: View {
                     }
                     HStack {
                         Text("Minimum group size")
-                        TextField("2", text: $model.threshold).frame(width: 75)
+                        TextField("2", text: $model.threshold)
+                            .appFont(13).frame(width: 75)
                     }
                     Picker("Validation profile", selection: $model.validationProfile) {
                         Text("Strict — rare groups block export").tag("strict")
                         Text("Controlled pseudonymisation — rare groups warn")
                             .tag("controlled_pseudonymisation")
                     }
+                    .appFont(13)
                     Text(model.validationProfile == "strict"
                          ? "Strict mode blocks small marginal and joint groups."
                          : "Controlled pseudonymisation keeps structural checks mandatory and requires explicit review of rare-group and linkage warnings.")
@@ -1272,6 +1323,7 @@ struct ProtectView: View {
                                             else { model.sharedCodeFields.remove(field) }
                                         }
                                     ))
+                                    .appFont(13)
                                 }
                                 Text("This deliberately exposes cross-worksheet category equality and frequency. Unconfirmed fields use independent codebooks, even when their headings match.")
                                     .foregroundStyle(.orange)
@@ -1285,12 +1337,13 @@ struct ProtectView: View {
                                 save: true, fileExtension: "enc")
                     }
                     Button("Review protection") { model.prepareProtection() }
+                        .appFont(13)
                         .buttonStyle(.borderedProminent)
                 }
                 if let review = model.protectionReview,
                    let validation = review["validation"] as? [String: Any] {
                     Divider()
-                    Text("Final review").font(.title2.bold())
+                    Text("Final review").appFont(18, weight: .bold)
                     if let worksheets = review["worksheets"] as? Int {
                         Text("\(review["rows"] as? Int ?? 0) records · \(worksheets) related worksheets · \(review["entities"] as? Int ?? 0) linked entities")
                         if let shared = review["shared_code_fields"] as? [String], !shared.isEmpty {
@@ -1321,9 +1374,10 @@ struct ProtectView: View {
                     Text("Passing validation does not establish anonymity or recipient suitability.")
                         .foregroundStyle(.secondary)
                     Button("Approve and create") { showApproval = true }
+                        .appFont(13)
                         .disabled(validation["passed"] as? Bool != true)
                         .buttonStyle(.borderedProminent)
-                    Button("Cancel review") { model.cancelReview() }
+                    Button("Cancel review") { model.cancelReview() }.appFont(13)
                 }
             }
             .padding(28)
@@ -1331,8 +1385,8 @@ struct ProtectView: View {
         }
         .sheet(item: $model.categorySheet) { category in
             VStack(alignment: .leading, spacing: 12) {
-                Text("Review values found in this field").font(.title2.bold())
-                Text(category.field).font(.headline)
+                Text("Review values found in this field").appFont(18, weight: .bold)
+                Text(category.field).appFont(13, weight: .semibold)
                 Text("Worksheet\(category.sheets.count == 1 ? "" : "s"): \(category.sheets.joined(separator: ", "))")
                     .foregroundStyle(.secondary)
                 Text("SafeSet found \(category.values.count) distinct source values. Confirm that this is the complete set you expect in this field.")
@@ -1342,6 +1396,7 @@ struct ProtectView: View {
                         "\(category.blankCount) blank or whitespace-only cells were found. Blank categories cannot be approved; correct the source workbook or remove this field.",
                         systemImage: "exclamationmark.triangle.fill"
                     )
+                    .appFont(13)
                     .foregroundStyle(.red)
                 }
                 if category.action == "code" {
@@ -1358,10 +1413,11 @@ struct ProtectView: View {
                 .padding(10)
                 .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
                 HStack {
-                    Button("Cancel") { model.categorySheet = nil }
+                    Button("Cancel") { model.categorySheet = nil }.appFont(13)
                     Button("Approve this source-value list") {
                         model.approveCategories(category)
                     }
+                        .appFont(13)
                         .disabled(category.blankCount > 0 || category.values.isEmpty)
                         .buttonStyle(.borderedProminent)
                 }
@@ -1369,12 +1425,13 @@ struct ProtectView: View {
         }
         .sheet(isPresented: $showApproval) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Approve protection").font(.title2.bold())
+                Text("Approve protection").appFont(18, weight: .bold)
                 Text("Create the reviewed protected workbook and private encrypted bundle?")
-                SecureField("Restoration passphrase", text: $passphrase)
-                SecureField("Confirm passphrase", text: $confirmation)
+                SecureField("Restoration passphrase", text: $passphrase).appFont(13)
+                SecureField("Confirm passphrase", text: $confirmation).appFont(13)
                 HStack {
                     Button("Cancel") { showApproval = false; passphrase = ""; confirmation = "" }
+                        .appFont(13)
                     Button("Create") {
                         guard passphrase.count >= 16, passphrase == confirmation else {
                             model.alert = "Passphrases must match and contain at least 16 characters."
@@ -1383,7 +1440,7 @@ struct ProtectView: View {
                         let secret = passphrase
                         passphrase = ""; confirmation = ""; showApproval = false
                         model.approveProtection(passphrase: secret)
-                    }.buttonStyle(.borderedProminent)
+                    }.appFont(13).buttonStyle(.borderedProminent)
                 }
             }.padding(24).frame(width: 430)
         }
@@ -1398,8 +1455,9 @@ struct RestoreView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Restore a workbook").font(.largeTitle.bold())
+                Text("Restore a workbook").appFont(26, weight: .bold)
                 Toggle("Multi-sheet relational bundle", isOn: $model.relationalRestore)
+                    .appFont(13)
                 Text(model.relationalRestore
                      ? "All bundle-bound worksheets are required. Select any added analysis worksheets to include."
                      : "Restore one or more same-schema worksheets from a version 2 bundle.")
@@ -1421,7 +1479,7 @@ struct RestoreView: View {
                         Text(model.relationalRestore
                              ? "Worksheets to include"
                              : "Protected worksheets")
-                            .font(.headline)
+                            .appFont(13, weight: .semibold)
                         ForEach(model.returnedSheets, id: \.self) { sheet in
                             Toggle(sheet, isOn: Binding(
                                 get: { model.selectedReturnedSheets.contains(sheet) },
@@ -1430,6 +1488,7 @@ struct RestoreView: View {
                                     else { model.selectedReturnedSheets.remove(sheet) }
                                 }
                             ))
+                            .appFont(13)
                         }
                     }
                 }
@@ -1439,7 +1498,7 @@ struct RestoreView: View {
                 }
                 if !model.relationalRestore && model.originalSheets.count > 1 {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Original source worksheets").font(.headline)
+                        Text("Original source worksheets").appFont(13, weight: .semibold)
                         ForEach(model.originalSheets, id: \.self) { sheet in
                             Toggle(sheet, isOn: Binding(
                                 get: { model.selectedOriginalSheets.contains(sheet) },
@@ -1448,6 +1507,7 @@ struct RestoreView: View {
                                     else { model.selectedOriginalSheets.remove(sheet) }
                                 }
                             ))
+                            .appFont(13)
                         }
                     }
                 }
@@ -1461,6 +1521,7 @@ struct RestoreView: View {
                     Spacer()
                     if !model.restoreBundle.isEmpty {
                         Button("Forget remembered bundle") { model.forgetRestoreBundle() }
+                            .appFont(13)
                             .buttonStyle(.link)
                     }
                 }
@@ -1468,14 +1529,14 @@ struct RestoreView: View {
                         save: true, fileExtension: "xlsx")
                 Text("Unlocking the private bundle is required to validate exact record coverage.")
                     .foregroundStyle(.secondary)
-                SecureField("Restoration passphrase", text: $passphrase)
+                SecureField("Restoration passphrase", text: $passphrase).appFont(13)
                 Button("Validate and review") {
                     let secret = passphrase; passphrase = ""
                     model.prepareRestoration(passphrase: secret)
-                }.buttonStyle(.borderedProminent)
+                }.appFont(13).buttonStyle(.borderedProminent)
                 if let review = model.restorationReview {
                     Divider()
-                    Text("Restoration review").font(.title2.bold())
+                    Text("Restoration review").appFont(18, weight: .bold)
                     Text("Exact coverage: \(review["rows"] as? Int ?? 0) records")
                     Text("Original identity and removed fields will be restored from the source.")
                     if let coded = review["coded_columns"] as? [String], !coded.isEmpty {
@@ -1494,12 +1555,13 @@ struct RestoreView: View {
                                 set: { if $0 { model.approvedResults.insert(name) }
                                        else { model.approvedResults.remove(name) } }
                             ))
+                            .appFont(13)
                         }
                     }
                     if let groups = review["new_columns"] as? [String: [String]] {
                         Text("Approve each new result field in every worksheet")
                         ForEach(groups.keys.sorted(), id: \.self) { sheet in
-                            Text(sheet).font(.headline)
+                            Text(sheet).appFont(13, weight: .semibold)
                             ForEach(groups[sheet] ?? [], id: \.self) { name in
                                 let key = "\(sheet)::\(name)"
                                 Toggle(name, isOn: Binding(
@@ -1507,6 +1569,7 @@ struct RestoreView: View {
                                     set: { if $0 { model.approvedResults.insert(key) }
                                            else { model.approvedResults.remove(key) } }
                                 ))
+                                .appFont(13)
                             }
                         }
                     }
@@ -1518,20 +1581,22 @@ struct RestoreView: View {
                                 set: { if $0 { model.approvedSheets.insert(sheet) }
                                        else { model.approvedSheets.remove(sheet) } }
                             ))
+                            .appFont(13)
                         }
                         Text("Approved worksheet cell text is copied into static tables; formatting and drawings are not preserved.")
                             .foregroundStyle(.secondary)
                     }
                     Text("New sensitive workbook: \(review["output"] as? String ?? "")")
                     Button("Authorise local restoration") { showAuthorise = true }
+                        .appFont(13)
                         .buttonStyle(.borderedProminent)
-                    Button("Cancel review") { model.cancelReview() }
+                    Button("Cancel review") { model.cancelReview() }.appFont(13)
                 }
             }.padding(28).frame(maxWidth: 850, alignment: .leading)
         }
         .confirmationDialog("Create a new locally reidentified workbook?",
                             isPresented: $showAuthorise) {
-            Button("Authorise restoration") { model.approveRestoration() }
+            Button("Authorise restoration") { model.approveRestoration() }.appFont(13)
         }
     }
 }
@@ -1543,7 +1608,7 @@ struct AdvancedView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Advanced tools").font(.largeTitle.bold())
+                Text("Advanced tools").appFont(26, weight: .bold)
                 Text("These local workflows use explicit YAML policies and legacy version 1 maps.")
                     .foregroundStyle(.secondary)
                 GroupBox("Policy YAML") {
@@ -1555,19 +1620,22 @@ struct AdvancedView: View {
                                 Text("Choose…").tag("")
                                 ForEach(model.sourceSheets, id: \.self) { Text($0).tag($0) }
                             }
-                            Button("Inspect") { model.inspect() }
+                            .appFont(13)
+                            Button("Inspect") { model.inspect() }.appFont(13)
                         }
                         PathRow(title: "Policy", path: $model.legacyPolicy,
                                 save: false, fileExtension: "yaml")
                         HStack {
-                            Button("Load policy choices") { model.loadPolicy() }
+                            Button("Load policy choices") { model.loadPolicy() }.appFont(13)
                             Button("Review and edit fields") { model.page = .protect }
+                                .appFont(13)
                             Button("Save revised policy…") {
                                 chooseSave(extension: "yaml") { url in
                                     guard let url else { return }
                                     model.savePolicy(url.path)
                                 }
                             }
+                            .appFont(13)
                         }
                     }.padding(8)
                 }
@@ -1578,6 +1646,7 @@ struct AdvancedView: View {
                         PathRow(title: "Private map (optional)", path: $model.legacyMap,
                                 save: true, fileExtension: "enc")
                         Button("Prepare export review") { model.prepareLegacyExport() }
+                            .appFont(13)
                         if let review = model.legacyReview,
                            let validation = review["validation"] as? [String: Any] {
                             Text("\(review["rows"] as? Int ?? 0) records. Validation: \((validation["passed"] as? Bool == true) ? "passed" : "blocked")")
@@ -1586,8 +1655,9 @@ struct AdvancedView: View {
                             if let warnings = validation["warnings"] as? [String] {
                                 ForEach(warnings, id: \.self) { Text($0) }
                             }
-                            SecureField("New map passphrase", text: $secret)
+                            SecureField("New map passphrase", text: $secret).appFont(13)
                             SecureField("Confirm map passphrase", text: $confirmation)
+                                .appFont(13)
                             Button("Approve export and create map") {
                                 guard secret.count >= 16, secret == confirmation else {
                                     model.alert = "Passphrases must match and contain at least 16 characters."
@@ -1596,8 +1666,8 @@ struct AdvancedView: View {
                                 let value = secret; secret = ""
                                 confirmation = ""
                                 model.approveLegacyExport(passphrase: value)
-                            }.disabled(validation["passed"] as? Bool != true)
-                            Button("Cancel review") { model.cancelReview() }
+                            }.appFont(13).disabled(validation["passed"] as? Bool != true)
+                            Button("Cancel review") { model.cancelReview() }.appFont(13)
                         }
                     }.padding(8)
                 }
@@ -1606,20 +1676,23 @@ struct AdvancedView: View {
                         PathRow(title: "Returned workbook", path: $model.legacyReturned,
                                 save: false, fileExtension: "xlsx")
                         Button("Read returned columns") { model.inspectLegacyReturned() }
+                            .appFont(13)
                         ForEach(model.legacyResultColumns, id: \.self) { name in
                             Toggle(name, isOn: Binding(
                                 get: { model.legacyApproved.contains(name) },
                                 set: { if $0 { model.legacyApproved.insert(name) }
                                        else { model.legacyApproved.remove(name) } }
                             ))
+                            .appFont(13)
                         }
                         PathRow(title: "New restored workbook", path: $model.restoredOutput,
                                 save: true, fileExtension: "xlsx")
-                        SecureField("Map passphrase", text: $secret)
+                        SecureField("Map passphrase", text: $secret).appFont(13)
                         Button("Authorise legacy restoration") {
                             let value = secret; secret = ""
                             model.restoreLegacy(passphrase: value)
                         }
+                        .appFont(13)
                     }.padding(8)
                 }
             }.padding(28).frame(maxWidth: 850, alignment: .leading)
@@ -1627,10 +1700,46 @@ struct AdvancedView: View {
     }
 }
 
+private enum AppTextSize {
+    static let levels = [0.85, 0.92, 1.0, 1.12, 1.25, 1.4, 1.6]
+    static let defaultIndex = 2
+
+    static func level(at index: Int) -> Double {
+        levels[min(max(index, 0), levels.count - 1)]
+    }
+}
+
 @main struct SafeSetMacApp: App {
     @StateObject private var model = AppModel()
+    @AppStorage("appTextSizeIndex") private var textSizeIndex = AppTextSize.defaultIndex
+
     var body: some Scene {
-        WindowGroup { RootView().environmentObject(model) }
+        WindowGroup {
+            RootView()
+                .environmentObject(model)
+                .environment(\.appTextScale, AppTextSize.level(at: textSizeIndex))
+        }
             .windowStyle(.titleBar)
+            .commands {
+                CommandGroup(after: .toolbar) {
+                    Button("Increase Text Size") {
+                        textSizeIndex = min(textSizeIndex + 1, AppTextSize.levels.count - 1)
+                    }
+                    .keyboardShortcut("+", modifiers: .command)
+                    .disabled(textSizeIndex >= AppTextSize.levels.count - 1)
+
+                    Button("Decrease Text Size") {
+                        textSizeIndex = max(textSizeIndex - 1, 0)
+                    }
+                    .keyboardShortcut("-", modifiers: .command)
+                    .disabled(textSizeIndex <= 0)
+
+                    Button("Reset Text Size") {
+                        textSizeIndex = AppTextSize.defaultIndex
+                    }
+                    .keyboardShortcut("0", modifiers: .command)
+                    .disabled(textSizeIndex == AppTextSize.defaultIndex)
+                }
+            }
     }
 }

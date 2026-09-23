@@ -2,6 +2,8 @@
 
 SafeSet runs locally. A passing validation report reduces some disclosure risks but does not prove anonymity or decide whether a protected copy may be shared. Keep source workbooks, bundles and reconstructed workbooks private, outside repositories and synchronised folders.
 
+In the macOS app, press **⌘+** or **⌘−** to increase or decrease the text size. Press **⌘0** to restore the default size. These controls are also in the **View** menu, and the chosen size is remembered.
+
 ## Protect a workbook
 
 1. Choose **Protect a workbook**, then the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. When several are visible, select every related worksheet that belongs to the release. Selecting multiple worksheets creates a relational protected workbook and version 3 bundle with shared random entity IDs and separate row IDs.
