@@ -122,6 +122,7 @@ struct FieldDraft: Identifiable, Equatable {
 struct CategorySheet: Identifiable {
     let id = UUID()
     let field: String
+    let action: String
     let values: [String]
 }
 
@@ -233,8 +234,9 @@ struct CategorySheet: Identifiable {
     func categories(for field: String) {
         invalidate()
         send("categories", ["source": source, "sheet": sourceSheet, "column": field]) { result in
+            let action = self.fields.first(where: { $0.id == field })?.action ?? ""
             self.categorySheet = CategorySheet(
-                field: field, values: result["values"] as? [String] ?? []
+                field: field, action: action, values: result["values"] as? [String] ?? []
             )
         }
     }
@@ -476,10 +478,17 @@ struct FieldCard: View {
                 }
             }
             if field.action == "keep" || field.action == "code" {
-                HStack {
-                    Button("Review category values…") { categories(field.id) }
-                    Text("\(field.allowedValues.count) approved")
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(field.action == "code"
+                         ? "Review the distinct source values before SafeSet replaces each one with a fresh random code."
+                         : "Review the distinct source values that will remain unchanged in the protected copy.")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
+                    HStack {
+                        Button("Review values found in this field…") { categories(field.id) }
+                        Text("\(field.allowedValues.count) source values approved")
+                        .foregroundStyle(.secondary)
+                    }
                 }
             }
             if field.action == "bin" {
@@ -493,10 +502,18 @@ struct FieldCard: View {
                     TextField("Decimal places", text: $field.places)
                 }
             }
-            DisclosureGroup("Details") {
-                Text("Suggested classification: \(field.hint)")
-                if !field.flags.isEmpty { Text("Warnings: \(field.flags.joined(separator: ", "))") }
-            }.foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Decision details").font(.subheadline.weight(.semibold))
+                Text("Suggested classification: \(field.hint.replacingOccurrences(of: "_", with: " "))")
+                if !field.flags.isEmpty {
+                    Label("Warnings: \(field.flags.joined(separator: ", "))",
+                          systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                }
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
         }
         .padding(14)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
@@ -647,15 +664,31 @@ struct ProtectView: View {
         }
         .sheet(item: $model.categorySheet) { category in
             VStack(alignment: .leading, spacing: 12) {
-                Text("Review local categories").font(.title2.bold())
-                Text(category.field)
-                ScrollView { ForEach(category.values, id: \.self) { Text($0) } }
+                Text("Review values found in this field").font(.title2.bold())
+                Text(category.field).font(.headline)
+                Text("SafeSet found \(category.values.count) distinct source values. Confirm that this is the complete set you expect in this field.")
+                    .foregroundStyle(.secondary)
+                if category.action == "code" {
+                    Text("After approval, SafeSet will replace each value below with a fresh random code. These are the original values, not the replacement codes.")
+                } else {
+                    Text("After approval, these original values will remain unchanged in the protected workbook.")
+                }
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(category.values, id: \.self) { Text($0) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(10)
+                .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
                 HStack {
                     Button("Cancel") { model.categorySheet = nil }
-                    Button("Approve these values") { model.approveCategories(category) }
+                    Button("Approve this source-value list") {
+                        model.approveCategories(category)
+                    }
                         .buttonStyle(.borderedProminent)
                 }
-            }.padding(24).frame(minWidth: 420, minHeight: 280)
+            }.padding(24).frame(minWidth: 500, minHeight: 390)
         }
         .sheet(isPresented: $showApproval) {
             VStack(alignment: .leading, spacing: 14) {
