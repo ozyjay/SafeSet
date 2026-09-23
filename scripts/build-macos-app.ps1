@@ -59,6 +59,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Python helper build failed.' }
 
 xcodebuild -quiet -project (Join-Path $package 'SafeSetMac.xcodeproj') `
     -scheme SafeSetMac -configuration Release `
+    -destination 'platform=macOS,arch=arm64' `
     -derivedDataPath (Join-Path $build 'DerivedData') `
     CODE_SIGNING_ALLOWED=NO OTHER_SWIFT_FLAGS=-disable-sandbox build
 if ($LASTEXITCODE -ne 0) { throw 'SwiftUI Xcode build failed.' }

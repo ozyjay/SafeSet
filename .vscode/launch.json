@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SafeSet}/macos/SafeSetMac",
+            "name": "Debug SafeSetMac (macos/SafeSetMac)",
+            "target": "SafeSetMac",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug SafeSetMac (macos/SafeSetMac)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SafeSet}/macos/SafeSetMac",
+            "name": "Release SafeSetMac (macos/SafeSetMac)",
+            "target": "SafeSetMac",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release SafeSetMac (macos/SafeSetMac)"
+        }
+    ]
+}
