@@ -275,8 +275,8 @@ def inspect_document_bytes(data: bytes) -> DocumentInspection:
     if embedded:
         blockers.append("embedded_objects")
     return DocumentInspection(
-        email_count=len(EMAIL_RE.findall(text)),
-        orcid_count=len(ORCID_RE.findall(text)),
+        email_count=len(set(EMAIL_RE.findall(text))),
+        orcid_count=len(set(ORCID_RE.findall(text))),
         comments=_count_comments(parts),
         tracked_changes=tracked,
         hidden_text=hidden,
