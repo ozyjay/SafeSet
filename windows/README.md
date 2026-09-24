@@ -22,10 +22,23 @@ From PowerShell on the Windows development machine:
 ```pwsh
 dotnet new install Microsoft.WindowsAppSDK.WinUI.CSharp.Templates
 ./scripts/bootstrap-windows-app.ps1
+cd ./windows/SafeSetWindows
+dotnet run
 ```
 
-The bootstrap script creates the template project only when the target directory does
-not already exist.
+The bootstrap script creates the local WinUI template project and then applies the
+source-controlled SafeSet UX overlay from `windows/SafeSetWindowsUX`.
+
+If the WinUI project already exists, update it without recreating the template:
+
+```pwsh
+./scripts/update-windows-ux.ps1
+cd ./windows/SafeSetWindows
+dotnet run
+```
+
+The generated `windows/SafeSetWindows` directory is intentionally ignored by Git.
+The reviewed Windows UX source lives in `windows/SafeSetWindowsUX`.
 
 ## Architecture
 
@@ -62,3 +75,22 @@ Before a Windows build may handle operational data:
 6. update the threat model and verification record with tested behaviour.
 
 Do not bypass the existing fail-closed storage check merely to make the Windows UI work.
+
+
+## Current UX milestone
+
+The current Windows shell is deliberately usable for UX evaluation before the
+sensitive storage boundary is enabled. It includes:
+
+- Windows 11 Mica backdrop and left-hand `NavigationView`;
+- Home cards for protect/restore workbook and document workflows;
+- native file open/save pickers;
+- a document-protection form with explicit identity terms and comment-removal choice;
+- a document-restoration form with returned DOCX, bundle and output selection;
+- workbook workflow shells matching the established SafeSet terminology;
+- Advanced and Help pages explaining the shared-engine boundary;
+- a persistent InfoBar making it clear that publication is still disabled on Windows.
+
+The interactive review buttons intentionally stop at preview mode. Do not replace
+that warning with a publication path until Windows ACL protection is implemented
+and verified.
