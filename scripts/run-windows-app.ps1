@@ -8,15 +8,11 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not $IsWindows) {
-    throw 'Run this smoke check on Windows.'
+    throw 'Run this script on Windows.'
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $target = Join-Path $repo 'windows/SafeSetWindowsUX'
-
-if (-not (Test-Path $target -PathType Container)) {
-    throw 'windows/SafeSetWindowsUX does not exist. Restore the frontend sources first.'
-}
 
 if (-not (Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue)) {
     throw 'Install the .NET 10 SDK or later, then restart PowerShell.'
@@ -26,13 +22,11 @@ if (-not (Get-Command dotnet -CommandType Application -ErrorAction SilentlyConti
 
 Push-Location $target
 try {
-    dotnet build ./SafeSetWindows.csproj --configuration $Configuration '-p:Platform=x64'
+    dotnet run --project ./SafeSetWindows.csproj --configuration $Configuration '-p:Platform=x64'
     if ($LASTEXITCODE -ne 0) {
-        throw 'SafeSet Windows UX build failed.'
+        throw 'SafeSet Windows UX launch failed. Check the build output and ensure Windows Developer Mode is enabled.'
     }
 }
 finally {
     Pop-Location
 }
-
-Write-Output 'SafeSet Windows UX build passed.'

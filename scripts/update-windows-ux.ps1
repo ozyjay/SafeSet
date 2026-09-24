@@ -1,3 +1,5 @@
+#Requires -Version 7.0
+
 $ErrorActionPreference = 'Stop'
 
 if (-not $IsWindows) {
@@ -5,26 +7,25 @@ if (-not $IsWindows) {
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$source = Join-Path $repo 'windows/SafeSetWindowsUX'
-$target = Join-Path $repo 'windows/SafeSetWindows'
+$target = Join-Path $repo 'windows/SafeSetWindowsUX'
 
 if (-not (Test-Path $target -PathType Container)) {
-    throw 'windows/SafeSetWindows does not exist. Run scripts/bootstrap-windows-app.ps1 first.'
+    throw 'windows/SafeSetWindowsUX does not exist. Restore the frontend sources first.'
 }
 
 $project = Join-Path $target 'SafeSetWindows.csproj'
 if (-not (Test-Path $project -PathType Leaf)) {
-    throw 'SafeSetWindows.csproj was not found. Recreate the WinUI template before applying the UX overlay.'
+    throw 'SafeSetWindows.csproj was not found in SafeSetWindowsUX. Run scripts/bootstrap-windows-app.ps1 first.'
 }
 
-foreach ($name in @('MainWindow.xaml', 'MainWindow.xaml.cs')) {
-    $from = Join-Path $source $name
-    $to = Join-Path $target $name
-    if (-not (Test-Path $from -PathType Leaf)) {
+$files = @('MainWindow.xaml', 'MainWindow.xaml.cs')
+# Compatibility entry point: UX files now live directly in the project directory.
+foreach ($name in $files) {
+    $from = Join-Path $target $name
+    if (-not (Test-Path -LiteralPath $from -PathType Leaf)) {
         throw "Missing Windows UX source file: $name"
     }
-    Copy-Item -LiteralPath $from -Destination $to -Force
 }
 
-Write-Output 'SafeSet Windows UX overlay applied.'
-Write-Output "Run: cd '$target'; dotnet run"
+Write-Output 'SafeSet Windows UX project is ready.'
+Write-Output 'From the repository root, run: & ./scripts/run-windows-app.ps1'
