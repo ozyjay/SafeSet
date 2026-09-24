@@ -87,7 +87,7 @@ struct SourceCellLocation: Identifiable {
 
 @MainActor final class AppModel: ObservableObject {
     private static let recentRestoreBundleKey = "recentRestoreBundlePath"
-    enum Page: String { case home, protect, restore, advanced, help }
+    enum Page: String { case home, protect, protectDocument, restore, restoreDocument, advanced, help }
     @Published var page: Page = .home
     @Published var busy = false
     @Published var alert = ""
@@ -127,6 +127,15 @@ struct SourceCellLocation: Identifiable {
     @Published var legacyResultColumns: [String] = []
     @Published var legacyApproved: Set<String> = []
     @Published var legacyReview: [String: Any]?
+    @Published var documentSource = ""
+    @Published var documentProtectedOutput = ""
+    @Published var documentBundleOutput = ""
+    @Published var documentInspection: [String: Any]?
+    @Published var documentProtectionReview: [String: Any]?
+    @Published var documentReturned = ""
+    @Published var documentRestoreBundle = ""
+    @Published var documentRestoredOutput = ""
+    @Published var documentRestorationReview: [String: Any]?
     private var bridge: BackendBridge?
     private let preferences: UserDefaults
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
@@ -349,6 +358,8 @@ struct SourceCellLocation: Identifiable {
         protectionReview = nil
         restorationReview = nil
         legacyReview = nil
+        documentProtectionReview = nil
+        documentRestorationReview = nil
         unsafeSourceCount = nil
         unsafeSourceLocations = []
     }
@@ -656,6 +667,74 @@ struct SourceCellLocation: Identifiable {
         ]) { _ in
             self.restorationReview = nil
             self.alert = "A new locally reidentified workbook was created. Keep it private."
+            self.page = .home
+        }
+    }
+
+    func chooseDocumentSource(_ url: URL) {
+        documentSource = url.path
+        documentInspection = nil
+        documentProtectionReview = nil
+        send("inspect_document", ["source": documentSource]) {
+            self.documentInspection = $0
+        }
+    }
+
+    func prepareDocumentProtection(terms: [String], removeComments: Bool = true) {
+        guard !documentSource.isEmpty else {
+            alert = "Choose an original DOCX document."
+            return
+        }
+        let output = documentProtectedOutput.isEmpty
+            ? (documentSource as NSString).deletingPathExtension + "-protected.docx"
+            : documentProtectedOutput
+        let payloadTerms: [[String: String]] = terms
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { ["value": $0, "kind": "person"] }
+        send("prepare_document_protection", [
+            "source": documentSource,
+            "output": output,
+            "bundle": documentBundleOutput.isEmpty ? NSNull() : documentBundleOutput,
+            "terms": payloadTerms,
+            "remove_comments": removeComments
+        ]) { self.documentProtectionReview = $0 }
+    }
+
+    func approveDocumentProtection(passphrase: String) {
+        guard let review = documentProtectionReview,
+              let token = review["review_id"] as? String else { return }
+        send("approve_document_protection", [
+            "review_id": token, "passphrase": passphrase
+        ]) { _ in
+            self.documentRestoreBundle = review["bundle"] as? String ?? ""
+            self.documentProtectionReview = nil
+            self.alert = "Protected document and private restoration bundle created."
+            self.page = .home
+        }
+    }
+
+    func prepareDocumentRestoration(passphrase: String) {
+        guard !documentReturned.isEmpty, !documentRestoreBundle.isEmpty else {
+            alert = "Choose the modified protected DOCX and its private bundle."
+            return
+        }
+        let output = documentRestoredOutput.isEmpty
+            ? (documentReturned as NSString).deletingPathExtension + "-restored.docx"
+            : documentRestoredOutput
+        send("prepare_document_restoration", [
+            "returned": documentReturned,
+            "bundle": documentRestoreBundle,
+            "output": output,
+            "passphrase": passphrase
+        ]) { self.documentRestorationReview = $0 }
+    }
+
+    func approveDocumentRestoration() {
+        guard let token = documentRestorationReview?["review_id"] as? String else { return }
+        send("approve_document_restoration", ["review_id": token]) { _ in
+            self.documentRestorationReview = nil
+            self.alert = "A new locally reidentified document was created. Keep it private."
             self.page = .home
         }
     }
