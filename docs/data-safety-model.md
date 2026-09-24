@@ -116,3 +116,16 @@ No check measures auxiliary-data attacks, within-group sensitive-attribute
 homogeneity, longitudinal linkage or the suitability of a particular AI service.
 Human review and purpose limitation remain mandatory. No automatic suppression,
 privacy budget, probabilistic inference, redaction or safety override exists.
+
+
+## Document protection model
+
+The DOCX workflow uses a separate protection model from spreadsheet policies. It does not infer that a manuscript is safe because no identifier pattern was found.
+
+Operator-provided identity strings are exact local matches. SafeSet also detects email and ORCID shapes in supported Word text parts and relationship attributes. Each protected value receives a fresh random document-scoped token; repeated occurrences of the same value use the same token so the scholarly document remains coherent during external review. The encrypted document bundle records the original value, token, kind and expected occurrence count.
+
+Common authoring metadata and custom document properties are removed rather than tokenised. Comments can be removed. Tracked changes, hidden text, embedded/active content and protected identities split across Word formatting runs fail closed in the first iteration.
+
+Restoration verifies the returned DOCX before writing anything. Every token must occur exactly as many times as recorded in the bundle, and none of the original protected values may already be present. Restoration replaces only the authenticated tokens and publishes a new local document without overwriting the returned copy.
+
+These checks do not detect indirect identification, participant information expressed without a known identifier shape, confidential research content, identifying figures/images, acknowledgements or contextual clues. Human purpose/suitability review remains mandatory.
