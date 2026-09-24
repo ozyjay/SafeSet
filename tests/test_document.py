@@ -247,3 +247,13 @@ def test_document_restoration_rejects_missing_or_duplicated_token(tmp_path):
 
     with pytest.raises(SafetyError, match="preserve every protection token"):
         prepare_document_restoration(returned, bundle, restored, PASSPHRASE)
+
+
+def test_document_protects_email_present_only_in_relationship(tmp_path):
+    source = tmp_path / "draft.docx"
+    source.write_bytes(docx_bytes('<w:p><w:r><w:t>No visible email</w:t></w:r></w:p>'))
+    protected, bundle, _ = destinations(tmp_path)
+    review = prepare_document_protection(source, (), protected, bundle)
+    assert review.replacement_count == 1
+    approve_document_protection(review, PASSPHRASE, approved=True)
+    assert "student@example.test" not in text_parts(protected.read_bytes())
