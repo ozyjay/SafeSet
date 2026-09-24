@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "safeset"
 version = "0.1.0"
-description = "Local-first dataset minimisation and controlled pseudonymisation"
+description = "Local-first protection and controlled pseudonymisation for research artefacts"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["typer>=0.16,<1", "PyYAML>=6.0.2,<7", "cryptography>=44,<51", "openpyxl>=3.1.5,<4"]
@@ -17,6 +17,7 @@ mac-app = ["pyinstaller>=6.20,<7"]
 [project.scripts]
 safeset = "safeset.cli:app"
 safeset-desktop = "safeset.desktop:main"
+safeset-document = "safeset.document_cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/safeset"]
