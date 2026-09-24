@@ -1,4 +1,4 @@
-"""Bounded local JSON-line bridge for the macOS desktop. Never log requests."""
+"""Bounded local JSON-line bridge for native desktops. Never log requests."""
 
 import json
 import sys
@@ -132,6 +132,10 @@ PUBLIC_SAFETY_ERRORS = {
         "bundle_permissions"
     ),
     "Private mapping storage requires supported POSIX permissions.": "bundle_permissions",
+    "Windows private storage permissions could not be verified.": "bundle_permissions",
+    "Windows storage requires a local fixed NTFS path without reparse points.": (
+        "storage_location"
+    ),
     "Only .docx Word documents are supported.": "document_invalid",
     "Input is not a supported Word document.": "document_invalid",
     "Word document has an unsafe archive structure.": "document_invalid",

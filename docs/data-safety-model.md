@@ -1,5 +1,24 @@
 # Data safety model
 
+## Windows private artefact storage
+
+On Windows, private bundle directories must have a current-user owner and a
+protected, explicit NTFS ACL. Only full-control allow entries for that user and
+optionally SYSTEM/Administrators are accepted; inheritance and other ACEs fail
+closed. New directories and staged files receive private ACLs at creation, before
+payload bytes are written. Existing permissive directories are rejected, not
+repaired. Select a new private bundle subdirectory separate from the export
+directory; SafeSet creates it only as part of explicitly approved publication.
+
+All Windows publications use private staged files and no-clobber hard links.
+Private bundle reads also check the parent directory and reject multiply linked
+files. Reparse paths, alternate streams and unsupported/nonlocal volumes are
+rejected. These controls reduce local access exposure, not disclosure through a
+released document. They do not identify ordinary cloud-synchronised directories,
+provide secure deletion or replace human review. Native ACL tests have passed;
+encrypted Windows workflow verification is still outstanding and the WinUI
+publication controls remain disabled.
+
 For the protected working-copy workflow, the original source is the authority
 for all source fields during reconstruction. Every protected source-derived field
 must still equal its expected value under the bound policy and random codebook.

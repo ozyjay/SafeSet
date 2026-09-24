@@ -1,5 +1,61 @@
 # Verification
 
+## Current Windows development pass — 25 September 2026
+
+Baseline: clean checked-out `main`, commit `f5fdd05` (merged document/Windows
+foundation). Inspected repository instructions, architecture, threat/safety models,
+document flow/bundle/bridge code and the WinUI sources before code changes.
+The historical macOS totals below are not current Windows results.
+
+Environment: Windows AMD64 build 26200, local NTFS temporary storage, PowerShell
+7.6.6, .NET SDK 10.0.303. No active pyenv executable or existing Windows virtual
+environment was available. The `python3` command was an inaccessible Store alias.
+Created `.venv` using the installed CPython 3.12.10 `python.exe`; no runtime or
+test dependencies were installed. Offline installation from the existing uv cache
+failed because required packages, including cryptography, were unavailable.
+The user explicitly required this pass to remain offline.
+
+Baseline checks attempted:
+
+- `.venv/Scripts/python.exe -m pytest`: blocked, no pytest module.
+- `.venv/Scripts/python.exe -m ruff check .`: blocked, no Ruff module.
+- `scripts/smoke-windows-ux.ps1`: failed at dependency restore. NuGet packages
+  were unavailable; no successful frontend build is claimed for this pass.
+
+Post-change checks:
+
+- `.venv/Scripts/python.exe -m unittest discover -s tests/windows -v`, with
+  `PYTHONPATH=./src`: **24 tests, 22 passed, 2 skipped**. Real Windows API and
+  independent PowerShell ACL checks exercised private directory/file creation,
+  protected DACLs, explicit Everyone access rejection, inherited ACE rejection,
+  null DACL rejection, unsupported deny ACE rejection, optional SYSTEM/Admin
+  access, file symlinks, directory junctions, multiple hard links, reserved/device/
+  UNC/stream paths, private export staging, no-clobber, repository exclusion,
+  map/export separation and fixed error messages. Failure-injection tests cover
+  native API errors; they do not substitute for the real ACL checks.
+- Skipped: encrypted DOCX round trip (missing cryptography/openpyxl/PyYAML), and
+  changing ownership to Administrators (required privilege unavailable).
+- `scripts/smoke-windows-ux.ps1 -NoRestore`: blocked by the previous unresolved
+  NuGet restore; failed with five dependency errors. This added option performs
+  no restore and does not work around missing dependencies.
+- Python `compileall` for `src` and `tests/windows`, PowerShell parsing of the
+  changed smoke script, and `git diff --check`: passed. These checks do not
+  substitute for Ruff or the full regression suite.
+
+The WinUI shell remains a preview with no publication path. No backend controller,
+DOCX UI approval workflow or Windows helper packaging is claimed complete. No
+operational data was used. Full Python regression/lint, encrypted document/bundle
+behaviour on Windows, a privileged wrong-owner test, a second-user access test,
+unsupported-volume hardware tests, packaged app testing and POSIX regressions
+remain unverified. Some existing fixtures assume POSIX modes and must be reviewed
+when running the full suite on Windows; this pass did not weaken or skip them.
+
+Supply the declared dependencies locally to resume the encrypted/full-suite
+checks before enabling the native DOCX workflow. Historical results below remain
+historical evidence only.
+
+## Historical macOS verification (not rerun in this pass)
+
 The protected working-copy suite in `tests/test_reconstruction.py` uses only
 synthetic records. It exercises version 2 bundle encryption and authentication,
 source binding, full-source reconstruction, new-field approval, malformed,
@@ -7,11 +63,11 @@ missing, duplicate and unknown IDs, altered protected values, schema collisions,
 legacy envelope rejection and no-clobber output publication. The original CLI
 and version 1 map tests remain in place.
 
-The current change was checked on macOS ARM64 using the active pyenv Python
+The earlier macOS change was checked on macOS ARM64 using the active pyenv Python
 3.12.13. The detailed package and dependency checks below describe the earlier
 baseline unless repeated in this iteration.
 
-## Executed checks
+### Historical executed checks
 
 - `.venv/bin/python -m pytest`: **218 passed**.
 - `ruff check .`: passed.
@@ -35,7 +91,7 @@ openpyxl 3.1.5,
 pytest 9.1.1 and Ruff 0.16.8. Build isolation used Hatchling 1.32.4. The project uses
 bounded dependency ranges, not a fully locked deployment environment.
 
-## Behaviour covered
+### Historical behaviour covered
 
 Synthetic source → policy → candidate → approved Excel workbook plus encrypted map → exact
 restoration, including shuffled returned rows and leading-zero source keys. Tests
@@ -78,7 +134,7 @@ The SwiftUI Home and Protect screens were opened on this host. A packaged helper
 was copied to a separate directory and completed a synthetic protect and
 reconstruct round trip with development Python removed from its environment.
 
-## Not established
+### Historical limitations
 
 Developer ID signing, notarisation, DMG creation and a macOS 14 runtime test were
 not completed. The current host's disk-image service returned a device error;
