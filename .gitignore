@@ -28,5 +28,9 @@ private/
 maps/
 !examples/synthetic_students.xlsx
 
-# Generated local WinUI template project; source-controlled UX overlay lives in windows/SafeSetWindowsUX/
+# Legacy generated project directory.
 windows/SafeSetWindows/
+# Local WinUI scaffolding lives beside the reviewed UX sources.
+windows/SafeSetWindowsUX/*
+!windows/SafeSetWindowsUX/MainWindow.xaml
+!windows/SafeSetWindowsUX/MainWindow.xaml.cs

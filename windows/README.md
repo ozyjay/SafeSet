@@ -12,33 +12,50 @@ Initial target:
 - .NET 10+
 - WinUI 3 / Windows App SDK
 - packaged desktop application
+- PowerShell 7+ (`pwsh`), with Windows Developer Mode enabled for launch
 
 Use the current Microsoft WinUI project template rather than pinning a stale template
 or Windows App SDK package version in this repository before the Windows build is
 actively maintained.
 
-From PowerShell on the Windows development machine:
+From PowerShell 7 on the Windows development machine, at the repository root:
 
 ```pwsh
 dotnet new install Microsoft.WindowsAppSDK.WinUI.CSharp.Templates
-./scripts/bootstrap-windows-app.ps1
-cd ./windows/SafeSetWindows
-dotnet run
+& ./scripts/bootstrap-windows-app.ps1
+& ./scripts/smoke-windows-ux.ps1
+& ./scripts/run-windows-app.ps1
 ```
 
-The bootstrap script creates the local WinUI template project and then applies the
-source-controlled SafeSet UX overlay from `windows/SafeSetWindowsUX`.
+The bootstrap script creates `SafeSetWindows.csproj` and its supporting template
+files directly in `windows/SafeSetWindowsUX`, preserving the source-controlled
+`MainWindow.xaml` and `MainWindow.xaml.cs`. The project name and C# namespace remain
+`SafeSetWindows`. Temporary scaffolding is retained under the ignored `build` directory.
 
-If the WinUI project already exists, update it without recreating the template:
+If the WinUI project already exists in `windows/SafeSetWindowsUX`, launch it directly:
 
 ```pwsh
-./scripts/update-windows-ux.ps1
-cd ./windows/SafeSetWindows
-dotnet run
+& ./scripts/run-windows-app.ps1
 ```
 
-The generated `windows/SafeSetWindows` directory is intentionally ignored by Git.
-The reviewed Windows UX source lives in `windows/SafeSetWindowsUX`.
+The frontend lives in `windows/SafeSetWindowsUX`; all scripts use that directory.
+Generated template files are ignored by Git; the two reviewed `MainWindow` source
+files remain tracked. The old `windows/SafeSetWindows` directory is no longer used.
+If you previously bootstrapped there, run bootstrap again to create the project in
+the correct directory; the old directory is left untouched.
+
+Both smoke and launch scripts validate the frontend project, select
+the x64 platform and accept `-Configuration Release` (the default is `Debug`).
+The smoke script builds only; the launch script uses the template's packaged
+`dotnet run` support. Both restore the caller's working directory after completion
+or failure. `& ./scripts/update-windows-ux.ps1` remains a compatibility command
+that checks the project and source files; copying an overlay is no longer needed.
+Edit the tracked `MainWindow` files directly in `windows/SafeSetWindowsUX`.
+
+Template installation and the initial NuGet restore need network access. The
+scripts do not install SDKs or templates or enable Developer Mode automatically.
+See Microsoft's [WinUI command-line setup](https://learn.microsoft.com/en-us/windows/apps/get-started/start-here)
+for prerequisites and packaged launch troubleshooting.
 
 ## Architecture
 
