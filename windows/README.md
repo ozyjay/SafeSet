@@ -52,6 +52,10 @@ or failure. `& ./scripts/update-windows-ux.ps1` remains a compatibility command
 that checks the project and source files; copying an overlay is no longer needed.
 Edit the tracked `MainWindow` files directly in `windows/SafeSetWindowsUX`.
 
+For an offline build after a successful restore, run
+`& ./scripts/smoke-windows-ux.ps1 -NoRestore`. This does not fetch missing packages;
+an absent or failed previous restore still blocks the build.
+
 Template installation and the initial NuGet restore need network access. The
 scripts do not install SDKs or templates or enable Developer Mode automatically.
 See Microsoft's [WinUI command-line setup](https://learn.microsoft.com/en-us/windows/apps/get-started/start-here)
@@ -78,20 +82,25 @@ window behaviour and packaging. The Python engine owns every data-handling decis
 
 ## Mandatory Windows release gate
 
-The current private-bundle storage implementation deliberately requires POSIX ownership
-and mode checks. Therefore Windows protection/restoration remains **not operational**
-until SafeSet has an equivalent tested Windows ACL boundary.
+The shared engine implements protected NTFS ACL creation and validation with no
+new dependencies. Native tests cover private creation, inheritance, excessive
+permissions, links, destination separation and no-clobber publication. This does
+**not** yet make desktop protection/restoration operational: encrypted round-trip
+verification is blocked by missing offline Python dependencies, and the WinUI
+backend controller remains to be implemented.
 
 Before a Windows build may handle operational data:
 
-1. implement private bundle directory/file ACL creation and validation;
-2. ensure only the current user (and unavoidable system/admin principals) can access it;
-3. reject inherited or overly broad permissions according to an explicit policy;
-4. test symlinks/reparse points, repository paths, cloud/network locations and no-clobber writes;
-5. exercise bundle creation/read/restoration with synthetic fixtures on Windows 11;
-6. update the threat model and verification record with tested behaviour.
+1. retain the engine's restricted directory/file ACL creation and validation;
+2. complete encrypted bundle creation/read/restoration tests with synthetic DOCX fixtures;
+3. run the full safety suite, including existing POSIX-specific fixture review;
+4. connect the bounded shared backend with native review, approval and masked secrets;
+5. verify packaged-helper execution and native interactions on Windows 11;
+6. review the threat model and verification record against that actual evidence.
 
-Do not bypass the existing fail-closed storage check merely to make the Windows UI work.
+Do not bypass ACL validation or enable publication without the remaining evidence.
+Existing broad/inheriting directories are not silently repaired. Only fixed local
+NTFS storage is supported; ordinary cloud synchronisation cannot be detected.
 
 
 ## Current UX milestone
@@ -108,6 +117,15 @@ sensitive storage boundary is enabled. It includes:
 - Advanced and Help pages explaining the shared-engine boundary;
 - a persistent InfoBar making it clear that publication is still disabled on Windows.
 
-The interactive review buttons intentionally stop at preview mode. Do not replace
-that warning with a publication path until Windows ACL protection is implemented
-and verified.
+The interactive review buttons intentionally stop at preview mode. The current
+ACL implementation does not remove the encrypted round-trip and native-controller
+release gates. Standalone storage checks can run without external packages:
+
+```pwsh
+$env:PYTHONPATH = Join-Path (Get-Location) 'src'
+& ./.venv/Scripts/python.exe -m unittest discover -s tests/windows -v
+```
+
+Tests create only synthetic artefacts in an external temporary directory. The
+encrypted DOCX test explicitly skips when its dependencies are absent; that skip
+is a release gap, not a successful encrypted-workflow result.

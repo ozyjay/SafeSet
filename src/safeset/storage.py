@@ -1,4 +1,4 @@
-"""Local destination guardrails and no-clobber publication on POSIX."""
+"""Local destination guardrails and private no-clobber publication."""
 
 import os
 import stat
@@ -22,6 +22,10 @@ def repository_roots(*paths: Path) -> set[Path]:
 
 
 def outside_repositories(path: Path, *context: Path) -> Path:
+    if os.name == "nt":
+        from .windows_storage import local_path
+
+        path = local_path(path)
     resolved = path.expanduser().resolve()
     if any(resolved.is_relative_to(root) for root in repository_roots(path, *context)):
         raise SafetyError("Operational artefacts must be stored outside repositories.")
@@ -42,6 +46,11 @@ def default_map_path() -> Path:
 
 
 def private_directory(directory: Path, *, create: bool) -> None:
+    if os.name == "nt":
+        from .windows_storage import private_directory as windows_private_directory
+
+        windows_private_directory(directory, create=create)
+        return
     if os.name != "posix":
         raise SafetyError("Private mapping storage requires supported POSIX permissions.")
     if create:
@@ -56,6 +65,10 @@ def private_directory(directory: Path, *, create: bool) -> None:
 
 
 def map_destination(path: Path, export: Path, *context: Path) -> Path:
+    if os.name == "nt":
+        from .windows_storage import local_path
+
+        export = local_path(export)
     resolved = outside_repositories(path, export, *context)
     export_dir = export.expanduser().resolve().parent
     if resolved.is_relative_to(export_dir) or export.resolve().is_relative_to(resolved.parent):
@@ -68,6 +81,11 @@ def map_destination(path: Path, export: Path, *context: Path) -> Path:
 def check_map_read(path: Path, *context: Path) -> Path:
     resolved = outside_repositories(path, *context)
     private_directory(resolved.parent, create=False)
+    if os.name == "nt":
+        from .windows_storage import validate_private
+
+        validate_private(resolved, directory=False)
+        return resolved
     info = resolved.stat()
     if (
         not stat.S_ISREG(info.st_mode)
@@ -82,12 +100,22 @@ def publish(path: Path, data: bytes) -> None:
     """Stage privately and publish without replacing any existing destination."""
     temporary = None
     try:
-        fd, name = tempfile.mkstemp(prefix=".safeset-", dir=path.parent)
-        temporary = Path(name)
+        if os.name == "nt":
+            from .windows_storage import local_path, private_temporary, validate_private
+
+            path = local_path(path)
+            staged = path.parent / f".safeset-{new_id()}"
+            fd = private_temporary(staged)
+            temporary = staged
+        else:
+            fd, name = tempfile.mkstemp(prefix=".safeset-", dir=path.parent)
+            temporary = Path(name)
         with os.fdopen(fd, "wb") as stream:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
+        if os.name == "nt":
+            validate_private(temporary, directory=False)
         os.link(temporary, path)
     except OSError:
         raise SafetyError("Unable to publish artefact safely; nothing was overwritten.") from None

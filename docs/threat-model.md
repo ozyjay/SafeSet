@@ -1,5 +1,24 @@
 # Threat model
 
+## Windows ACL boundary and remaining release gate
+
+Private Windows objects require current-user ownership and an explicit protected
+DACL. Creation supplies that descriptor atomically rather than writing sensitive
+bytes and tightening access later. Validation rejects inherited or unknown ACEs
+and access for principals other than the user, LocalSystem and Administrators.
+SafeSet rejects unsupported volumes, network/device paths, alternate streams,
+reparse points and multiply linked bundle files; it does not repair existing ACLs.
+These checks do not detect cloud synchronisation of an ordinary NTFS directory.
+The operator must still choose a private, non-synchronised location.
+
+Administrators with takeover/backup privileges, SYSTEM and a hostile process
+running as the same user remain outside the boundary. As on POSIX, path checks
+are not a filesystem transaction and do not establish protection against hostile
+concurrent filesystem replacement. No secure deletion or crash-atomic pair of
+bundle/export files is claimed. Native ACL checks have passed for the exercised
+paths; the encrypted round-trip check remains unverified. Windows desktop
+publication remains disabled. See `docs/verification.md` for exact evidence.
+
 ## macOS app boundary
 
 The SwiftUI process may display headings, explicitly requested category labels
@@ -141,7 +160,8 @@ falling back to weaker encryption.
 
 Use a private, non-synchronised local filesystem. Map/export separation is not a
 check for cloud-sync software. POSIX ownership/mode enforcement is implemented;
-Windows ACL support is not established and map operations fail closed there.
+Windows private storage now enforces restricted NTFS ACLs. Encrypted Windows
+workflow verification is incomplete, so the native desktop remains in preview.
 The caller must choose an external private output directory for restored data;
 restored Excel workbook contains sensitive plaintext and must not be uploaded. Normal exports also need
 access control. No special guarantees apply to network filesystems or hostile
@@ -160,4 +180,4 @@ concurrent modification. No secure deletion is claimed.
 | Formatted-run evasion | Explicit identities spanning several text runs cause protection to fail | Safe handling of arbitrary run fragmentation is deferred |
 | Returned-token corruption | Restoration requires the exact occurrence count of every protected token | External editing can still change surrounding scholarly content incorrectly |
 | Original identity reintroduced externally | Returned package is rejected if an original protected value is present | A semantically equivalent or differently formatted identity may evade exact matching |
-| Private document bundle disclosure | Same encrypted bundle/passphrase separation and no-clobber rules as workbook workflows | Windows ACL enforcement is not yet implemented; operational Windows use remains blocked |
+| Private document bundle disclosure | Same encrypted bundle/passphrase separation and no-clobber rules as workbook workflows; Windows uses protected NTFS ACLs | Encrypted Windows round-trip verification and native backend connection remain incomplete; desktop publication stays disabled |

@@ -71,4 +71,11 @@ Tracked changes, hidden text, embedded/active content and split-run identities f
 
 Windows 11 x64 is the initial Windows target. Use WinUI 3 / Windows App SDK as a native shell over the shared Python helper and JSON-line protocol. Do not port safety logic into C#.
 
-Before enabling operational protection/restoration on Windows, implement and test private bundle storage with Windows ACL semantics equivalent to the current POSIX owner/mode enforcement. Windows UI work may proceed before that gate, but it must not bypass the storage failure.
+The shared engine now implements protected NTFS ACL creation and validation using
+Win32 APIs through `ctypes`, with native storage integration tests. The current
+offline development pass cannot verify the encrypted document round trip or run
+the full safety suite because required Python packages are unavailable. The UI
+remains in preview mode. Next, supply the declared dependencies locally, run the
+encrypted and full regression checks, then implement the bounded Windows backend
+controller and DOCX review/approval flow. Packaging and workbook parity follow
+that verified vertical slice; neither is established by the ACL tests alone.

@@ -1,5 +1,25 @@
 # Architecture and decisions
 
+## Windows private-storage implementation contract
+
+The Windows boundary uses the standard-library `ctypes` bindings to local Win32
+security APIs; it adds no dependency or subprocess ACL parser. New private
+directories and staged files receive a protected DACL at creation, with full
+control only for the current process user. Existing objects must be owned by
+that user, have a protected DACL and contain only explicit full-control allow
+ACEs for that user, optionally LocalSystem and built-in Administrators. Unknown
+ACE types, inherited ACEs, null DACLs and additional principals are rejected.
+Existing permissions are never silently repaired. The validation policy is
+deliberately narrower than all possible secure Windows ACL configurations.
+
+Only local fixed NTFS volumes are supported initially. Device/UNC paths,
+alternate streams, reparse points in any existing path component and multiply
+linked private files are rejected. New staged files are private before any bytes
+are written, flushed and published without replacing an existing destination.
+Repository rejection and separate bundle/export directories remain mandatory.
+This contract must pass real Windows integration checks before the desktop
+publication gate is removed.
+
 ## Standalone macOS desktop
 
 The macOS 14+ Apple Silicon app uses SwiftUI for presentation and packages the
@@ -288,7 +308,12 @@ SafeSet now treats the desktop bridge as a shared internal contract rather than 
 
 Both shells communicate with the helper over the same bounded JSON-line stdin/stdout protocol. The protocol returns aggregate review metadata and fixed safety codes; sensitive source values and private mapping contents do not cross back to the UI. Platform shells must not reimplement safety decisions.
 
-Windows support has a separate security release gate. The existing private-bundle storage boundary verifies POSIX ownership/mode and fails closed on non-POSIX systems. Windows workflows must remain disabled until equivalent Windows ACL creation/validation is implemented and regression-tested.
+Windows support has a separate security release gate. Private-bundle storage
+dispatches to POSIX ownership/mode checks or the restricted Win32 NTFS ACL
+implementation described above, and rejects other platforms. The native Windows
+desktop remains in preview mode: encrypted round-trip and full safety-suite
+verification are still blocked by unavailable offline dependencies. Storage tests
+alone do not enable the UI or establish release readiness.
 
 ## Protected DOCX round trip (document bundle version 1)
 

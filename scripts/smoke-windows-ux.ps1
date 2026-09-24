@@ -2,7 +2,8 @@
 
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Debug'
+    [string]$Configuration = 'Debug',
+    [switch]$NoRestore
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,7 +27,9 @@ if (-not (Get-Command dotnet -CommandType Application -ErrorAction SilentlyConti
 
 Push-Location $target
 try {
-    dotnet build ./SafeSetWindows.csproj --configuration $Configuration '-p:Platform=x64'
+    $buildArguments = @('./SafeSetWindows.csproj', '--configuration', $Configuration, '-p:Platform=x64')
+    if ($NoRestore) { $buildArguments += '--no-restore' }
+    dotnet build @buildArguments
     if ($LASTEXITCODE -ne 0) {
         throw 'SafeSet Windows UX build failed.'
     }

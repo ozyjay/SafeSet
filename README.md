@@ -35,7 +35,7 @@ python3 -m pip install -e '.[dev,mac-app]'
 & ./scripts/smoke-macos-app.ps1
 ```
 
-Core runtime operations need no network. Installation and building may access package repositories. The macOS desktop uses SwiftUI with a bundled Python engine and needs no separate Python installation when run from `dist/SafeSet.app`. The local ZIP is ad-hoc signed for development; [macOS app build and release instructions](docs/macos-app.md) explain Developer ID signing and notarisation. POSIX private bundle storage is supported; Windows ACL protection has not been implemented.
+Core runtime operations need no network. Installation and building may access package repositories. The macOS desktop uses SwiftUI with a bundled Python engine and needs no separate Python installation when run from `dist/SafeSet.app`. The local ZIP is ad-hoc signed for development; [macOS app build and release instructions](docs/macos-app.md) explain Developer ID signing and notarisation. POSIX private bundle storage is supported. The shared engine now implements restricted Windows NTFS ACL storage; encrypted Windows round-trip verification and native UI wiring remain release gates. See [actual verification results](docs/verification.md).
 
 ## CLI and synthetic example
 
@@ -118,4 +118,4 @@ safeset-document protect ./Draft.docx --person 'Synthetic Author' --output ./Dra
 safeset-document restore ./Returned-protected.docx --bundle ./private/document.enc --output ./Returned-restored.docx
 ```
 
-The macOS SwiftUI shell includes dedicated Protect document and Restore document pages on the feature branch. Windows is a first-class target using a native WinUI 3 shell over the same shared engine; see `windows/README.md`. Windows operational protection/restoration remains blocked until equivalent private-bundle ACL enforcement is implemented and tested.
+The merged macOS SwiftUI shell includes dedicated Protect document and Restore document pages. Windows is a first-class target using a native WinUI 3 shell over the same shared engine; see `windows/README.md`. Windows desktop protection/restoration remains in preview mode pending encrypted round-trip verification and connection to the shared backend. The Windows ACL storage implementation has native integration tests; that evidence alone does not establish an operational document workflow.
