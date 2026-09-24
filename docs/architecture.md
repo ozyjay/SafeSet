@@ -238,6 +238,9 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   Other direct identifiers and all free text must be dropped. Map only that key,
   never names, notes or whole source rows. Rejoining dropped source fields is a
   separate local operation outside this workflow.
+- During bundle reconstruction, the bound original source supplies dropped fields
+  to the local restored workbook. Formula-like source text is written as literal
+  Excel text; source control characters still block restoration.
 - Keep and code actions require explicit finite categorical `allowed_values`.
   Codes are random per distinct observed category, column and run. The category
   codebook exists only in memory and is not added to the encrypted identity map.

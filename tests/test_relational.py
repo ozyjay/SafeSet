@@ -255,7 +255,7 @@ def test_shared_obfuscation_rejects_unconfirmed_or_ineligible_fields():
 def test_relational_source_text_locator_reports_only_bound_cell_coordinates(tmp_path):
     tables = _sources()
     rows = [dict(row) for row in tables["Enrolments"].rows]
-    rows[0]["display_name"] = "-SYNTHETIC-UNSAFE"
+    rows[0]["display_name"] = "SYNTHETIC\tUNSAFE"
     tables["Enrolments"] = Table(tables["Enrolments"].columns, tuple(rows))
     source = tmp_path / "synthetic-related.xlsx"
     source.write_bytes(excel_workbook_bytes(tables))
@@ -273,7 +273,13 @@ def test_relational_source_text_locator_reports_only_bound_cell_coordinates(tmp_
         source, bundle_path, PASSPHRASE, relational=True
     )
     assert located == {"count": 1, "cells": [{"sheet": "Enrolments", "cell": "B2"}]}
-    assert "SYNTHETIC-UNSAFE" not in str(located)
+    assert "SYNTHETIC" not in str(located)
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    with pytest.raises(SafetyError, match="Original source contains unsafe spreadsheet text"):
+        prepare_relational_reconstruction(
+            protected, source, bundle_path, private / "restored.xlsx", PASSPHRASE
+        )
 
 
 def test_relational_round_trip_and_minimal_bundle(tmp_path):

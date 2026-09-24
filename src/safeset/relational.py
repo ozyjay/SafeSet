@@ -13,7 +13,7 @@ from pathlib import Path
 from cryptography.fernet import InvalidToken
 
 from .bundle import policy_payload, source_digest
-from .classification import canonical_numeric, formula_or_control, safe_category
+from .classification import canonical_numeric, formula_or_control, has_control, safe_category
 from .errors import SafetyError
 from .ingestion import (
     MAX_BYTES,
@@ -665,7 +665,7 @@ def review_relational_reconstruction(
                 not safe_category(row[name]) or len(row[name]) > MAX_FIELD for name in new_columns
             ):
                 raise SafetyError("New result contains unsafe or unsupported spreadsheet text.")
-        if any(formula_or_control(value) for row in source.rows for value in row.values()):
+        if any(has_control(value) for row in source.rows for value in row.values()):
             raise SafetyError("Original source contains unsafe spreadsheet text.")
         result[sheet] = new_columns
     return result

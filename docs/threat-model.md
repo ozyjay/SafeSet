@@ -38,6 +38,9 @@ private. Category codes still expose equality and frequency. Bundle loss or
 passphrase loss prevents restoration. The bundle never contains a copy of source
 rows or dropped personal fields; the selected source key and codebook labels are
 necessary reversible secrets. Legacy version 1 maps cannot be used for this flow.
+Original fields omitted from the protected copy are copied back only in the local
+restored workbook. Formula-like source strings remain literal text in that
+`.xlsx`; control characters still block reconstruction.
 
 ## Version 3 relational restoration bundle
 

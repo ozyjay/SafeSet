@@ -22,14 +22,16 @@ This check prevents accidental source overwrite but cannot establish that an
 approved result is accurate or that the protected workbook is suitable for a
 recipient. The source-table fingerprint binds the selected data and order, so even
 benign source edits require a new protection run.
-After that binding is verified, reconstruction rejects original source cells
-with formula-like prefixes or control characters before writing the restored
-workbook. Such cells can be in fields omitted from the protected copy. Correcting
-them requires a new source, protection run and matching private bundle; the bound
-source cannot be edited in place for an existing release.
-The local source-text locator verifies that source against the authenticated
-bundle and shows a count and up to 20 cell coordinates. It never sends cell
-contents to the desktop UI or changes the blocking restoration check.
+After that binding is verified, reconstruction copies original source fields,
+including fields removed from the protected copy, into a new local workbook.
+The writer explicitly marks every output cell as text, so a formula-like prefix
+in an original source value is copied as literal text. Control characters in
+source values still block restoration. Correcting a blocked cell requires a new
+source, protection run and matching private bundle; the bound source cannot be
+edited in place for an existing release. The local source-text locator verifies
+the source against the authenticated bundle and shows a count and up to 20
+coordinates of blocking control characters. It never sends cell contents to
+the desktop UI.
 
 A **direct identifier** connects a record to a person; a **pseudonymous identifier**
 is the generated random `record_id`. A **quasi-identifier** may identify someone in

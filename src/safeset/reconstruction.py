@@ -3,7 +3,7 @@
 from decimal import Decimal, InvalidOperation
 
 from .bundle import source_digest, validate_bundle
-from .classification import canonical_numeric, formula_or_control, safe_category
+from .classification import canonical_numeric, has_control, safe_category
 from .errors import SafetyError
 from .ingestion import MAX_COLUMNS, MAX_FIELD, MAX_ROWS, MAX_TABLES, Table, valid_heading
 from .policy import parse_policy
@@ -71,7 +71,7 @@ def review_reconstruction(source: Table, returned: Table, bundle: dict) -> tuple
         for name in new_columns:
             if not safe_category(row[name]) or len(row[name]) > MAX_FIELD:
                 raise SafetyError("New result contains unsafe or unsupported spreadsheet text.")
-    if any(formula_or_control(value) for row in source.rows for value in row.values()):
+    if any(has_control(value) for row in source.rows for value in row.values()):
         raise SafetyError("Original source contains unsafe spreadsheet text.")
     return new_columns
 

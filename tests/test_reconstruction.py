@@ -93,6 +93,32 @@ def test_reconstruction_round_trip(destinations):
         approve_reconstruction(review, ("Team",), authorised=True)
 
 
+def test_reconstruction_copies_removed_source_text_as_literal_excel_text(destinations):
+    original = read_excel(ROOT / "examples/synthetic_students.xlsx")
+    rows = [dict(row) for row in original.rows]
+    rows[0]["student_name"] = "-"
+    rows[1]["student_name"] = "=SYNTHETIC()"
+    source = destinations[0].parent.parent / "private/synthetic-source.xlsx"
+    source.write_bytes(excel_bytes(Table(original.columns, tuple(rows))))
+    output, bundle_path = destinations
+    drafts, threshold = load_drafts(source, ROOT / "examples/example-policy.yaml")
+    protection = prepare_protection(source, drafts, str(threshold), output, bundle_path)
+    assert protection.validation.passed
+    approve_protection(protection, PASSPHRASE, approved=True)
+
+    protected = read_excel(output)
+    assert "student_name" not in protected.columns
+    returned = output.parent / "analysed.xlsx"
+    returned.write_bytes(excel_bytes(protected))
+    restored = source.parent / "restored.xlsx"
+    review = prepare_reconstruction(returned, source, bundle_path, restored, PASSPHRASE)
+    assert approve_reconstruction(review, (), authorised=True) == len(rows)
+    workbook = load_workbook(restored)
+    assert workbook.active["A2"].value == "-"
+    assert workbook.active["A3"].value == "=SYNTHETIC()"
+    assert workbook.active["A3"].data_type == "s"
+
+
 def test_reconstruction_combines_selected_worksheets_in_workbook_order(
     destinations, tmp_path
 ):

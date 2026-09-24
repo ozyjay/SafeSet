@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .bundle import read_bundle, source_digest
-from .classification import formula_or_control, inspect_table
+from .classification import has_control, inspect_table
 from .errors import SafetyError
 from .ingestion import (
     excel_bytes,
@@ -452,7 +452,7 @@ def locate_unsafe_source_cells(
 
     def observe(worksheet: str, coordinate: str, value: str) -> None:
         nonlocal count
-        if formula_or_control(value):
+        if has_control(value):
             count += 1
             if len(locations) < 20:
                 locations.append({"sheet": worksheet, "cell": coordinate})

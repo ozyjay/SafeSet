@@ -6,6 +6,7 @@ import socket
 import pytest
 
 from safeset.desktop_bridge import Bridge
+from safeset.desktop_flow import prepare_reconstruction
 from safeset.errors import SafetyError
 from safeset.ingestion import Table, excel_bytes, list_excel_sheets, read_excel
 from safeset.policy_authoring import load_drafts
@@ -323,7 +324,7 @@ def test_bridge_rejects_changed_returned_workbook(destinations, change):
 def test_bridge_locates_unsafe_bound_source_cell_without_returning_its_value(destinations):
     source = read_excel(ROOT / "examples/synthetic_students.xlsx")
     rows = [dict(row) for row in source.rows]
-    rows[0]["student_name"] = "-SYNTHETIC-UNSAFE"
+    rows[0]["student_name"] = "SYNTHETIC\tUNSAFE"
     source_path = destinations[0].parent.parent / "private/synthetic-source.xlsx"
     source_path.write_bytes(excel_bytes(Table(source.columns, tuple(rows))))
     output, bundle = destinations
@@ -364,7 +365,11 @@ def test_bridge_locates_unsafe_bound_source_cell_without_returning_its_value(des
     assert located["result"] == {
         "count": 1, "cells": [{"sheet": "SafeSet", "cell": "A2"}],
     }
-    assert "SYNTHETIC-UNSAFE" not in json.dumps(located)
+    assert "SYNTHETIC" not in json.dumps(located)
+    with pytest.raises(SafetyError, match="Original source contains unsafe spreadsheet text"):
+        prepare_reconstruction(
+            output, source_path, bundle, source_path.parent / "restored.xlsx", PASSPHRASE
+        )
     rows[1]["student_name"] = "@SYNTHETIC-CHANGED"
     source_path.write_bytes(excel_bytes(Table(source.columns, tuple(rows))))
     changed = call(

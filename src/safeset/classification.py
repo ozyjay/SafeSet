@@ -34,9 +34,11 @@ def inferred_classification(name: str) -> str:
 
 
 def formula_or_control(value: str) -> bool:
-    return value.lstrip().startswith(("=", "+", "-", "@")) or any(
-        ord(ch) < 32 or ord(ch) == 127 for ch in value
-    )
+    return value.lstrip().startswith(("=", "+", "-", "@")) or has_control(value)
+
+
+def has_control(value: str) -> bool:
+    return any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
 
 
 def identifier_shaped(value: str) -> bool:
