@@ -207,6 +207,17 @@ def _visible_text(roots: list[tuple[str, ET.Element]]) -> str:
     )
 
 
+def _relationship_text(parts: dict[str, bytes]) -> str:
+    values = []
+    for name, raw in parts.items():
+        if not name.endswith(".rels"):
+            continue
+        root = _parse_xml(raw)
+        for item in root.iter():
+            values.extend(item.attrib.values())
+    return "\n".join(values)
+
+
 def _relationship_count(parts: dict[str, bytes]) -> int:
     total = 0
     for name, raw in parts.items():
@@ -244,7 +255,7 @@ def _metadata_field_count(parts: dict[str, bytes]) -> int:
 def inspect_document_bytes(data: bytes) -> DocumentInspection:
     parts = _read_parts(data)
     roots = _text_roots(parts)
-    text = _visible_text(roots)
+    text = _visible_text(roots) + "\n" + _relationship_text(parts)
     tracked = sum(
         1 for _, root in roots for item in root.iter() if item.tag in TRACKED_TAGS
     )
@@ -367,6 +378,23 @@ def _discover_terms(
                 if value not in seen:
                     found.append(DocumentTerm(value, "identifier"))
                     seen.add(value)
+    return _validate_terms(tuple(found))
+
+
+def _discover_relationship_terms(
+    parts: dict[str, bytes], supplied: tuple[DocumentTerm, ...]
+) -> tuple[DocumentTerm, ...]:
+    found = list(supplied)
+    seen = {term.value for term in supplied}
+    relation_text = _relationship_text(parts)
+    for value in EMAIL_RE.findall(relation_text):
+        if value not in seen:
+            found.append(DocumentTerm(value, "email"))
+            seen.add(value)
+    for value in ORCID_RE.findall(relation_text):
+        if value not in seen:
+            found.append(DocumentTerm(value, "identifier"))
+            seen.add(value)
     return _validate_terms(tuple(found))
 
 
@@ -524,6 +552,7 @@ def protect_document_bytes(
     roots = _text_roots(parts)
     supplied = _validate_terms(terms)
     discovered = _discover_terms(roots, supplied)
+    discovered = _discover_relationship_terms(parts, discovered)
     values = tuple(term.value for term in discovered)
     if _split_occurrence_exists(roots, values):
         raise SafetyError(
