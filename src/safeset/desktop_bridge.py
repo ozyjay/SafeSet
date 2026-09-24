@@ -20,6 +20,13 @@ from .desktop_flow import (
     prepare_relational_reconstruction,
     restore_results,
 )
+from .document import DocumentTerm, inspect_document
+from .document_flow import (
+    approve_document_protection,
+    approve_document_restoration,
+    prepare_document_protection,
+    prepare_document_restoration,
+)
 from .errors import SafetyError
 from .ingestion import list_excel_sheets
 from .policy_authoring import RuleDraft, load_drafts, local_category_review, save_policy
@@ -125,6 +132,30 @@ PUBLIC_SAFETY_ERRORS = {
         "bundle_permissions"
     ),
     "Private mapping storage requires supported POSIX permissions.": "bundle_permissions",
+    "Only .docx Word documents are supported.": "document_invalid",
+    "Input is not a supported Word document.": "document_invalid",
+    "Word document has an unsafe archive structure.": "document_invalid",
+    "Word document contains malformed XML.": "document_invalid",
+    "Word document exceeds supported archive limits.": "document_limit",
+    "Protected Word document exceeds the supported size limit.": "document_limit",
+    "Word document contains tracked changes that must be resolved first.": "document_tracked_changes",
+    "Word document contains hidden text that must be resolved first.": "document_hidden_text",
+    "Word document contains unsupported embedded or active content.": "document_active_content",
+    "Word document comments require explicit removal before protection.": "document_comments",
+    "A document identifier is split across formatted runs and cannot be protected safely.": "document_split_identifier",
+    "A document identifier remained after protection.": "document_protection_incomplete",
+    "Returned Word document does not preserve every protection token.": "document_token_integrity",
+    "Returned Word document contains an original protected identifier.": "document_original_identifier",
+    "Returned Word document contains tracked changes.": "document_tracked_changes",
+    "Returned Word document contains hidden text.": "document_hidden_text",
+    "Returned Word document contains unsupported embedded or active content.": "document_active_content",
+    "Document restoration bundle version or structure is unsupported.": "bundle_incompatible",
+    "Document restoration bundle version or envelope is unsupported.": "bundle_incompatible",
+    "Document restoration bundle could not be authenticated or decoded.": "bundle_authentication",
+    "Unable to access private document restoration bundle.": "bundle_unavailable",
+    "Word document changed after protection review.": "stale_review",
+    "Word document changed after restoration review.": "stale_review",
+    "Private document bundle must have an .enc filename.": "output_format",
 }
 
 
@@ -255,6 +286,22 @@ def _approved_results(value: object) -> dict[str, tuple[str, ...]]:
     return {name: _columns(columns) for name, columns in value.items()}
 
 
+def _document_terms(value: object) -> tuple[DocumentTerm, ...]:
+    if not isinstance(value, list) or len(value) > 64:
+        raise ValueError("document terms")
+    result = []
+    for item in value:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"value", "kind"}
+            or not isinstance(item["value"], str)
+            or not isinstance(item["kind"], str)
+        ):
+            raise ValueError("document term")
+        result.append(DocumentTerm(item["value"], item["kind"]))
+    return tuple(result)
+
+
 class Bridge:
     """A single in-memory review is valid until the next operation or approval."""
 
@@ -264,7 +311,26 @@ class Bridge:
     def dispatch(self, command: str, raw: object) -> dict:
         if command == "hello":
             _payload(raw, set())
-            return {"protocol": PROTOCOL_VERSION}
+            return {
+                "protocol": PROTOCOL_VERSION,
+                "artefacts": ["workbook", "document"],
+                "desktop_contract": "shared",
+            }
+        if command in {"approve_document_protection", "approve_document_restoration"}:
+            required = {"review_id", "passphrase"} if command == "approve_document_protection" else {"review_id"}
+            data = _payload(raw, required)
+            token = _string(data["review_id"])
+            pending = self.pending
+            self.pending = None
+            if pending is None or pending[0] != command or pending[1] != token:
+                raise SafetyError("Review is stale; prepare and review again.")
+            if command == "approve_document_protection":
+                approve_document_protection(
+                    pending[2], _string(data["passphrase"]), approved=True
+                )
+            else:
+                approve_document_restoration(pending[2], authorised=True)
+            return {"created": True}
         if command in {
             "approve_protection",
             "approve_relational_protection",
@@ -314,6 +380,51 @@ class Bridge:
         if command == "cancel":
             _payload(raw, set())
             return {"cancelled": True}
+        if command == "inspect_document":
+            data = _payload(raw, {"source"})
+            return inspect_document(_path(data["source"])).summary()
+        if command == "prepare_document_protection":
+            data = _payload(
+                raw,
+                {"source", "output", "terms", "remove_comments"},
+                {"bundle"},
+            )
+            if type(data["remove_comments"]) is not bool:
+                raise ValueError("remove comments")
+            review = prepare_document_protection(
+                _path(data["source"]),
+                _document_terms(data["terms"]),
+                _path(data["output"]),
+                _path(data.get("bundle"), optional=True),
+                remove_comments=data["remove_comments"],
+            )
+            token = new_id()
+            self.pending = ("approve_document_protection", token, review)
+            return {
+                "review_id": token,
+                "replacement_count": review.replacement_count,
+                "replacement_occurrences": review.replacement_occurrences,
+                "comments_removed": review.comments_removed,
+                "inspection": review.inspection.summary(),
+                "output": str(review.output),
+                "bundle": str(review.bundle_path),
+            }
+        if command == "prepare_document_restoration":
+            data = _payload(raw, {"returned", "bundle", "output", "passphrase"})
+            review = prepare_document_restoration(
+                _path(data["returned"]),
+                _path(data["bundle"]),
+                _path(data["output"]),
+                _string(data["passphrase"]),
+            )
+            token = new_id()
+            self.pending = ("approve_document_restoration", token, review)
+            return {
+                "review_id": token,
+                "replacement_count": review.replacement_count,
+                "replacement_occurrences": review.replacement_occurrences,
+                "output": str(review.output),
+            }
         if command == "list_sheets":
             data = _payload(raw, {"path"})
             return {"sheets": list(list_excel_sheets(_path(data["path"])))}
