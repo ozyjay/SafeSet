@@ -90,3 +90,32 @@ use repeatable `--analysis-sheet` options to approve every added analysis worksh
 See [HOWTO.md](HOWTO.md), [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [safety model](docs/data-safety-model.md), [policy format](docs/policy-format.md) and [verification](docs/verification.md).
 
 SafeSet writes fixed, value-free local diagnostics to `~/.local/state/safeset/diagnostics.log`; `safeset log-path` shows that path. Never put real student data, credentials, bundles, source workbooks or restored outputs in this repository or an agent conversation.
+
+
+## Protected document workflow (DOCX)
+
+SafeSet now has a conservative DOCX protection foundation for scholarly manuscripts and similar research documents. The document workflow is:
+
+`original DOCX → protected DOCX + private encrypted bundle → external review/work → returned protected DOCX → local restoration`.
+
+The current implementation:
+
+- automatically detects and protects email addresses and ORCID identifiers in Word text and relationship targets;
+- accepts explicit local names/identifiers to protect with stable random SafeSet tokens;
+- strips common creator/editor/company metadata and custom document properties;
+- removes comments when explicitly selected;
+- rejects tracked changes, hidden text, embedded/active objects and identifiers split across formatted Word runs;
+- requires every original SafeSet token occurrence to survive the returned document before restoration;
+- restores protected identities only into a new local DOCX and never guesses missing mappings.
+
+This reduces some disclosure risks but does not certify that a document is anonymous or suitable for a recipient. The operator remains responsible for reviewing the manuscript for participant information, confidential material, figures/images and other context that deterministic protection may not identify.
+
+Use the document CLI while native UI work evolves:
+
+```pwsh
+safeset-document inspect ./Draft.docx
+safeset-document protect ./Draft.docx --person 'Synthetic Author' --output ./Draft-protected.docx
+safeset-document restore ./Returned-protected.docx --bundle ./private/document.enc --output ./Returned-restored.docx
+```
+
+The macOS SwiftUI shell includes dedicated Protect document and Restore document pages on the feature branch. Windows is a first-class target using a native WinUI 3 shell over the same shared engine; see `windows/README.md`. Windows operational protection/restoration remains blocked until equivalent private-bundle ACL enforcement is implemented and tested.
