@@ -59,3 +59,16 @@ Which attributes are necessary? What equivalence-class threshold is appropriate?
 Where are the private map directory and restored files stored and backed up?
 Who may approve export and restoration? Is the intended external service suitable?
 The supplied synthetic policy is illustrative, not an institutional policy.
+
+
+## Current document-protection iteration
+
+DOCX protection/restoration is being added as a second first-class artefact workflow rather than extending the spreadsheet policy model. The first vertical slice provides bounded DOCX package parsing, aggregate inspection, explicit identity terms, automatic email/ORCID protection, metadata stripping, optional comment removal, random reversible tokens, encrypted document bundles and exact-token restoration.
+
+Tracked changes, hidden text, embedded/active content and split-run identities fail closed. Deferred document work includes richer review of affiliations/acknowledgements, image/figure inspection, safe tracked-change flattening, better Word run reconstruction and additional Office formats.
+
+## Native Windows desktop
+
+Windows 11 x64 is the initial Windows target. Use WinUI 3 / Windows App SDK as a native shell over the shared Python helper and JSON-line protocol. Do not port safety logic into C#.
+
+Before enabling operational protection/restoration on Windows, implement and test private bundle storage with Windows ACL semantics equivalent to the current POSIX owner/mode enforcement. Windows UI work may proceed before that gate, but it must not bypass the storage failure.
