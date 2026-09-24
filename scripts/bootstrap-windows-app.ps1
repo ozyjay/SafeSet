@@ -26,4 +26,9 @@ if ($LASTEXITCODE -ne 0) {
     throw 'WinUI project creation failed.'
 }
 
+& (Join-Path $repo 'scripts/update-windows-ux.ps1')
+if ($LASTEXITCODE -ne 0) {
+    throw 'SafeSet Windows UX overlay failed.'
+}
+
 Write-Output $target
