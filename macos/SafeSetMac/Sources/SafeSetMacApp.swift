@@ -267,10 +267,14 @@ struct RootView: View {
                 get: { model.page }, set: { model.page = $0 ?? .home; model.invalidate() }
             )) {
                 Label("Home", systemImage: "house").appFont(13).tag(AppModel.Page.home)
-                Label("Protect workbook", systemImage: "lock.doc")
+                Label("Protect workbook", systemImage: "tablecells")
                     .appFont(13).tag(AppModel.Page.protect)
-                Label("Restore workbook", systemImage: "lock.open")
+                Label("Protect document", systemImage: "doc.text")
+                    .appFont(13).tag(AppModel.Page.protectDocument)
+                Label("Restore workbook", systemImage: "arrow.uturn.backward.square")
                     .appFont(13).tag(AppModel.Page.restore)
+                Label("Restore document", systemImage: "arrow.uturn.backward.doc")
+                    .appFont(13).tag(AppModel.Page.restoreDocument)
                 Label("Advanced", systemImage: "slider.horizontal.3")
                     .appFont(13).tag(AppModel.Page.advanced)
                 Divider()
@@ -286,7 +290,9 @@ struct RootView: View {
                 switch model.page {
                 case .home: HomeView()
                 case .protect: ProtectView()
+                case .protectDocument: ProtectDocumentView()
                 case .restore: RestoreView()
+                case .restoreDocument: RestoreDocumentView()
                 case .advanced: AdvancedView()
                 case .help: HelpView()
                 }
@@ -331,18 +337,28 @@ struct HomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
             Text("Protect, work, restore").appFont(26, weight: .bold)
-            Text("Create a protected working copy, analyse it, then reconstruct a new identifiable workbook locally.")
+            Text("Create protected working copies for analysis or review, then restore approved identifiers locally.")
                 .appFont(16).foregroundStyle(.secondary)
-            HStack(spacing: 16) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 240))], spacing: 16) {
                 Button { model.page = .protect } label: {
-                    Label("Protect a workbook", systemImage: "lock.doc")
+                    Label("Protect a workbook", systemImage: "tablecells")
                         .appFont(13)
-                        .frame(maxWidth: .infinity, minHeight: 100)
+                        .frame(maxWidth: .infinity, minHeight: 92)
+                }.buttonStyle(.borderedProminent)
+                Button { model.page = .protectDocument } label: {
+                    Label("Protect a document", systemImage: "doc.text")
+                        .appFont(13)
+                        .frame(maxWidth: .infinity, minHeight: 92)
                 }.buttonStyle(.borderedProminent)
                 Button { model.page = .restore } label: {
-                    Label("Restore a workbook", systemImage: "lock.open")
+                    Label("Restore a workbook", systemImage: "arrow.uturn.backward.square")
                         .appFont(13)
-                        .frame(maxWidth: .infinity, minHeight: 100)
+                        .frame(maxWidth: .infinity, minHeight: 92)
+                }.buttonStyle(.bordered)
+                Button { model.page = .restoreDocument } label: {
+                    Label("Restore a document", systemImage: "arrow.uturn.backward.doc")
+                        .appFont(13)
+                        .frame(maxWidth: .infinity, minHeight: 92)
                 }.buttonStyle(.bordered)
             }
             Text("Passing checks reduces some disclosure risks. It does not establish anonymity or recipient suitability.")
@@ -602,6 +618,154 @@ struct HelpView: View {
         .navigationTitle("Help")
     }
 }
+
+struct ProtectDocumentView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var identities = ""
+    @State private var passphrase = ""
+    @State private var confirmation = ""
+    @State private var showApproval = false
+    @State private var removeComments = true
+
+    private var terms: [String] {
+        identities.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Protect a document").appFont(26, weight: .bold)
+                Text("Prepare a DOCX manuscript for external review or AI-assisted work. SafeSet automatically protects email addresses and ORCID identifiers; add known names or other identities below.")
+                    .foregroundStyle(.secondary)
+                PathRow(title: "Original document", path: $model.documentSource,
+                        save: false, fileExtension: "docx") { model.chooseDocumentSource($0) }
+
+                if let inspection = model.documentInspection {
+                    GroupBox("Local document inspection") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Emails found: \(inspection["email_count"] as? Int ?? 0)")
+                            Text("ORCID identifiers found: \(inspection["orcid_count"] as? Int ?? 0)")
+                            Text("Comments: \(inspection["comments"] as? Int ?? 0)")
+                            Text("Tracked changes: \(inspection["tracked_changes"] as? Int ?? 0)")
+                            Text("Hidden text markers: \(inspection["hidden_text"] as? Int ?? 0)")
+                            Text("Embedded/active objects: \(inspection["embedded_objects"] as? Int ?? 0)")
+                            Text("Authoring metadata fields: \(inspection["metadata_fields"] as? Int ?? 0)")
+                            if let blockers = inspection["blockers"] as? [String], !blockers.isEmpty {
+                                Text("Resolve before protection: \(blockers.joined(separator: ", "))")
+                                    .foregroundStyle(.red)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                Text("Known names or identifiers to protect").appFont(18, weight: .bold)
+                TextEditor(text: $identities)
+                    .font(.system(size: 13))
+                    .frame(minHeight: 120)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+                Text("One value per line. SafeSet performs exact local matching; this list is never returned through the desktop bridge.")
+                    .appFont(12).foregroundStyle(.secondary)
+                Toggle("Remove Word comments from the protected copy", isOn: $removeComments)
+                    .toggleStyle(.checkbox)
+
+                PathRow(title: "Protected document", path: $model.documentProtectedOutput,
+                        save: true, fileExtension: "docx")
+                DisclosureGroup("Advanced settings") {
+                    PathRow(title: "Private bundle location", path: $model.documentBundleOutput,
+                            save: true, fileExtension: "enc")
+                }
+                Button("Review document protection") {
+                    model.prepareDocumentProtection(terms: terms, removeComments: removeComments)
+                }
+                .buttonStyle(.borderedProminent)
+
+                if let review = model.documentProtectionReview {
+                    Divider()
+                    Text("Final review").appFont(18, weight: .bold)
+                    Text("Protected identities: \(review["replacement_count"] as? Int ?? 0)")
+                    Text("Protected occurrences: \(review["replacement_occurrences"] as? Int ?? 0)")
+                    Text("Comments removed: \((review["comments_removed"] as? Bool) == true ? "yes" : "no")")
+                    Text("Protected copy: \(review["output"] as? String ?? "")")
+                    Text("Private restoration bundle: \(review["bundle"] as? String ?? "")")
+                    Text("This review reduces some disclosure risks; it does not certify anonymity or recipient suitability.")
+                        .foregroundStyle(.secondary)
+                    Button("Approve and create") { showApproval = true }
+                        .buttonStyle(.borderedProminent)
+                    Button("Cancel review") { model.cancelReview() }
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: 850, alignment: .leading)
+        }
+        .sheet(isPresented: $showApproval) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Approve document protection").appFont(18, weight: .bold)
+                SecureField("Restoration passphrase", text: $passphrase)
+                SecureField("Confirm passphrase", text: $confirmation)
+                HStack {
+                    Button("Cancel") {
+                        showApproval = false; passphrase = ""; confirmation = ""
+                    }
+                    Button("Create") {
+                        guard passphrase.count >= 16, passphrase == confirmation else {
+                            model.alert = "Passphrases must match and contain at least 16 characters."
+                            return
+                        }
+                        let secret = passphrase
+                        passphrase = ""; confirmation = ""; showApproval = false
+                        model.approveDocumentProtection(passphrase: secret)
+                    }.buttonStyle(.borderedProminent)
+                }
+            }.padding(24).frame(width: 430)
+        }
+    }
+}
+
+
+struct RestoreDocumentView: View {
+    @EnvironmentObject var model: AppModel
+    @State private var passphrase = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Restore a document").appFont(26, weight: .bold)
+                Text("Restore SafeSet protection tokens in a returned DOCX. The returned document must preserve every token exactly; SafeSet never guesses missing identities.")
+                    .foregroundStyle(.secondary)
+                PathRow(title: "Modified protected document", path: $model.documentReturned,
+                        save: false, fileExtension: "docx")
+                PathRow(title: "Private restoration bundle", path: $model.documentRestoreBundle,
+                        save: false, fileExtension: "enc")
+                PathRow(title: "Restored document", path: $model.documentRestoredOutput,
+                        save: true, fileExtension: "docx")
+                SecureField("Bundle passphrase", text: $passphrase)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 420)
+                Button("Review restoration") {
+                    let secret = passphrase
+                    passphrase = ""
+                    model.prepareDocumentRestoration(passphrase: secret)
+                }.buttonStyle(.borderedProminent)
+
+                if let review = model.documentRestorationReview {
+                    Divider()
+                    Text("Restoration review").appFont(18, weight: .bold)
+                    Text("Identifiers to restore: \(review["replacement_count"] as? Int ?? 0)")
+                    Text("Protected occurrences: \(review["replacement_occurrences"] as? Int ?? 0)")
+                    Text("New local document: \(review["output"] as? String ?? "")")
+                    Button("Authorise restoration") { model.approveDocumentRestoration() }
+                        .buttonStyle(.borderedProminent)
+                    Button("Cancel review") { model.cancelReview() }
+                }
+            }
+            .padding(28)
+            .frame(maxWidth: 850, alignment: .leading)
+        }
+    }
+}
+
 
 struct ProtectView: View {
     @EnvironmentObject var model: AppModel

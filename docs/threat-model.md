@@ -146,3 +146,18 @@ The caller must choose an external private output directory for restored data;
 restored Excel workbook contains sensitive plaintext and must not be uploaded. Normal exports also need
 access control. No special guarantees apply to network filesystems or hostile
 concurrent modification. No secure deletion is claimed.
+
+
+## DOCX protection threats
+
+| Threat | Current control | Residual limitation |
+| --- | --- | --- |
+| Visible author/contact identifiers | Exact operator terms plus local email/ORCID detection are replaced with fresh random tokens | Deterministic matching is incomplete; context, uncommon identifiers and indirect identification still require human review |
+| Hyperlink-only identifiers | Relationship attributes, including `mailto:` targets, are scanned and transformed | Other relationship targets may still reveal project/institution context |
+| Word authoring metadata | Creator/editor/revision/time fields, company/manager fields and custom properties are stripped | Other package/application metadata may exist in unsupported parts |
+| Comments/revision history | Comments can be removed; tracked changes fail closed | Accepting/rejecting revisions is left to the operator and Word |
+| Hidden/embedded content | Hidden text, embedded objects and active content fail closed | Images and ordinary drawing content are not semantically inspected |
+| Formatted-run evasion | Explicit identities spanning several text runs cause protection to fail | Safe handling of arbitrary run fragmentation is deferred |
+| Returned-token corruption | Restoration requires the exact occurrence count of every protected token | External editing can still change surrounding scholarly content incorrectly |
+| Original identity reintroduced externally | Returned package is rejected if an original protected value is present | A semantically equivalent or differently formatted identity may evade exact matching |
+| Private document bundle disclosure | Same encrypted bundle/passphrase separation and no-clobber rules as workbook workflows | Windows ACL enforcement is not yet implemented; operational Windows use remains blocked |

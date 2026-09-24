@@ -51,7 +51,10 @@ def test_protocol_rejects_malformed_and_secret_output():
         result = json.loads(bridge.process_line(line))
         assert not result["ok"]
         assert set(result) == {"version", "id", "ok", "error"}
-    assert call(bridge, "hello", {})["result"] == {"protocol": 1}
+    hello = call(bridge, "hello", {})["result"]
+    assert hello["protocol"] == 1
+    assert hello["artefacts"] == ["workbook", "document"]
+    assert hello["desktop_contract"] == "shared"
 
 
 @pytest.mark.parametrize(
