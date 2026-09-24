@@ -277,3 +277,25 @@ Paths are checked at use time; a hostile process with the same account can race
 these checks. Filesystem transactions, secure deletion and protection from a
 compromised host are out of scope. Repository detection is a guardrail, not a way
 to identify every possible data-sync destination.
+
+
+## Cross-platform desktop contract
+
+SafeSet now treats the desktop bridge as a shared internal contract rather than a macOS-specific implementation detail. The Python helper remains the authority for inspection, validation, review-token lifecycle, protection, restoration and publication. Native shells may differ in presentation:
+
+- macOS: SwiftUI;
+- Windows: WinUI 3 / Windows App SDK.
+
+Both shells communicate with the helper over the same bounded JSON-line stdin/stdout protocol. The protocol returns aggregate review metadata and fixed safety codes; sensitive source values and private mapping contents do not cross back to the UI. Platform shells must not reimplement safety decisions.
+
+Windows support has a separate security release gate. The existing private-bundle storage boundary verifies POSIX ownership/mode and fails closed on non-POSIX systems. Windows workflows must remain disabled until equivalent Windows ACL creation/validation is implemented and regression-tested.
+
+## Protected DOCX round trip (document bundle version 1)
+
+The document workflow is source DOCX → protected DOCX plus encrypted private document bundle → external work → returned protected DOCX → new locally restored DOCX.
+
+The DOCX reader is bounded by compressed size, unpacked size, part count and per-part size. It rejects unsafe archive paths and active macro payloads. Protection operates on Word body, headers, footers, footnotes and endnotes plus relationship attributes. It automatically recognises email and ORCID shapes and accepts explicit operator-provided identities.
+
+Protection deliberately strips common authoring metadata and custom properties. Comments are removable as a protection action. Tracked changes, hidden text, embedded objects and identity strings split across formatted text runs fail closed in this first iteration.
+
+Each protected value receives a fresh document-scoped random token. The encrypted document bundle stores the original value, token, kind, occurrence count and source/protected digests; it does not store the whole document. Restoration requires every expected token occurrence to remain present and rejects any returned package that already contains an original protected value. It then creates a new DOCX with the approved identities restored. Word comments and stripped authoring metadata are not reintroduced.
