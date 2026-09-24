@@ -11,6 +11,16 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
+    <Window.Resources>
+        <Style x:Key="CardBorderStyle" TargetType="Border">
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <NavigationView
             x:Name="NavView"
@@ -284,6 +294,12 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
                                         <TextBlock Grid.Row="0" Text="Tracked changes" />
                                         <TextBlock Grid.Row="0" Grid.Column="1" Text="Must be resolved before protection"
                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
