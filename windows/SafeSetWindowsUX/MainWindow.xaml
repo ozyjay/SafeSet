@@ -1,0 +1,428 @@
+<Window
+    x:Class="SafeSetWindows.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="SafeSet">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid>
+        <NavigationView
+            x:Name="NavView"
+            PaneDisplayMode="Left"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            SelectionChanged="NavView_SelectionChanged"
+            Loaded="NavView_Loaded">
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="Home" Tag="home">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Home" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Protect workbook" Tag="protectWorkbook">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Document" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Protect document" Tag="protectDocument">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Document" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Restore workbook" Tag="restoreWorkbook">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="OpenFile" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Restore document" Tag="restoreDocument">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="OpenFile" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Advanced" Tag="advanced">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Setting" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Help" Tag="help">
+                    <NavigationViewItem.Icon>
+                        <SymbolIcon Symbol="Help" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Grid Padding="24,18,24,24" RowSpacing="14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <InfoBar
+                    x:Name="StatusBar"
+                    Grid.Row="0"
+                    IsOpen="True"
+                    IsClosable="False"
+                    Severity="Informational"
+                    Title="Windows UX preview"
+                    Message="The native Windows shell is ready for UX testing. Protection and restoration publication remain disabled until Windows private-bundle ACL enforcement is implemented and verified." />
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <Grid MaxWidth="1080" HorizontalAlignment="Left">
+
+                        <!-- HOME -->
+                        <StackPanel x:Name="HomePage" Spacing="18">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Protect, work, restore"
+                                           Style="{ThemeResource TitleTextBlockStyle}" />
+                                <TextBlock
+                                    Text="Prepare protected working copies for analysis or review, then restore approved identifiers locally."
+                                    Style="{ThemeResource BodyTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    TextWrapping="Wrap"
+                                    MaxWidth="760" />
+                            </StackPanel>
+
+                            <Grid ColumnSpacing="14" RowSpacing="14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Button Grid.Row="0" Grid.Column="0"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="20"
+                                        CornerRadius="12"
+                                        Click="HomeProtectWorkbook_Click">
+                                    <StackPanel Spacing="7">
+                                        <TextBlock Text="Protect a workbook"
+                                                   Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                        <TextBlock Text="Prepare tabular data for controlled external analysis."
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Grid.Row="0" Grid.Column="1"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="20"
+                                        CornerRadius="12"
+                                        Click="HomeProtectDocument_Click">
+                                    <StackPanel Spacing="7">
+                                        <TextBlock Text="Protect a document"
+                                                   Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                        <TextBlock Text="Prepare a DOCX manuscript for external review or AI-assisted work."
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Grid.Row="1" Grid.Column="0"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="20"
+                                        CornerRadius="12"
+                                        Click="HomeRestoreWorkbook_Click">
+                                    <StackPanel Spacing="7">
+                                        <TextBlock Text="Restore a workbook"
+                                                   Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                        <TextBlock Text="Bring approved analysis results back into a new local identifiable workbook."
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Grid.Row="1" Grid.Column="1"
+                                        HorizontalContentAlignment="Stretch"
+                                        Padding="20"
+                                        CornerRadius="12"
+                                        Click="HomeRestoreDocument_Click">
+                                    <StackPanel Spacing="7">
+                                        <TextBlock Text="Restore a document"
+                                                   Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                        <TextBlock Text="Restore SafeSet protection tokens into a new local DOCX."
+                                                   TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <Border Padding="18"
+                                    CornerRadius="12"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    BorderThickness="1">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Safety boundary"
+                                               Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <TextBlock
+                                        Text="Passing SafeSet checks can reduce disclosure risk. It does not establish anonymity, legal compliance or recipient suitability. Human review remains required."
+                                        TextWrapping="Wrap"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- PROTECT WORKBOOK -->
+                        <StackPanel x:Name="ProtectWorkbookPage" Visibility="Collapsed" Spacing="16">
+                            <TextBlock Text="Protect a workbook" Style="{ThemeResource TitleTextBlockStyle}" />
+                            <TextBlock
+                                Text="Windows UX preview of the established SafeSet workbook workflow."
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                TextWrapping="Wrap" />
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="1. Choose the workbook" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="WorkbookSourcePath" PlaceholderText="Original .xlsx workbook" IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Browse…" Click="BrowseWorkbookSource_Click" />
+                                    </Grid>
+                                    <TextBlock
+                                        Text="The release will eventually use the same field-by-field decisions, validation profiles and explicit approval flow as the macOS app."
+                                        TextWrapping="Wrap"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="2. Review field decisions" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
+                                             Message="Field inspection and policy editing will be connected to the shared SafeSet bridge after the Windows private-storage boundary is complete." />
+                                    <CheckBox Content="Show only fields needing attention" IsChecked="True" />
+                                    <Button Content="Review protection" HorizontalAlignment="Left"
+                                            Click="PreviewOnly_Click" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- PROTECT DOCUMENT -->
+                        <StackPanel x:Name="ProtectDocumentPage" Visibility="Collapsed" Spacing="16">
+                            <TextBlock Text="Protect a document" Style="{ThemeResource TitleTextBlockStyle}" />
+                            <TextBlock
+                                Text="Prepare a DOCX manuscript for external review or AI-assisted work while preserving the scholarly content."
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                TextWrapping="Wrap" />
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="1. Original document" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="DocumentSourcePath" PlaceholderText="Original .docx document" IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Browse…" Click="BrowseDocumentSource_Click" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="2. Known identities to protect" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <TextBlock
+                                        Text="Add names or other identifiers you know should be protected. Email addresses and ORCIDs are detected automatically by the shared engine."
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        TextWrapping="Wrap" />
+                                    <TextBox x:Name="DocumentIdentityTerms"
+                                             PlaceholderText="One value per line"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             MinHeight="120" />
+                                    <CheckBox x:Name="RemoveDocumentComments"
+                                              Content="Remove Word comments from the protected copy"
+                                              IsChecked="True" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="3. Output" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="DocumentProtectedPath"
+                                                 PlaceholderText="Protected .docx output"
+                                                 IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Choose…" Click="ChooseProtectedDocument_Click" />
+                                    </Grid>
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="DocumentBundlePath"
+                                                 PlaceholderText="Private .enc restoration bundle"
+                                                 IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Choose…" Click="ChooseDocumentBundle_Click" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Protection checks" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="28" RowSpacing="7">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Row="0" Text="Tracked changes" />
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Must be resolved before protection"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Grid.Row="1" Text="Hidden text" />
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="Blocks protection"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Grid.Row="2" Text="Embedded/active content" />
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="Blocks protection"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        <TextBlock Grid.Row="3" Text="Authoring metadata" />
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="Removed from protected copy"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    </Grid>
+                                    <Button Content="Review document protection"
+                                            HorizontalAlignment="Left"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Click="PreviewOnly_Click" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- RESTORE WORKBOOK -->
+                        <StackPanel x:Name="RestoreWorkbookPage" Visibility="Collapsed" Spacing="16">
+                            <TextBlock Text="Restore a workbook" Style="{ThemeResource TitleTextBlockStyle}" />
+                            <TextBlock
+                                Text="Review the returned protected workbook and create a new locally reidentified workbook."
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                TextWrapping="Wrap" />
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="Returned protected workbook" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="WorkbookReturnedPath" PlaceholderText="Modified protected .xlsx" IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Browse…" Click="BrowseWorkbookReturned_Click" />
+                                    </Grid>
+                                    <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
+                                             Message="The authenticated bundle—not the UI—will remain authoritative for restoration scope." />
+                                    <Button Content="Review restoration" HorizontalAlignment="Left"
+                                            Click="PreviewOnly_Click" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- RESTORE DOCUMENT -->
+                        <StackPanel x:Name="RestoreDocumentPage" Visibility="Collapsed" Spacing="16">
+                            <TextBlock Text="Restore a document" Style="{ThemeResource TitleTextBlockStyle}" />
+                            <TextBlock
+                                Text="Restore protected identities only when every SafeSet token survives the returned DOCX exactly."
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                TextWrapping="Wrap" />
+
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="Returned protected document" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="DocumentReturnedPath" PlaceholderText="Modified protected .docx" IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Browse…" Click="BrowseDocumentReturned_Click" />
+                                    </Grid>
+
+                                    <TextBlock Text="Private restoration bundle" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="DocumentRestoreBundlePath" PlaceholderText="Private .enc bundle" IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Browse…" Click="BrowseDocumentRestoreBundle_Click" />
+                                    </Grid>
+
+                                    <TextBlock Text="Restored output" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="DocumentRestoredPath" PlaceholderText="New local .docx output" IsReadOnly="True" />
+                                        <Button Grid.Column="1" Content="Choose…" Click="ChooseRestoredDocument_Click" />
+                                    </Grid>
+
+                                    <InfoBar IsOpen="True" IsClosable="False" Severity="Warning"
+                                             Message="SafeSet will never guess a missing or altered token. Any mismatch blocks restoration." />
+                                    <Button Content="Review restoration"
+                                            HorizontalAlignment="Left"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Click="PreviewOnly_Click" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ADVANCED -->
+                        <StackPanel x:Name="AdvancedPage" Visibility="Collapsed" Spacing="16">
+                            <TextBlock Text="Advanced" Style="{ThemeResource TitleTextBlockStyle}" />
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Shared engine" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Text="Desktop contract: bounded JSON-line protocol over local stdin/stdout"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="Runtime network requirement: none"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="Safety decisions: shared Python engine"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Windows release gate" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <InfoBar IsOpen="True" IsClosable="False" Severity="Warning"
+                                             Title="Private storage not yet enabled"
+                                             Message="SafeSet must implement and verify Windows ACL-equivalent private bundle storage before operational protection/restoration is enabled." />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- HELP -->
+                        <StackPanel x:Name="HelpPage" Visibility="Collapsed" Spacing="16">
+                            <TextBlock Text="Help" Style="{ThemeResource TitleTextBlockStyle}" />
+                            <Border Style="{StaticResource CardBorderStyle}">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Testing this Windows UX" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Text="Use synthetic or non-sensitive files only while the Windows storage boundary is unfinished."
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Text="Try the navigation, browse/save pickers, window resizing, keyboard navigation, light/dark mode and overall workflow language. Protection buttons currently report preview mode rather than publishing files."
+                                               TextWrapping="Wrap"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Window>
