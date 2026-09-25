@@ -22,7 +22,32 @@ swift test --disable-sandbox --package-path macos/SafeSetMac
 & /usr/bin/codesign --verify --strict ./dist/SafeSet.app
 ```
 
-The build creates `dist/SafeSet.app` and `dist/SafeSet-local.zip`. The smoke
+The default configuration is `Release`. To build the native app using Xcode's
+`Debug` configuration, run:
+
+```pwsh
+& ./scripts/build-macos-app.ps1 -Configuration Debug
+```
+
+Both configurations create `dist/SafeSet.app` and `dist/SafeSet-local.zip`, replacing
+the previous local build. Building does not update the installed app. The bundled
+Python helper uses the same packaging and safety checks in either configuration.
+
+In VS Code, use **Terminal → Run Task → SafeSet: Build macOS Debug**. This workspace
+task starts a separate `pwsh -NoProfile -NonInteractive -File` process, bypassing
+the PowerShell extension's interactive PSReadLine loop. It uses the Homebrew
+PowerShell location on Apple Silicon Macs. If the extension terminal reports an
+`IOException` in `System.ConsolePal.GetCursorPosition` / `PSConsoleReadLine`, this
+task provides a build path without that input loop. It does not repair the
+extension's interactive terminal or enable PowerShell script breakpoints.
+
+The equivalent command, from a regular PowerShell terminal in the repository, is:
+
+```pwsh
+pwsh -NoProfile -NonInteractive -File ./scripts/build-macos-app.ps1 -Configuration Debug
+```
+
+The smoke
 test copies the app to a temporary directory, removes development Python
 settings from the helper's environment and runs a synthetic protected workbook
 round trip. It also checks that the app icon generated from

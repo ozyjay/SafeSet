@@ -1,5 +1,7 @@
 param(
-    [switch]$CreateDmg
+    [switch]$CreateDmg,
+    [ValidateSet('Debug', 'Release')]
+    [string]$Configuration = 'Release'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,12 +92,12 @@ New-Item -ItemType Directory -Force $env:PYINSTALLER_CONFIG_DIR | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Python helper build failed.' }
 
 xcodebuild -quiet -project (Join-Path $package 'SafeSetMac.xcodeproj') `
-    -scheme SafeSetMac -configuration Release `
+    -scheme SafeSetMac -configuration $Configuration `
     -destination 'platform=macOS,arch=arm64' `
     -derivedDataPath (Join-Path $build 'DerivedData') `
     CODE_SIGNING_ALLOWED=NO OTHER_SWIFT_FLAGS=-disable-sandbox build
 if ($LASTEXITCODE -ne 0) { throw 'SwiftUI Xcode build failed.' }
-$builtApp = Join-Path $build 'DerivedData/Build/Products/Release/SafeSetMac.app'
+$builtApp = Join-Path $build "DerivedData/Build/Products/$Configuration/SafeSetMac.app"
 if (-not (Test-Path $builtApp)) { throw 'Xcode did not produce the app.' }
 
 $staging = Join-Path $dist ('.SafeSet-build-' + [Guid]::NewGuid().ToString('N'))
