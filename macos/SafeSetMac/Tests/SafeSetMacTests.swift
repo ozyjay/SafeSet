@@ -84,6 +84,8 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertTrue(restorationResultExample.contains("blank result cells are not supported"))
         XCTAssertTrue(restorationResultExample.contains("exact record_id values"))
         XCTAssertTrue(restorationResultExample.contains("no new IDs"))
+        XCTAssertTrue(restorationResultExample.contains("Do not merge cells"))
+        XCTAssertTrue(restorationResultExample.contains("at most four words and 64 characters"))
     }
 
     @MainActor func testWizardDecisionAndReviewGates() {
