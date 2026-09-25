@@ -89,11 +89,65 @@ try {
         bundle = $bundle; output = $restored; passphrase = $passphrase
     }
     if ($repeat.ok) { throw 'Existing output was not rejected.' }
-    $transcript = @($prepared, $approved, $review, $finished) | ConvertTo-Json -Depth 20
+    $sheetList = Invoke-Bridge 'list_sheets' @{ path = $source }
+    $sheet = $sheetList.result.sheets[0]
+    $editOutput = Join-Path $exports 'editable.xlsx'
+    $editBundle = Join-Path $maps 'editable.enc'
+    $editPrepared = Invoke-Bridge 'prepare_relational_protection' @{
+        source = $source; sheets = @($sheet); output = $editOutput; bundle = $editBundle
+        drafts = @{ $sheet = $loaded.result.drafts }; threshold = [string]$loaded.result.threshold
+        validation_profile = 'strict'; editable_fields = @{ $sheet = @('campus') }
+    }
+    if (-not $editPrepared.ok -or -not $editPrepared.result.analysis_prompt) {
+        throw 'Bundled editable-workbook review failed.'
+    }
+    $editApproved = Invoke-Bridge 'approve_relational_protection' @{
+        review_id = $editPrepared.result.review_id; passphrase = $passphrase
+    }
+    if (-not $editApproved.ok) { throw 'Bundled editable-workbook protection failed.' }
+    $editReturned = Join-Path $exports 'editable-returned.xlsx'
+    Copy-Item -LiteralPath $editOutput -Destination $editReturned
+    $archive = [System.IO.Compression.ZipFile]::Open($editReturned, 'Update')
+    try {
+        $entry = $archive.GetEntry('xl/worksheets/sheet1.xml')
+        $reader = [System.IO.StreamReader]::new($entry.Open())
+        try { [xml]$xml = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        $namespaces = [System.Xml.XmlNamespaceManager]::new($xml.NameTable)
+        $namespaces.AddNamespace('s', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main')
+        $first = $xml.SelectSingleNode('//s:c[@r="C2"]/s:is/s:t', $namespaces)
+        $second = $xml.SelectSingleNode('//s:c[@r="C4"]/s:is/s:t', $namespaces)
+        if (-not $first -or -not $second -or $first.InnerText -eq $second.InnerText) {
+            throw 'Synthetic allocation fixture is unsuitable.'
+        }
+        $firstCode = $first.InnerText
+        $first.InnerText = $second.InnerText
+        $second.InnerText = $firstCode
+        $entry.Delete()
+        $replacement = $archive.CreateEntry('xl/worksheets/sheet1.xml')
+        $writer = [System.IO.StreamWriter]::new($replacement.Open())
+        try { $writer.Write($xml.OuterXml) } finally { $writer.Dispose() }
+    } finally { $archive.Dispose() }
+    $editRestored = Join-Path $private 'edited-restored.xlsx'
+    $editReview = Invoke-Bridge 'prepare_relational_reconstruction' @{
+        returned = $editReturned; source = $source; bundle = $editBundle
+        output = $editRestored; passphrase = $passphrase
+    }
+    if (-not $editReview.ok -or $editReview.result.changes[$sheet].campus -ne 2) {
+        throw 'Bundled editable-workbook restoration review failed.'
+    }
+    $editFinished = Invoke-Bridge 'approve_relational_reconstruction' @{
+        review_id = $editReview.result.review_id
+        approved_results = @{ $sheet = @() }; approved_changes = @{ $sheet = @('campus') }
+    }
+    if (-not $editFinished.ok -or -not (Test-Path -LiteralPath $editRestored)) {
+        throw 'Bundled editable-workbook restoration failed.'
+    }
+    $transcript = @($prepared, $approved, $review, $finished,
+                   $editPrepared, $editApproved, $editReview, $editFinished) | ConvertTo-Json -Depth 20
     if ($transcript.Contains('SYNTH-001') -or $transcript.Contains($passphrase)) {
         throw 'Sensitive value appeared in a bridge response.'
     }
-    Write-Output 'Standalone relocated helper round trip passed.'
+    Write-Output 'Standalone relocated helper legacy and editable round trips passed.'
 }
 finally {
     if ($process) {

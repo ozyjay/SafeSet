@@ -59,8 +59,13 @@ Command-Minus decreases and Command-0 restores the default size.
 After workbook protection succeeds, a sheet displays the copyable ChatGPT
 analysis prompt. A reminder on the home view opens it again during that session;
 the same prompt is also available on the Restore workbook page. The prompt asks
-for exact record-ID and row preservation. It contains no source values, bundle
-content or passphrase.
+for exact record-ID and row preservation. Editing mode creates a version 4 bundle,
+shows per-sheet field checkboxes and generates a prompt from those permissions and
+approved numeric bounds. Reference sheets have no editable fields. Restoration
+shows changed-cell counts and requires approval of each changed field before
+applying edits to a copy of the original workbook. The prompt contains no source
+cell values, identities, codebooks or passphrase. Version 2/3 append-results mode
+remains available by turning off the editing option during protection.
 Passphrases pass only through its local standard-input pipe. The protocol is
 versioned and rejects malformed requests, stale review tokens and oversized
 frames. Every publish operation remains subject to Python's validation and

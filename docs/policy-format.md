@@ -1,5 +1,22 @@
 # Policy versions 1, 2 and 3
 
+Version 4 *restoration bundles* add editable-workbook permissions without changing
+policy YAML. The desktop protocol accepts `editable_fields` as a mapping containing
+every selected worksheet and a list of its editable source headings (empty for a
+reference sheet). Unknown sheets/fields, duplicates and non-string headings fail.
+Only `keep`, `code` and `keep_numeric` actions can be selected; identifiers, dropped
+fields, bins, formula cells and date cells are excluded. These fields still undergo
+the same protection and disclosure checks.
+
+The encrypted bundle records the permissions, observed category domains, codebooks
+and original-file digest. Returned categorical edits use observed categories;
+codes must belong to the field's authenticated codebook or an explicitly shared
+same-field codebook. Numeric edits use the policy's bounds and genuine-blank rule.
+Publication of numeric Excel cells also enforces Excel precision. Changed fields
+need their own explicit restoration approval. These permissions cannot be added
+to old bundles; a new protection run creates a `SAFESET4` envelope. Adding
+`editable_fields` to policy YAML remains an unknown-key error.
+
 The guided protected-workbook desktop constructs a strict version 3 policy in
 memory from explicit field decisions. Saving YAML is optional. Source-derived protected
 fields are immutable during version 2 bundle reconstruction; newly added result

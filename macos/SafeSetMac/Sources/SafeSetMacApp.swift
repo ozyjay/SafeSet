@@ -36,31 +36,6 @@ let restorationAnalysisGuidance = "Please analyse the protected Excel workbook a
 let restorationResultExample = "For each new result column on a protected worksheet, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Do not put formulas in protected worksheets. Put each added analysis table on its own worksheet, with unique column headings in row 1 and data immediately below. Do not merge cells or add title rows, spacer rows or narrative paragraphs inside the workbook. Added analysis cells may be blank; non-blank results must be short categories of at most four words and 64 characters, without names, email addresses, dates, times or other identifiers. Put longer explanations in your ChatGPT reply, outside the workbook. Use static values where possible. If added analysis cells contain formulas, the workbook must include saved scalar results. Before returning the file, compare each protected worksheet's row count and exact record_id values with the input workbook; every original ID must appear once on the same worksheet, with no new IDs in protected worksheets. SafeSet copies approved results into static tables, so formulas, formatting and drawings are not preserved. If you cannot keep the original workbook intact, explain the limitation instead of returning a changed file."
 let restorationCopyText = "\(restorationAnalysisGuidance)\n\n\(restorationResultExample)"
 
-func editingAnalysisPrompt(_ permissions: [String: [String]]) -> String {
-    let scope = permissions.keys.sorted().map { sheet in
-        let columns = permissions[sheet] ?? []
-        return columns.isEmpty ? "\(sheet): reference only; preserve all values."
-            : "\(sheet): editable fields: \(columns.joined(separator: ", "))."
-    }.joined(separator: "\n")
-    return """
-    Update the attached SafeSet-protected workbook using the editing permissions below.
-    Edit the permitted existing fields directly. Preserve every worksheet, heading and row.
-    Keep every record_id and entity_id exactly as supplied and attached to the same record.
-    Use entity_id to relate the same participant across sheets. All other fields are reference only.
-    Reassign coded categories using existing codes for that field; never invent codes or decode identities.
-    Keep categorical edits within the supplied categories and numeric edits within the approved bounds.
-    Do not add result columns, worksheets, merged cells, title rows, formulas or narrative text.
-    Explain your findings in your reply, outside the workbook. Return a modified .xlsx file.
-    Before returning it, check every ID occurs exactly once on its original sheet, every reference
-    value is unchanged, and only permitted fields differ. If an edit requires a new category or
-    unknown numeric bounds, explain what is needed before changing it.
-    Do not request the original source, private bundle or passphrase.
-
-    Editing permissions:
-    \(scope)
-    """
-}
-
 func copyRestorationPrompt(_ text: String = restorationCopyText) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
@@ -759,6 +734,14 @@ struct ProtectDocumentView: View {
                     Text("Protected occurrences: \(review["replacement_occurrences"] as? Int ?? 0)")
                     Text("Comments removed: \((review["comments_removed"] as? Bool) == true ? "yes" : "no")")
                     Text("Protected copy: \(review["output"] as? String ?? "")")
+                    if let permissions = review["editable_fields"] as? [String: [String]] {
+                        ForEach(permissions.keys.sorted(), id: \.self) { sheet in
+                            let names = permissions[sheet] ?? []
+                            Text(names.isEmpty ? "\(sheet): reference only"
+                                 : "\(sheet): editable — \(names.joined(separator: ", "))")
+                        }
+                        Text("Restoration preserves the original workbook and applies only approved field changes.")
+                    }
                     Text("Private restoration bundle: \(review["bundle"] as? String ?? "")")
                     Text("This review reduces some disclosure risks; it does not certify anonymity or recipient suitability.")
                         .foregroundStyle(.secondary)
@@ -956,7 +939,7 @@ struct ProtectView: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Toggle("Edit selected fields and preserve the original workbook",
                                    isOn: $model.workbookEditing)
-                                .onChange(of: model.workbookEditing) { _ in model.invalidate() }
+                                .onChange(of: model.workbookEditing) { model.invalidate() }
                             if model.workbookEditing {
                                 Text("Select editable fields separately for each sheet. Sheets with no selected fields are reference only. Unselected source sheets stay local and are preserved during restoration. Identities and grouped ranges cannot be edited.")
                                     .foregroundStyle(.secondary)
@@ -1119,15 +1102,17 @@ struct RestoreView: View {
                 ))
                     .appFont(13)
                 Text(model.relationalRestore
-                     ? "The private bundle defines every required worksheet. SafeSet includes those automatically and presents added analysis worksheets separately for approval."
+                     ? "The private bundle defines the required worksheets and permitted edits. SafeSet verifies them automatically."
                      : "Restore one or more same-schema worksheets from a version 2 bundle.")
                     .foregroundStyle(.secondary)
-                GroupBox("Returning analysis findings") {
+                GroupBox("ChatGPT instructions") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text(restorationAnalysisGuidance)
-                        Text(restorationResultExample)
+                        Text("Use the prompt shown after creating this protected workbook. Reviewing a returned editable workbook refreshes its permitted-field instructions here.")
+                        DisclosureGroup("View prompt") {
+                            Text(model.latestAnalysisPrompt).textSelection(.enabled)
+                        }
                         Button("Copy prompt") {
-                            copyRestorationPrompt()
+                            copyRestorationPrompt(model.latestAnalysisPrompt)
                         }
                         .buttonStyle(.bordered)
                         .foregroundStyle(.primary)

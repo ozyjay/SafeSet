@@ -29,8 +29,10 @@ from .document_flow import (
 )
 from .errors import SafetyError
 from .ingestion import list_excel_sheets
+from .policy import parse_policy
 from .policy_authoring import RuleDraft, load_drafts, local_category_review, save_policy
 from .pseudonyms import new_id
+from .workbook_editing import editing_instructions
 
 PROTOCOL_VERSION = 1
 MAX_REQUEST = 1024 * 1024
@@ -89,9 +91,7 @@ PUBLIC_SAFETY_ERRORS = {
     "Returned relational workbook worksheet coverage does not match the bundle.": (
         "worksheet_coverage"
     ),
-    "Relational workbook worksheet coverage does not match the bundle.": (
-        "worksheet_coverage"
-    ),
+    "Relational workbook worksheet coverage does not match the bundle.": ("worksheet_coverage"),
     "Protected workbook schema has changed unexpectedly.": "protected_schema",
     "Protected worksheet schema has changed unexpectedly.": "protected_schema",
     "Returned workbook contains unexpected or colliding fields.": "result_schema",
@@ -108,6 +108,7 @@ PUBLIC_SAFETY_ERRORS = {
     "Every changed field requires explicit approval.": "edit_approval",
     "Editable workbook cell locations are ambiguous.": "edit_layout",
     "Editable workbook XML is unsupported.": "edit_layout",
+    "An edited number exceeds Excel's supported precision.": "edit_precision",
     "Restored workbook exceeds the supported size limit.": "edit_layout",
     "New result contains unsafe or unsupported spreadsheet text.": "result_text",
     "Original source contains unsafe spreadsheet text.": "source_text",
@@ -153,17 +154,25 @@ PUBLIC_SAFETY_ERRORS = {
     "Word document contains malformed XML.": "document_invalid",
     "Word document exceeds supported archive limits.": "document_limit",
     "Protected Word document exceeds the supported size limit.": "document_limit",
-    "Word document contains tracked changes that must be resolved first.": "document_tracked_changes",
+    (
+        "Word document contains tracked changes that must be resolved first."
+    ): "document_tracked_changes",
     "Word document contains hidden text that must be resolved first.": "document_hidden_text",
     "Word document contains unsupported embedded or active content.": "document_active_content",
     "Word document comments require explicit removal before protection.": "document_comments",
-    "A document identifier is split across formatted runs and cannot be protected safely.": "document_split_identifier",
+    (
+        "A document identifier is split across formatted runs and cannot be protected safely."
+    ): "document_split_identifier",
     "A document identifier remained after protection.": "document_protection_incomplete",
     "Returned Word document does not preserve every protection token.": "document_token_integrity",
-    "Returned Word document contains an original protected identifier.": "document_original_identifier",
+    (
+        "Returned Word document contains an original protected identifier."
+    ): "document_original_identifier",
     "Returned Word document contains tracked changes.": "document_tracked_changes",
     "Returned Word document contains hidden text.": "document_hidden_text",
-    "Returned Word document contains unsupported embedded or active content.": "document_active_content",
+    (
+        "Returned Word document contains unsupported embedded or active content."
+    ): "document_active_content",
     "Document restoration bundle version or structure is unsupported.": "bundle_incompatible",
     "Document restoration bundle version or envelope is unsupported.": "bundle_incompatible",
     "Document restoration bundle could not be authenticated or decoded.": "bundle_authentication",
@@ -332,7 +341,11 @@ class Bridge:
                 "desktop_contract": "shared",
             }
         if command in {"approve_document_protection", "approve_document_restoration"}:
-            required = {"review_id", "passphrase"} if command == "approve_document_protection" else {"review_id"}
+            required = (
+                {"review_id", "passphrase"}
+                if command == "approve_document_protection"
+                else {"review_id"}
+            )
             data = _payload(raw, required)
             token = _string(data["review_id"])
             pending = self.pending
@@ -340,9 +353,7 @@ class Bridge:
             if pending is None or pending[0] != command or pending[1] != token:
                 raise SafetyError("Review is stale; prepare and review again.")
             if command == "approve_document_protection":
-                approve_document_protection(
-                    pending[2], _string(data["passphrase"]), approved=True
-                )
+                approve_document_protection(pending[2], _string(data["passphrase"]), approved=True)
             else:
                 approve_document_restoration(pending[2], authorised=True)
             return {"created": True}
@@ -354,8 +365,9 @@ class Bridge:
             "approve_export",
         }:
             data = _payload(
-                raw, {"review_id"},
-                {"passphrase", "approved_results", "approved_sheets", "approved_changes"}
+                raw,
+                {"review_id"},
+                {"passphrase", "approved_results", "approved_sheets", "approved_changes"},
             )
             token = _string(data["review_id"])
             pending = self.pending
@@ -375,7 +387,9 @@ class Bridge:
                 _payload(data, {"review_id", "passphrase"})
                 approve_export(review, _string(data["passphrase"]), approved=True)
                 return {"created": True}
-            _payload(data, {"review_id", "approved_results"}, {"approved_sheets", "approved_changes"})
+            _payload(
+                data, {"review_id", "approved_results"}, {"approved_sheets", "approved_changes"}
+            )
             approved_sheets = _columns(data.get("approved_sheets", []))
             if command == "approve_relational_reconstruction":
                 rows = approve_relational_reconstruction(
@@ -385,7 +399,8 @@ class Bridge:
                     authorised=True,
                     approved_changes=(
                         _approved_results(data["approved_changes"])
-                        if "approved_changes" in data else None
+                        if "approved_changes" in data
+                        else None
                     ),
                 )
                 return {"created": True, "rows": rows}
@@ -532,9 +547,14 @@ class Bridge:
                 _path(data.get("bundle"), optional=True),
                 _string(data["validation_profile"]),
                 _columns(data.get("shared_code_fields", [])),
-                ({name: list(columns) for name, columns in
-                  _approved_results(data["editable_fields"]).items()}
-                 if "editable_fields" in data else None),
+                (
+                    {
+                        name: list(columns)
+                        for name, columns in _approved_results(data["editable_fields"]).items()
+                    }
+                    if "editable_fields" in data
+                    else None
+                ),
             )
             token = new_id()
             self.pending = ("approve_relational_protection", token, review)
@@ -545,6 +565,13 @@ class Bridge:
                 "entities": len(review.candidate.entities),
                 "shared_code_fields": list(review.candidate.shared_code_fields),
                 "editable_fields": review.editable_fields,
+                "analysis_prompt": (
+                    editing_instructions(
+                        review.editable_fields, review.policies, review.candidate.shared_code_fields
+                    )
+                    if review.editable_fields is not None
+                    else None
+                ),
                 "output": str(review.output),
                 "bundle": str(review.bundle_path),
                 "validation": review.validation.summary(),
@@ -604,6 +631,18 @@ class Bridge:
                 },
                 "new_sheets": list(review.analysis_sheets),
                 "changes": review.changes,
+                "analysis_prompt": (
+                    editing_instructions(
+                        review.bundle["editable_fields"],
+                        {
+                            name: parse_policy(item["policy"])
+                            for name, item in review.bundle["sheets"].items()
+                        },
+                        tuple(review.bundle["shared_code_fields"]),
+                    )
+                    if review.bundle["version"] == 4
+                    else None
+                ),
                 "output": str(review.output),
             }
         if command == "prepare_export":

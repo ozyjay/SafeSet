@@ -72,6 +72,7 @@ final class BackendBridge: @unchecked Sendable {
         case "edit_structure": message = "This workbook permits edits to selected existing fields. Preserve its original protected sheets and headings. Put narrative findings in the ChatGPT reply rather than extra columns or sheets."
         case "edit_approval": message = "Review and approve every changed field before restoration."
         case "edit_layout": message = "SafeSet could not safely apply edits to the original workbook layout. No restored workbook was created."
+        case "edit_precision": message = "An edited numeric cell exceeds Excel's 15 significant-digit precision. Use a value Excel can store accurately, or keep that field as reference data."
         case "policy_configuration": message = "One or more field decisions are incomplete or incompatible. Check the identifier, classifications, approved categories and numeric settings on every selected worksheet."
         case "field_decisions": message = "Every field on every selected worksheet needs an explicit protection decision."
         case "source_key_invalid": message = "A selected worksheet contains a blank or unsafe source identifier. Source identifiers must be non-empty text."

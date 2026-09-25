@@ -599,11 +599,7 @@ struct SourceCellLocation: Identifiable {
              ["review_id": token, "passphrase": passphrase]) { _ in
             self.relationalRestore = relational
             self.preferences.set(relational, forKey: "recentRestoreBundleRelational")
-            if let permissions = review["editable_fields"] as? [String: [String]] {
-                self.latestAnalysisPrompt = editingAnalysisPrompt(permissions)
-            } else {
-                self.latestAnalysisPrompt = restorationCopyText
-            }
+            self.latestAnalysisPrompt = review["analysis_prompt"] as? String ?? restorationCopyText
             self.original = self.source
             self.originalSheets = self.sourceSheets
             self.originalSheet = self.sourceSheet
@@ -654,6 +650,7 @@ struct SourceCellLocation: Identifiable {
         }
         send(command, payload) { result in
             self.restorationReview = result
+            self.latestAnalysisPrompt = result["analysis_prompt"] as? String ?? restorationCopyText
             self.approvedResults = []
             self.approvedSheets = []
             self.approvedChanges = [:]
@@ -687,7 +684,7 @@ struct SourceCellLocation: Identifiable {
         guard canApproveRestoration,
               let review = restorationReview,
               let token = review["review_id"] as? String else {
-            alert = "Approve every new result field and added worksheet, or remove it from the returned workbook."
+            alert = "Review and approve every changed field, new result field and added worksheet before restoration."
             return
         }
         let command: String

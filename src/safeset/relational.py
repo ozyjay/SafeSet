@@ -33,7 +33,14 @@ from .pseudonyms import new_id, valid_id
 from .reconstruction import approved_analysis_sheets
 from .storage import check_map_read, map_destination, output_destination, private_directory, publish
 from .validation import ValidationReport, validate
-from .workbook_editing import decoded_edit, edit_codebooks, file_digest, validate_editable_fields
+from .workbook_editing import (
+    changed_value,
+    decoded_edit,
+    edit_codebooks,
+    file_digest,
+    validate_editable_fields,
+    validate_editable_layout,
+)
 
 MAGIC = b"SAFESET3\n"
 EDIT_MAGIC = b"SAFESET4\n"
@@ -325,8 +332,11 @@ def create_relational_bundle(
     return validate_relational_bundle(
         {
             "version": 4 if editable_fields is not None else 3,
-            **({"editable_fields": editable_fields, "source_file_digest": source_file_digest}
-               if editable_fields is not None else {}),
+            **(
+                {"editable_fields": editable_fields, "source_file_digest": source_file_digest}
+                if editable_fields is not None
+                else {}
+            ),
             "export_id": new_id(),
             "profile": profile,
             "workbook_digest": workbook_digest(sources),
@@ -343,7 +353,9 @@ def create_relational_bundle(
 def validate_relational_bundle(value: object) -> dict:
     legacy_keys = {"version", "export_id", "profile", "workbook_digest", "entities", "sheets"}
     keys = legacy_keys | {"shared_code_fields"}
-    editing = isinstance(value, dict) and type(value.get("version")) is int and value["version"] == 4
+    editing = (
+        isinstance(value, dict) and type(value.get("version")) is int and value["version"] == 4
+    )
     if editing:
         keys |= {"editable_fields", "source_file_digest"}
     if isinstance(value, dict) and set(value) == legacy_keys:
@@ -408,8 +420,11 @@ def validate_relational_bundle(value: object) -> dict:
     if editing:
         validate_editable_fields(value["editable_fields"], policies)
         digest = value["source_file_digest"]
-        if (not isinstance(digest, str) or len(digest) != 64
-                or any(character not in "0123456789abcdef" for character in digest)):
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
             raise SafetyError("Relational restoration bundle version or structure is unsupported.")
     if len(declared_record_ids) != len(set(declared_record_ids)) or any(
         not valid_id(record_id) for record_id in declared_record_ids
@@ -599,6 +614,8 @@ def publish_relational_candidate(
     fresh_validation.require_pass()
     if editable_fields is not None and file_digest(source_path) != source_file_digest:
         raise SafetyError("Source workbook changed after relational protection review.")
+    if editable_fields is not None:
+        validate_editable_layout(source_path, editable_fields)
     bundle = create_relational_bundle(
         sources, policies, candidate, validation.profile, editable_fields, source_file_digest
     )
@@ -722,9 +739,13 @@ def reconstruct_relational(
         if (
             not isinstance(approved_changes, dict)
             or set(approved_changes) != set(expected_changes)
-            or any(len(columns) != len(set(columns))
-                   or set(columns) != expected_changes[sheet]
-                   for sheet, columns in approved_changes.items())
+            or any(
+                not isinstance(columns, (tuple, list))
+                or any(not isinstance(name, str) for name in columns)
+                or len(columns) != len(set(columns))
+                or set(columns) != expected_changes[sheet]
+                for sheet, columns in approved_changes.items()
+            )
         ):
             raise SafetyError("Every changed field requires explicit approval.")
     if set(approved_results) != set(available) or any(
@@ -741,15 +762,19 @@ def reconstruct_relational(
         rows = []
         returned_rows = (
             sorted(returned[sheet].rows, key=lambda row: item["records"][row["record_id"]]["row"])
-            if bundle["version"] == 4 else returned[sheet].rows
+            if bundle["version"] == 4
+            else returned[sheet].rows
         )
         for row in returned_rows:
             original = source.rows[item["records"][row["record_id"]]["row"]]
             edits = {}
             for name in bundle.get("editable_fields", {}).get(sheet, []):
                 rule = policy.columns[name]
-                if row[name] != _expected(original[name], name, rule, item["codebooks"]):
-                    edits[name] = decoded_edit(row[name], rule, edit_books.get((sheet, name), {}))
+                value = changed_value(
+                    row[name], original[name], rule, edit_books.get((sheet, name), {})
+                )
+                if value is not None:
+                    edits[name] = value
             rows.append(
                 {
                     **original,
@@ -773,6 +798,7 @@ def relational_changes(sources: dict, returned: dict, bundle: dict) -> dict[str,
     """Only counts and headings cross the desktop boundary, never source or result values."""
     review_relational_reconstruction(sources, returned, bundle)
     changes = {}
+    edit_books = edit_codebooks(bundle) if bundle["version"] == 4 else {}
     for sheet, names in bundle.get("editable_fields", {}).items():
         item = bundle["sheets"][sheet]
         policy = parse_policy(item["policy"])
@@ -780,7 +806,15 @@ def relational_changes(sources: dict, returned: dict, bundle: dict) -> dict[str,
         for row in returned[sheet].rows:
             original = sources[sheet].rows[item["records"][row["record_id"]]["row"]]
             for name in names:
-                if row[name] != _expected(original[name], name, policy.columns[name], item["codebooks"]):
+                if (
+                    changed_value(
+                        row[name],
+                        original[name],
+                        policy.columns[name],
+                        edit_books.get((sheet, name), {}),
+                    )
+                    is not None
+                ):
                     counts[name] += 1
         changes[sheet] = {name: count for name, count in counts.items() if count}
     return changes

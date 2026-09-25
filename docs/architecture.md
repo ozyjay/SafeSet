@@ -31,9 +31,10 @@ Responses contain only aggregate inspection, local category values after an
 explicit request, fixed error codes and review metadata. Source rows, maps,
 bundle payloads and passphrases never enter protocol responses or logs.
 
-For restoration convenience, the SwiftUI process stores only the path of the
-most recently created or selected encrypted private bundle in its local app
-preferences. It prefills that path only while it still names an existing `.enc`
+For restoration convenience, the SwiftUI process stores the path of the
+most recently created or selected encrypted private bundle and the most recently
+created release's relational-mode flag in its local app preferences. It prefills
+the path only while it still names an existing `.enc`
 file, removes stale preferences and provides an explicit forget control. The
 passphrase and decrypted bundle content are never stored in preferences, and the
 bundle is not opened until the user requests validation.
@@ -52,7 +53,7 @@ The original source remains authoritative for every source field, including fiel
 omitted from the protected copy. The modified copy is untrusted. Reconstruction
 imports only individually approved new result columns; changes to any source-derived
 protected field, including coded categories, are blocked. Editable source-derived
-fields are deferred until a separate, explicit policy and review model exists.
+fields use the separate version 4 workflow described below.
 Returned protected columns may appear in any order, with new result columns
 interspersed. Restoration matches exact, unique headings to the authenticated
 protected schema, checks every protected value by record ID and requires explicit
@@ -77,6 +78,52 @@ trust boundaries. The bundle stays outside export directories and repositories;
 the reconstructed output is sensitive plaintext and never overwrites the source.
 The export and restore operations need no runtime network access.
 
+## Editable workbook round trip (bundle version 4)
+
+The native Mac protection flow defaults to editing selected existing fields.
+Per-sheet `editable_fields` lists explicitly authorise `keep`, `code` and
+`keep_numeric` fields; an empty list makes a selected sheet reference only.
+Identifiers, dropped fields, bins, formula cells and date cells cannot be editable.
+Every selected sheet still needs its normal protection policy and declared source
+key in the shared entity domain. Supporting sheets without that structure can
+remain local; selecting a reference role does not bypass disclosure checks.
+
+The `SAFESET4` envelope authenticates the version 3 relational payload plus exact
+editable-field lists and a SHA-256 binding of the entire original file. Versions
+2 and 3 remain immutable and are never upgraded implicitly. Version 4 requires a
+new protection run. Workflow permissions are separate from policy YAML versions.
+Protected output remains minimal static tables; original formatting, local-only
+worksheets and original formulas are never sent to the analysis recipient.
+
+Returned workbooks must retain exact row IDs, entity links, protected headings
+and reference values. Row and column reordering is allowed. No extra sheets or
+columns are accepted in editing mode. Edited categories must be observed values;
+edited codes must resolve in their authenticated codebook, or the union of an
+explicitly shared same-field codebook. Numeric edits obey policy bounds and blank
+semantics. The engine reports changed-cell counts per field without exposing row
+values, and requires explicit approval of every changed field.
+
+`workbook_editing` maps source rows to exact worksheet coordinates through the
+bounded ingestion reader, including multiple structured table regions. Restoration
+uses the original package as its base, applying only approved changes in source
+row order. Unmodified ZIP members, including reference/local-only worksheet XML,
+styles, drawings and charts, are copied byte-for-byte. Changed worksheet XML keeps
+its remaining cells and layout. Original formulas are retained and workbook
+calculation flags request recalculation in Excel; SafeSet does not calculate them.
+Existing numeric cells stay numeric; values exceeding Excel's 15 significant-digit
+precision are rejected before review. Numeric fields stored as text stay text.
+Digitally signed packages requiring edits and ambiguous XML layouts fail closed.
+
+The complete proposed workbook is built in memory before review, then rebuilt
+and compared at approval after rechecking the full original file and returned
+tables. Publication remains local and no-clobber. No source rows or workbook bytes
+are added to the encrypted bundle or protocol responses. The copyable prompt lists
+only authorised headings, domain instructions and approved numeric bounds. New
+desktop protocol options are `editable_fields` on relational protection and
+`approved_changes` on relational approval; the review returns `changes` as
+per-sheet/per-field counts and `analysis_prompt` as copyable instructions. Existing
+requests without editing permissions retain their version 3 behaviour.
+
 ## Relational workbook round trip (bundle version 3)
 
 The relational workflow protects an explicitly selected set of worksheets without
@@ -90,9 +137,8 @@ unambiguous when an entity occurs in several worksheets or several rows.
 
 Worksheet selection is a release role: selected worksheets are protected and
 included, while unselected worksheets are excluded rather than copied through.
-SafeSet has no copy-unchanged role. A future supporting/summary-sheet workflow
-would need its own explicit field review and allowlisting model; it is deliberately
-not inferred from a sheet being non-identifying or derived.
+No source worksheet is copied unchanged into a protected export. Version 4 adds
+reference roles and preserves local original worksheets during restoration only.
 
 The protected workbook preserves selected worksheet names and contains both IDs.
 The desktop inspects every selected worksheet and consolidates fields by exact

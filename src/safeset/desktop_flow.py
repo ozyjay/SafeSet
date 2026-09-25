@@ -41,13 +41,13 @@ from .restoration import restore
 from .storage import default_map_path, map_destination, output_destination, publish
 from .transform import Candidate, sanitise
 from .validation import ValidationReport, validate
-from .workflow import export_candidate, protect_candidate
 from .workbook_editing import (
     file_digest,
     patched_workbook_bytes,
     validate_editable_fields,
     validate_editable_layout,
 )
+from .workflow import export_candidate, protect_candidate
 
 
 @dataclass(frozen=True)
@@ -135,6 +135,7 @@ class RelationalReconstructionReview:
     new_columns: dict[str, tuple[str, ...]]
     visible_returned_sheets: tuple[str, ...]
     changes: dict | None = None
+    workbook_bytes: bytes | None = None
 
 
 def prepare_protection(
@@ -219,8 +220,16 @@ def prepare_relational_protection(
     destination = output_destination(output, source)
     private_bundle = map_destination(bundle_path or default_map_path(), destination, source)
     return RelationalProtectionReview(
-        source, sheets, destination, private_bundle, sources, policies, candidate, validation,
-        editable_fields, digest,
+        source,
+        sheets,
+        destination,
+        private_bundle,
+        sources,
+        policies,
+        candidate,
+        validation,
+        editable_fields,
+        digest,
     )
 
 
@@ -393,6 +402,17 @@ def prepare_relational_reconstruction(
         analysis_sheets, sheets, sum(len(table.rows) for table in sources.values())
     )
     new_columns = review_relational_reconstruction(sources, returned, bundle)
+    changes = relational_changes(sources, returned, bundle) if bundle["version"] == 4 else None
+    workbook_bytes = None
+    if changes is not None:
+        proposal = reconstruct_relational(
+            sources,
+            returned,
+            bundle,
+            new_columns,
+            approved_changes={sheet: tuple(columns) for sheet, columns in changes.items()},
+        )
+        workbook_bytes = patched_workbook_bytes(source_path, bundle, proposal)
     return RelationalReconstructionReview(
         source_path,
         returned_path,
@@ -404,7 +424,8 @@ def prepare_relational_reconstruction(
         bundle,
         new_columns,
         returned_names,
-        relational_changes(sources, returned, bundle) if bundle["version"] == 4 else None,
+        changes,
+        workbook_bytes,
     )
 
 
@@ -425,9 +446,7 @@ def approve_relational_reconstruction(
     sheets = tuple(review.bundle["sheets"])
     returned_names = list_excel_sheets(review.returned_path, reject_hidden=True)
     if returned_names != review.visible_returned_sheets:
-        raise SafetyError(
-            "A workbook changed after relational restoration review."
-        )
+        raise SafetyError("A workbook changed after relational restoration review.")
     current_sources = read_excel_sheets(
         review.source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
@@ -464,8 +483,11 @@ def approve_relational_reconstruction(
     )
     encoded = (
         patched_workbook_bytes(review.source_path, review.bundle, restored)
-        if review.bundle["version"] == 4 else excel_workbook_bytes(restored)
+        if review.bundle["version"] == 4
+        else excel_workbook_bytes(restored)
     )
+    if review.bundle["version"] == 4 and encoded != review.workbook_bytes:
+        raise SafetyError("A workbook changed after relational restoration review.")
     publish(destination, encoded)
     return sum(len(table.rows) for table in current_sources.values())
 
@@ -516,9 +538,10 @@ def locate_unsafe_source_cells(
             allow_source_dates=True,
             observe_cell=observe,
         )
-        if table.columns != tuple(bundle["source_columns"]) or source_digest(table) != bundle[
-            "source_digest"
-        ]:
+        if (
+            table.columns != tuple(bundle["source_columns"])
+            or source_digest(table) != bundle["source_digest"]
+        ):
             raise SafetyError("Original source does not match the restoration bundle.")
     return {"count": count, "cells": locations}
 

@@ -2,6 +2,43 @@ import XCTest
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    @MainActor func testEditableFieldsAreScopedToSheetsAndReversibleActions() {
+        let model = AppModel()
+        model.sourceSheet = "Allocations"
+        model.selectedSourceSheets = ["Allocations", "Participants"]
+        var team = FieldDraft(id: "Synthetic team")
+        team.action = "code"
+        var identifier = FieldDraft(id: "Synthetic key")
+        identifier.action = "pseudonymise"
+        var grouped = FieldDraft(id: "Synthetic band")
+        grouped.action = "bin"
+        model.fields = [team, identifier, grouped]
+        model.fieldsBySheet["Participants"] = [team, identifier]
+        model.editableFields["Allocations"] = [team.id, identifier.id, grouped.id]
+        XCTAssertEqual(model.editingPermissions["Allocations"], [team.id])
+        XCTAssertEqual(model.editingPermissions["Participants"], [])
+        team.action = "drop"
+        model.fields = [team, identifier, grouped]
+        XCTAssertEqual(model.editingPermissions["Allocations"], [])
+    }
+
+    @MainActor func testChangedFieldsRequireSeparateExplicitApproval() {
+        let model = AppModel()
+        model.relationalRestore = true
+        model.restorationReview = [
+            "review_id": "synthetic-token",
+            "new_columns": ["Allocations": [String](), "Participants": [String]()],
+            "changes": ["Allocations": ["Team": 2], "Participants": [String: Int]()]
+        ]
+        XCTAssertFalse(model.canApproveRestoration)
+        model.approvedChanges = ["Allocations": ["Team"]]
+        XCTAssertTrue(model.canApproveRestoration)
+        model.approvedChanges["Allocations"]?.insert("Unexpected")
+        XCTAssertFalse(model.canApproveRestoration)
+        model.approvedChanges = ["Allocations": ["Team"], "Participants": ["Team"]]
+        XCTAssertFalse(model.canApproveRestoration)
+    }
+
     func testHelpIsAnExplicitNavigationDestination() {
         XCTAssertEqual(AppModel.Page.help.rawValue, "help")
     }
