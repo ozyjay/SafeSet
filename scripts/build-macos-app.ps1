@@ -6,7 +6,8 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $package = Join-Path $repo 'macos/SafeSetMac'
 $build = Join-Path $repo 'build/macos'
-$app = Join-Path $repo 'dist/SafeSet.app'
+$dist = Join-Path $repo 'dist'
+$app = Join-Path $dist 'SafeSet.app'
 $python = Join-Path $repo '.venv/bin/python'
 $iconSource = Join-Path $repo 'assets/safeset-app-icon-1024.png'
 $iconCatalog = Join-Path $build 'SafeSetAssets.xcassets'
@@ -14,12 +15,43 @@ $iconSet = Join-Path $iconCatalog 'AppIcon.appiconset'
 $compiledIcons = Join-Path $build 'compiled-icons'
 $iconFile = Join-Path $compiledIcons 'AppIcon.icns'
 
+function Restore-InterruptedPublish([string]$destination) {
+    $backup = "$destination.previous-build"
+    if (-not (Test-Path -LiteralPath $backup)) { return }
+    if (Test-Path -LiteralPath $destination) {
+        Remove-Item -LiteralPath $backup -Recurse -Force
+    } else {
+        Move-Item -LiteralPath $backup -Destination $destination
+    }
+}
+
+function Publish-BuiltArtifact([string]$source, [string]$destination) {
+    $backup = "$destination.previous-build"
+    if (Test-Path -LiteralPath $destination) {
+        Move-Item -LiteralPath $destination -Destination $backup
+    }
+    try {
+        Move-Item -LiteralPath $source -Destination $destination
+    } catch {
+        if (Test-Path -LiteralPath $backup) {
+            Move-Item -LiteralPath $backup -Destination $destination
+        }
+        throw
+    }
+    if (Test-Path -LiteralPath $backup) {
+        Remove-Item -LiteralPath $backup -Recurse -Force
+    }
+}
+
+New-Item -ItemType Directory -Force $build, $dist | Out-Null
+Restore-InterruptedPublish $app
+Restore-InterruptedPublish (Join-Path $dist 'SafeSet-local.zip')
+Restore-InterruptedPublish (Join-Path $dist 'SafeSet-local.dmg')
 if (-not (Test-Path $python)) { throw 'Create the project virtual environment first.' }
 if (-not (Test-Path $iconSource -PathType Leaf)) { throw 'SafeSet app icon source is missing.' }
 & $python -m PyInstaller --version | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Install the mac-app dependency group first.' }
 
-New-Item -ItemType Directory -Force $build | Out-Null
 if (Test-Path $iconCatalog) { Remove-Item -LiteralPath $iconCatalog -Recurse -Force }
 if (Test-Path $compiledIcons) { Remove-Item -LiteralPath $compiledIcons -Recurse -Force }
 New-Item -ItemType Directory $iconSet, $compiledIcons | Out-Null
@@ -66,37 +98,51 @@ if ($LASTEXITCODE -ne 0) { throw 'SwiftUI Xcode build failed.' }
 $builtApp = Join-Path $build 'DerivedData/Build/Products/Release/SafeSetMac.app'
 if (-not (Test-Path $builtApp)) { throw 'Xcode did not produce the app.' }
 
-if (Test-Path $app) { Remove-Item -Recurse -Force $app }
-Copy-Item -LiteralPath $builtApp -Destination $app -Recurse
-$helpers = Join-Path $app 'Contents/Helpers/SafeSetBackend'
-$appResources = Join-Path $app 'Contents/Resources'
-$resources = Join-Path $appResources 'SafeSetBackend'
-New-Item -ItemType Directory -Force $helpers, $resources | Out-Null
-Copy-Item (Join-Path $build 'python/safeset-backend/safeset-backend') $helpers
-Copy-Item (Join-Path $build 'python/safeset-backend/_internal/*') $resources -Recurse
-Copy-Item -LiteralPath (Join-Path $repo 'HOWTO.md') `
-    -Destination (Join-Path $appResources 'HOWTO.md')
-Copy-Item -LiteralPath $iconFile -Destination (Join-Path $appResources 'AppIcon.icns')
-Copy-Item -LiteralPath (Join-Path $compiledIcons 'Assets.car') -Destination $appResources
-New-Item -ItemType SymbolicLink -Path (Join-Path $helpers '_internal') `
-    -Target '../../Resources/SafeSetBackend' | Out-Null
+$staging = Join-Path $dist ('.SafeSet-build-' + [Guid]::NewGuid().ToString('N'))
+$stagedApp = Join-Path $staging 'SafeSet.app'
+New-Item -ItemType Directory $staging | Out-Null
+try {
+    Copy-Item -LiteralPath $builtApp -Destination $stagedApp -Recurse
+    $helpers = Join-Path $stagedApp 'Contents/Helpers/SafeSetBackend'
+    $appResources = Join-Path $stagedApp 'Contents/Resources'
+    $resources = Join-Path $appResources 'SafeSetBackend'
+    New-Item -ItemType Directory -Force $helpers, $resources | Out-Null
+    Copy-Item (Join-Path $build 'python/safeset-backend/safeset-backend') $helpers
+    Copy-Item (Join-Path $build 'python/safeset-backend/_internal/*') $resources -Recurse
+    Copy-Item -LiteralPath (Join-Path $repo 'HOWTO.md') `
+        -Destination (Join-Path $appResources 'HOWTO.md')
+    Copy-Item -LiteralPath $iconFile -Destination (Join-Path $appResources 'AppIcon.icns')
+    Copy-Item -LiteralPath (Join-Path $compiledIcons 'Assets.car') -Destination $appResources
+    New-Item -ItemType SymbolicLink -Path (Join-Path $helpers '_internal') `
+        -Target '../../Resources/SafeSetBackend' | Out-Null
 
-& /usr/bin/codesign --force --sign - $app
-if ($LASTEXITCODE -ne 0) { throw 'Local ad-hoc app signing failed.' }
-& /usr/bin/codesign --verify --strict $app
-if ($LASTEXITCODE -ne 0) { throw 'Local app signature verification failed.' }
+    & /usr/bin/codesign --force --sign - $stagedApp
+    if ($LASTEXITCODE -ne 0) { throw 'Local ad-hoc app signing failed.' }
+    & /usr/bin/codesign --verify --strict $stagedApp
+    if ($LASTEXITCODE -ne 0) { throw 'Local app signature verification failed.' }
 
-$zip = Join-Path $repo 'dist/SafeSet-local.zip'
-if (Test-Path $zip) { Remove-Item -Force $zip }
-Push-Location (Join-Path $repo 'dist')
-try { & /usr/bin/ditto -c -k --keepParent 'SafeSet.app' 'SafeSet-local.zip' }
-finally { Pop-Location }
-if ($LASTEXITCODE -ne 0) { throw 'Local ZIP creation failed.' }
+    Push-Location $staging
+    try {
+        & /usr/bin/ditto -c -k --keepParent 'SafeSet.app' 'SafeSet-local.zip'
+        if ($LASTEXITCODE -ne 0) { throw 'Local ZIP creation failed.' }
+    } finally { Pop-Location }
 
-if ($CreateDmg) {
-    $dmg = Join-Path $repo 'dist/SafeSet-local.dmg'
-    if (Test-Path $dmg) { Remove-Item -Force $dmg }
-    & /usr/bin/hdiutil create -volname 'SafeSet' -srcfolder $app -ov -format UDZO $dmg
-    if ($LASTEXITCODE -ne 0) { throw 'Local DMG creation failed.' }
+    if ($CreateDmg) {
+        & /usr/bin/hdiutil create -volname 'SafeSet' -srcfolder $stagedApp -ov `
+            -format UDZO (Join-Path $staging 'SafeSet-local.dmg')
+        if ($LASTEXITCODE -ne 0) { throw 'Local DMG creation failed.' }
+    }
+
+    Publish-BuiltArtifact $stagedApp $app
+    Publish-BuiltArtifact (Join-Path $staging 'SafeSet-local.zip') `
+        (Join-Path $dist 'SafeSet-local.zip')
+    if ($CreateDmg) {
+        Publish-BuiltArtifact (Join-Path $staging 'SafeSet-local.dmg') `
+            (Join-Path $dist 'SafeSet-local.dmg')
+    }
+} finally {
+    if (Test-Path -LiteralPath $staging) {
+        Remove-Item -LiteralPath $staging -Recurse -Force
+    }
 }
 Write-Output $app

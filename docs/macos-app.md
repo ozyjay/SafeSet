@@ -29,7 +29,10 @@ round trip. It also checks that the app icon generated from
 `assets/safeset-app-icon-1024.png` is configured and that existing output is
 rejected. It uses no real student data. To request a development DMG, run
 `& ./scripts/build-macos-app.ps1 -CreateDmg` on a Mac whose disk-image service
-is available. A development DMG remains ad-hoc signed.
+is available. A development DMG remains ad-hoc signed. The build prepares and
+signs the new app in a staging directory before replacing existing local build
+artefacts. If publication is interrupted, the next build restores any missing
+app, ZIP or DMG from its previous-build backup.
 
 To install an existing build for the current user, run:
 
