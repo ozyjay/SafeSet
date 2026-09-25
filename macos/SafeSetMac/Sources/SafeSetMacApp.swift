@@ -344,48 +344,58 @@ struct RootView: View {
 struct HomeView: View {
     @EnvironmentObject var model: AppModel
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Protect, work, restore").appFont(26, weight: .bold)
-            Text("Create protected working copies for analysis or review, then restore approved identifiers locally.")
-                .appFont(16).foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 240))], spacing: 16) {
-                Button { model.page = .protect } label: {
-                    Label("Protect a workbook", systemImage: "tablecells")
-                        .appFont(13)
-                        .frame(maxWidth: .infinity, minHeight: 92)
-                }.buttonStyle(.borderedProminent)
-                Button { model.page = .protectDocument } label: {
-                    Label("Protect a document", systemImage: "doc.text")
-                        .appFont(13)
-                        .frame(maxWidth: .infinity, minHeight: 92)
-                }.buttonStyle(.borderedProminent)
-                Button { model.page = .restore } label: {
-                    Label("Restore a workbook", systemImage: "arrow.uturn.backward.square")
-                        .appFont(13)
-                        .frame(maxWidth: .infinity, minHeight: 92)
-                }.buttonStyle(.bordered)
-                Button { model.page = .restoreDocument } label: {
-                    Label("Restore a document", systemImage: "arrow.uturn.backward.doc")
-                        .appFont(13)
-                        .frame(maxWidth: .infinity, minHeight: 92)
-                }.buttonStyle(.bordered)
-            }
-            if model.hasRecentProtectedWorkbook {
-                GroupBox("Before using ChatGPT") {
-                    HStack(alignment: .center, spacing: 16) {
-                        Text("Send the protected workbook with the preservation prompt. Keep the original source, private bundle and passphrase local.")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Button("View and copy prompt") { model.showAnalysisPrompt = true }
-                            .buttonStyle(.bordered)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("Protect, work, restore").appFont(26, weight: .bold)
+                Text("Create protected working copies for analysis or review, then restore approved identifiers locally.")
+                    .appFont(16).foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 16) {
+                    GroupBox("Workbooks") {
+                        HStack(spacing: 16) {
+                            Button { model.page = .protect } label: {
+                                Label("Protect a workbook", systemImage: "tablecells")
+                                    .appFont(13)
+                                    .frame(maxWidth: .infinity, minHeight: 92)
+                            }.buttonStyle(.borderedProminent)
+                            Button { model.page = .restore } label: {
+                                Label("Restore a workbook", systemImage: "arrow.uturn.backward.square")
+                                    .appFont(13)
+                                    .frame(maxWidth: .infinity, minHeight: 92)
+                            }.buttonStyle(.bordered)
+                        }
                     }
-                    .padding(.vertical, 6)
+                    GroupBox("Documents") {
+                        HStack(spacing: 16) {
+                            Button { model.page = .protectDocument } label: {
+                                Label("Protect a document", systemImage: "doc.text")
+                                    .appFont(13)
+                                    .frame(maxWidth: .infinity, minHeight: 92)
+                            }.buttonStyle(.borderedProminent)
+                            Button { model.page = .restoreDocument } label: {
+                                Label("Restore a document", systemImage: "arrow.uturn.backward.doc")
+                                    .appFont(13)
+                                    .frame(maxWidth: .infinity, minHeight: 92)
+                            }.buttonStyle(.bordered)
+                        }
+                    }
                 }
+                if model.hasRecentProtectedWorkbook {
+                    GroupBox("Before using ChatGPT") {
+                        HStack(alignment: .center, spacing: 16) {
+                            Text("Send the protected workbook with the preservation prompt. Keep the original source, private bundle and passphrase local.")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Button("View and copy prompt") { model.showAnalysisPrompt = true }
+                                .buttonStyle(.bordered)
+                        }
+                        .padding(.vertical, 6)
+                    }
+                }
+                Text("Passing checks reduces some disclosure risks. It does not establish anonymity or recipient suitability.")
+                    .foregroundStyle(.secondary)
             }
-            Text("Passing checks reduces some disclosure risks. It does not establish anonymity or recipient suitability.")
-                .foregroundStyle(.secondary)
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(28)
         }
-        .padding(28)
     }
 }
 
@@ -671,6 +681,7 @@ struct ProtectDocumentView: View {
     @State private var passphrase = ""
     @State private var confirmation = ""
     @State private var showApproval = false
+    @State private var passphraseIssue = ""
     @State private var removeComments = true
 
     private var terms: [String] {
@@ -745,7 +756,10 @@ struct ProtectDocumentView: View {
                     Text("Private restoration bundle: \(review["bundle"] as? String ?? "")")
                     Text("This review reduces some disclosure risks; it does not certify anonymity or recipient suitability.")
                         .foregroundStyle(.secondary)
-                    Button("Approve and create") { showApproval = true }
+                    Button("Approve and create") {
+                        passphraseIssue = ""
+                        showApproval = true
+                    }
                         .buttonStyle(.borderedProminent)
                     Button("Cancel review") { model.cancelReview() }
                 }
@@ -757,18 +771,29 @@ struct ProtectDocumentView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Approve document protection").appFont(18, weight: .bold)
                 SecureField("Restoration passphrase", text: $passphrase)
+                    .onChange(of: passphrase) { passphraseIssue = "" }
                 SecureField("Confirm passphrase", text: $confirmation)
+                    .onChange(of: confirmation) { passphraseIssue = "" }
+                if !passphraseIssue.isEmpty {
+                    Text(passphraseIssue).foregroundStyle(.red).appFont(13)
+                }
                 HStack {
                     Button("Cancel") {
                         showApproval = false; passphrase = ""; confirmation = ""
+                        passphraseIssue = ""
                     }
                     Button("Create") {
-                        guard passphrase.count >= 16, passphrase == confirmation else {
-                            model.alert = "Passphrases must match and contain at least 16 characters."
+                        guard passphrase.count >= 16 else {
+                            passphraseIssue = "Passphrase must contain at least 16 characters."
+                            return
+                        }
+                        guard passphrase == confirmation else {
+                            passphraseIssue = "Passphrases do not match."
                             return
                         }
                         let secret = passphrase
                         passphrase = ""; confirmation = ""; showApproval = false
+                        passphraseIssue = ""
                         model.approveDocumentProtection(passphrase: secret)
                     }.buttonStyle(.borderedProminent)
                 }
@@ -826,6 +851,7 @@ struct ProtectView: View {
     @State private var passphrase = ""
     @State private var confirmation = ""
     @State private var showApproval = false
+    @State private var passphraseIssue = ""
     @State private var showOnlyFieldsNeedingAttention = true
 
     var body: some View {
@@ -1013,7 +1039,10 @@ struct ProtectView: View {
                     }
                     Text("Passing validation does not establish anonymity or recipient suitability.")
                         .foregroundStyle(.secondary)
-                    Button("Approve and create") { showApproval = true }
+                    Button("Approve and create") {
+                        passphraseIssue = ""
+                        showApproval = true
+                    }
                         .appFont(13)
                         .disabled(validation["passed"] as? Bool != true)
                         .buttonStyle(.borderedProminent)
@@ -1068,17 +1097,30 @@ struct ProtectView: View {
                 Text("Approve protection").appFont(18, weight: .bold)
                 Text("Create the reviewed protected workbook and private encrypted bundle?")
                 SecureField("Restoration passphrase", text: $passphrase).appFont(13)
+                    .onChange(of: passphrase) { passphraseIssue = "" }
                 SecureField("Confirm passphrase", text: $confirmation).appFont(13)
+                    .onChange(of: confirmation) { passphraseIssue = "" }
+                if !passphraseIssue.isEmpty {
+                    Text(passphraseIssue).foregroundStyle(.red).appFont(13)
+                }
                 HStack {
-                    Button("Cancel") { showApproval = false; passphrase = ""; confirmation = "" }
+                    Button("Cancel") {
+                        showApproval = false; passphrase = ""; confirmation = ""
+                        passphraseIssue = ""
+                    }
                         .appFont(13)
                     Button("Create") {
-                        guard passphrase.count >= 16, passphrase == confirmation else {
-                            model.alert = "Passphrases must match and contain at least 16 characters."
+                        guard passphrase.count >= 16 else {
+                            passphraseIssue = "Passphrase must contain at least 16 characters."
+                            return
+                        }
+                        guard passphrase == confirmation else {
+                            passphraseIssue = "Passphrases do not match."
                             return
                         }
                         let secret = passphrase
                         passphrase = ""; confirmation = ""; showApproval = false
+                        passphraseIssue = ""
                         model.approveProtection(passphrase: secret)
                     }.appFont(13).buttonStyle(.borderedProminent)
                 }
