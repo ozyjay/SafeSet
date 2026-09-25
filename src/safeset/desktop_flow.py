@@ -31,6 +31,7 @@ from .relational import (
     publish_relational_candidate,
     read_relational_bundle,
     reconstruct_relational,
+    relational_changes,
     review_relational_reconstruction,
     sanitise_relational,
     validate_relational,
@@ -41,6 +42,12 @@ from .storage import default_map_path, map_destination, output_destination, publ
 from .transform import Candidate, sanitise
 from .validation import ValidationReport, validate
 from .workflow import export_candidate, protect_candidate
+from .workbook_editing import (
+    file_digest,
+    patched_workbook_bytes,
+    validate_editable_fields,
+    validate_editable_layout,
+)
 
 
 @dataclass(frozen=True)
@@ -111,6 +118,8 @@ class RelationalProtectionReview:
     policies: dict[str, Policy]
     candidate: RelationalCandidate
     validation: RelationalValidation
+    editable_fields: dict | None = None
+    source_file_digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -125,6 +134,7 @@ class RelationalReconstructionReview:
     bundle: dict
     new_columns: dict[str, tuple[str, ...]]
     visible_returned_sheets: tuple[str, ...]
+    changes: dict | None = None
 
 
 def prepare_protection(
@@ -187,22 +197,30 @@ def prepare_relational_protection(
     bundle_path: Path | None = None,
     validation_profile: str = "strict",
     shared_code_fields: tuple[str, ...] = (),
+    editable_fields: dict | None = None,
 ) -> RelationalProtectionReview:
     if set(sheets) != set(drafts):
         raise SafetyError("Every selected worksheet needs explicit field decisions.")
+    digest = file_digest(source) if editable_fields is not None else None
     sources = read_excel_sheets(source, sheets, allow_cached_formulas=True, allow_source_dates=True)
     policies = {}
     for sheet in sheets:
         if set(sources[sheet].columns) != set(drafts[sheet]):
             raise SafetyError("Every source field needs an explicit protection decision.")
         policies[sheet] = parse_policy(policy_payload(drafts[sheet], threshold))
+    if editable_fields is not None:
+        validate_editable_fields(editable_fields, policies)
+        validate_editable_layout(source, editable_fields)
+        if file_digest(source) != digest:
+            raise SafetyError("Source workbook changed after relational protection review.")
     candidate = sanitise_relational(sources, policies, shared_code_fields)
     validation = validate_relational(candidate, policies, validation_profile)
     require_excel_path(output)
     destination = output_destination(output, source)
     private_bundle = map_destination(bundle_path or default_map_path(), destination, source)
     return RelationalProtectionReview(
-        source, sheets, destination, private_bundle, sources, policies, candidate, validation
+        source, sheets, destination, private_bundle, sources, policies, candidate, validation,
+        editable_fields, digest,
     )
 
 
@@ -220,6 +238,8 @@ def approve_relational_protection(
         review.bundle_path,
         passphrase,
         approved=approved,
+        editable_fields=review.editable_fields,
+        source_file_digest=review.source_file_digest,
     )
 
 
@@ -344,6 +364,8 @@ def prepare_relational_reconstruction(
     require_excel_path(output)
     destination = output_destination(output, returned_path, source_path, bundle_path)
     bundle = read_relational_bundle(bundle_path, passphrase, returned_path, source_path, output)
+    if bundle["version"] == 4 and file_digest(source_path) != bundle["source_file_digest"]:
+        raise SafetyError("Original workbook does not match the relational restoration bundle.")
     sheets = tuple(bundle["sheets"])
     returned_names = list_excel_sheets(returned_path, reject_hidden=True)
     if not set(sheets).issubset(returned_names):
@@ -355,6 +377,8 @@ def prepare_relational_reconstruction(
     )
     returned = read_excel_sheets(returned_path, sheets, allow_reordered_headings=True)
     new_sheet_names = tuple(name for name in returned_names if name not in sheets)
+    if bundle["version"] == 4 and new_sheet_names:
+        raise SafetyError("Editing workbooks must preserve the original protected fields only.")
     analysis_sheets = (
         read_excel_sheets(
             returned_path,
@@ -380,6 +404,7 @@ def prepare_relational_reconstruction(
         bundle,
         new_columns,
         returned_names,
+        relational_changes(sources, returned, bundle) if bundle["version"] == 4 else None,
     )
 
 
@@ -389,9 +414,14 @@ def approve_relational_reconstruction(
     approved_sheets: tuple[str, ...] = (),
     *,
     authorised: bool,
+    approved_changes: dict[str, tuple[str, ...]] | None = None,
 ) -> int:
     if not authorised:
         raise SafetyError("Explicit relational restoration authorisation is required.")
+    if review.bundle["version"] == 4 and (
+        file_digest(review.source_path) != review.bundle["source_file_digest"]
+    ):
+        raise SafetyError("A workbook changed after relational restoration review.")
     sheets = tuple(review.bundle["sheets"])
     returned_names = list_excel_sheets(review.returned_path, reject_hidden=True)
     if returned_names != review.visible_returned_sheets:
@@ -427,11 +457,16 @@ def approve_relational_reconstruction(
         approved_results,
         current_analysis,
         approved_sheets,
+        approved_changes,
     )
     destination = output_destination(
         review.output, review.returned_path, review.source_path, review.bundle_path
     )
-    publish(destination, excel_workbook_bytes(restored))
+    encoded = (
+        patched_workbook_bytes(review.source_path, review.bundle, restored)
+        if review.bundle["version"] == 4 else excel_workbook_bytes(restored)
+    )
+    publish(destination, encoded)
     return sum(len(table.rows) for table in current_sources.values())
 
 
