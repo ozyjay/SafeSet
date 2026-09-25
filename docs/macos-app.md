@@ -33,18 +33,18 @@ Both configurations create `dist/SafeSet.app` and `dist/SafeSet-local.zip`, repl
 the previous local build. Building does not update the installed app. The bundled
 Python helper uses the same packaging and safety checks in either configuration.
 
-In VS Code, use **Terminal → Run Task → SafeSet: Build macOS Debug**. This workspace
-task starts a separate `pwsh -NoProfile -NonInteractive -File` process, bypassing
-the PowerShell extension's interactive PSReadLine loop. It uses the Homebrew
-PowerShell location on Apple Silicon Macs. If the extension terminal reports an
-`IOException` in `System.ConsolePal.GetCursorPosition` / `PSConsoleReadLine`, this
-task provides a build path without that input loop. It does not repair the
-extension's interactive terminal or enable PowerShell script breakpoints.
+In VS Code, use **Terminal → Run Build Task** for the default Release build, or
+**Terminal → Run Task → SafeSet: Build macOS Debug** for Debug. These workspace
+tasks start a separate `pwsh -NoProfile -NonInteractive -File` process and keep
+the task terminal open after completion. This avoids returning to the interactive
+PowerShell prompt, which can crash in VS Code after the build has finished. The
+tasks use the Homebrew PowerShell location on Apple Silicon Macs. They do not
+repair the interactive terminal or enable PowerShell script breakpoints.
 
 The equivalent command, from a regular PowerShell terminal in the repository, is:
 
 ```pwsh
-pwsh -NoProfile -NonInteractive -File ./scripts/build-macos-app.ps1 -Configuration Debug
+pwsh -NoProfile -NonInteractive -File ./scripts/build-macos-app.ps1 -Configuration Release
 ```
 
 The smoke
