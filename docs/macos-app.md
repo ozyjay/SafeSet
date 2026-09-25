@@ -44,7 +44,9 @@ This verifies the bundle identifier and code signature before installing to
 `~/Applications/SafeSet.app`. It will not replace an existing installation
 unless `-Force` is supplied. Use `-Build` to build immediately before installing,
 or `-SourceApp '/path/to/SafeSet.app'` to install a specific bundle. `-Build` and
-`-SourceApp` cannot be combined.
+`-SourceApp` cannot be combined. Expected problems, such as a missing build or an
+existing installation, print a next step in the console and exit with status 1
+without an exception trace.
 
 The app can be moved as a single `.app` bundle. The helper executable lives in
 `Contents/Helpers/SafeSetBackend`; its dependency files live in

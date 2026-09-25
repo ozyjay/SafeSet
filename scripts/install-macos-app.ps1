@@ -9,36 +9,54 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Stop-Install([string]$problem, [string]$nextStep) {
+    Write-Host "SafeSet was not installed: $problem"
+    Write-Host "Next step: $nextStep"
+    exit 1
+}
+
+try {
 if (-not $IsMacOS) {
-    throw 'SafeSet.app can only be installed on macOS.'
+    Stop-Install 'this installer runs only on macOS.' `
+        'Run it on a Mac with PowerShell installed.'
 }
 if ($Build -and $PSBoundParameters.ContainsKey('SourceApp')) {
-    throw 'Do not combine -Build with -SourceApp; the build output is used automatically.'
+    Stop-Install '-Build and -SourceApp cannot be combined.' `
+        'Use -Build to create a new app, or -SourceApp to install an existing app.'
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ($Build) {
     $null = & (Join-Path $PSScriptRoot 'build-macos-app.ps1')
-    if ($LASTEXITCODE -ne 0) { throw 'SafeSet.app build failed.' }
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Install 'the macOS app build failed.' `
+            'Check the build output, fix the reported issue, then run this installer again.'
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($SourceApp)) {
     $SourceApp = Join-Path $repo 'dist/SafeSet.app'
 }
 if (-not (Test-Path -LiteralPath $SourceApp -PathType Container)) {
-    throw 'SafeSet.app was not found. Build it first or pass -SourceApp.'
+    Stop-Install 'the source app was not found.' `
+        'Run & ./scripts/install-macos-app.ps1 -Build, or pass -SourceApp with an existing app.'
 }
 $sourcePath = (Resolve-Path -LiteralPath $SourceApp).Path
 $infoPlist = Join-Path $sourcePath 'Contents/Info.plist'
 if (-not (Test-Path -LiteralPath $infoPlist -PathType Leaf)) {
-    throw 'The source is not a complete macOS application bundle.'
+    Stop-Install 'the source is not a complete macOS app.' `
+        'Build a fresh app with & ./scripts/build-macos-app.ps1, then try again.'
 }
 $bundleIdentifier = & /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' $infoPlist
 if ($LASTEXITCODE -ne 0 -or $bundleIdentifier -ne 'org.ozyjay.SafeSet') {
-    throw 'The source application does not have the expected SafeSet bundle identifier.'
+    Stop-Install 'the source app is not the expected SafeSet build.' `
+        'Choose a SafeSet.app build, or run & ./scripts/install-macos-app.ps1 -Build.'
 }
 & /usr/bin/codesign --verify --strict $sourcePath
-if ($LASTEXITCODE -ne 0) { throw 'The source application signature is invalid.' }
+if ($LASTEXITCODE -ne 0) {
+    Stop-Install 'the source app signature is invalid.' `
+        'Build a fresh app with & ./scripts/build-macos-app.ps1, then try again.'
+}
 
 if ([string]::IsNullOrWhiteSpace($DestinationDirectory)) {
     $userProfile = [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile)
@@ -48,10 +66,12 @@ New-Item -ItemType Directory -Force -Path $DestinationDirectory | Out-Null
 $destinationRoot = (Resolve-Path -LiteralPath $DestinationDirectory).Path
 $destinationPath = Join-Path $destinationRoot 'SafeSet.app'
 if ($sourcePath -eq $destinationPath) {
-    throw 'The source and installation paths are the same.'
+    Stop-Install 'the source and destination are the same app.' `
+        'Choose a different -DestinationDirectory or a different -SourceApp.'
 }
 if ((Test-Path -LiteralPath $destinationPath) -and -not $Force) {
-    throw 'SafeSet.app is already installed. Re-run with -Force to replace it.'
+    Stop-Install 'SafeSet.app is already installed.' `
+        'Re-run the same install command with -Force to replace it.'
 }
 
 $operationId = [Guid]::NewGuid().ToString('N')
@@ -102,3 +122,8 @@ finally {
 }
 
 Write-Output $destinationPath
+} catch {
+    Write-Host 'SafeSet was not installed: a local copy or validation step failed.'
+    Write-Host 'Next step: check the existing app and destination permissions, then retry.'
+    exit 1
+}
