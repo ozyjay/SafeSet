@@ -343,7 +343,7 @@ def test_analysis_worksheet_change_after_review_blocks_publication(destinations)
 
 
 @pytest.mark.parametrize(
-    "change", ["duplicate", "missing", "unknown", "malformed", "changed", "extra"]
+    "change", ["duplicate", "missing", "unknown", "malformed", "changed", "extra", "reordered"]
 )
 def test_reconstruction_rejects_tampering(destinations, change):
     source, output, bundle_path = _prepared(destinations)
@@ -363,6 +363,8 @@ def test_reconstruction_rejects_tampering(destinations, change):
         rows[0]["record_id"] = "bad-id"
     elif change == "changed":
         rows[0]["campus"] = new_id()
+    elif change == "reordered":
+        columns = (columns[1], columns[0], *columns[2:])
     else:
         columns = (*columns, "student_name")
         rows = [{**row, "student_name": "Invented Person"} for row in rows]

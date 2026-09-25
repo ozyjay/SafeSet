@@ -92,7 +92,7 @@ final class BackendBridge: @unchecked Sendable {
         case "bundle_incompatible": message = "The selected private bundle has an unsupported version or structure. Use the matching SafeSet release and bundle."
         case "source_mismatch": message = "The original source workbook does not match the private bundle. Select the exact source used to create this protected release."
         case "worksheet_coverage": message = "A required protected worksheet is missing or changed. Restore every original protected worksheet in the returned workbook."
-        case "protected_schema": message = "A protected worksheet's original headings or their order changed. Restore the original protected columns."
+        case "protected_schema": message = "The returned workbook changed a protected worksheet's headings or column order. Start with the SafeSet protected copy, keep its original columns in the same order with exactly the same headings, and add result columns only to their right. Then validate again."
         case "result_schema": message = "The returned workbook has an unexpected or conflicting result heading. Add new result columns after the original protected columns."
         case "record_ids": message = "A returned record ID is malformed or repeated. Restore the original record IDs."
         case "record_coverage": message = "The returned records do not match the bundle. Restore every original record exactly once."

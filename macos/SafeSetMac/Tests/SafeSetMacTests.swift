@@ -76,7 +76,10 @@ final class SafeSetMacTests: XCTestCase {
     func testRestorationGuidancePreservesProtectedLinkageAndUsesPopulatedResults() {
         XCTAssertTrue(restorationAnalysisGuidance.contains("record_id"))
         XCTAssertTrue(restorationAnalysisGuidance.contains("entity_id"))
-        XCTAssertTrue(restorationAnalysisGuidance.contains("instead of changing"))
+        XCTAssertTrue(restorationAnalysisGuidance.contains("column order"))
+        XCTAssertTrue(restorationAnalysisGuidance.contains("to the right of all protected columns"))
+        XCTAssertTrue(restorationAnalysisGuidance.contains("Do not insert result columns"))
+        XCTAssertTrue(restorationAnalysisGuidance.contains("change protected values"))
         XCTAssertTrue(restorationResultExample.contains("No change"))
         XCTAssertTrue(restorationResultExample.contains("blank result cells are not supported"))
     }
