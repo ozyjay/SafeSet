@@ -243,7 +243,7 @@ struct FieldCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Decision details").appFont(11, weight: .semibold)
                     Text("Local suggestion: \(plainLanguageSuggestion(field.hint))")
-                    Text("This suggestion is advisory only and never permits a field to be released.")
+                    Text("This suggestion is advisory only. You must review and approve the field before including it in the protected workbook.")
                     if field.action != "drop" && !field.flags.isEmpty {
                         Label("Warnings: \(field.flags.joined(separator: ", "))",
                               systemImage: "exclamationmark.triangle")
@@ -835,9 +835,9 @@ struct ProtectView: View {
                 PathRow(title: "Original workbook", path: $model.source, save: false,
                         fileExtension: "xlsx") { model.chooseSource($0) }
                 if model.sourceSheets.count > 1 {
-                    GroupBox("Worksheets in the protected release") {
+                    GroupBox("Worksheets in the protected workbook") {
                         VStack(alignment: .leading) {
-                            Text("Selected worksheets are protected and included in the release. Unselected worksheets are excluded, not copied through.")
+                            Text("Select the worksheets to include in the protected workbook. Other worksheets stay local; editing mode preserves them when restoring the original workbook.")
                                 .foregroundStyle(.secondary)
                             ForEach(model.sourceSheets, id: \.self) { sheet in
                                 Toggle(sheet, isOn: Binding(

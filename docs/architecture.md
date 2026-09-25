@@ -33,7 +33,7 @@ bundle payloads and passphrases never enter protocol responses or logs.
 
 For restoration convenience, the SwiftUI process stores the path of the
 most recently created or selected encrypted private bundle and the most recently
-created release's relational-mode flag in its local app preferences. It prefills
+created workbook's relational-mode flag in its local app preferences. It prefills
 the path only while it still names an existing `.enc`
 file, removes stale preferences and provides an explicit forget control. The
 passphrase and decrypted bundle content are never stored in preferences, and the
@@ -135,7 +135,7 @@ SafeSet never infers this relationship from similar headings. Each source row al
 receives a globally unique random `record_id`, so result restoration remains
 unambiguous when an entity occurs in several worksheets or several rows.
 
-Worksheet selection is a release role: selected worksheets are protected and
+Worksheet selection determines the protected workbook's contents: selected worksheets are protected and
 included, while unselected worksheets are excluded rather than copied through.
 No source worksheet is copied unchanged into a protected export. Version 4 adds
 reference roles and preserves local original worksheets during restoration only.
@@ -171,7 +171,7 @@ a confirmed field receive the same fresh random code across those worksheets;
 same-named fields that are not confirmed retain independent codebooks. This is
 workflow configuration rather than an inferred schema relationship. It contains
 no dropped fields or whole source rows. All sheets
-are reviewed and published as one release; a failure in any sheet or in linked
+are reviewed and exported as one protected workbook; a failure in any sheet or in linked
 validation blocks the workbook. Publication writes the authenticated private bundle
 before the protected workbook, so a failure may leave an orphan bundle but never a
 protected workbook without its bundle.
@@ -184,17 +184,17 @@ envelopes are not reinterpreted or migrated implicitly.
 
 Shared entity IDs deliberately reveal equality, cross-sheet participation and
 frequency patterns. Validation therefore reports per-sheet marginal and joint
-groups plus linked entity fingerprints formed from every released source-derived
+groups plus linked entity fingerprints formed from every exported source-derived
 attribute and worksheet participation pattern. Confirmed shared obfuscation
 codebooks additionally reveal cross-sheet category equality and frequency and are
-called out in the release review.
+called out in the protection review.
 
 ## Validation profiles
 
 `strict` remains the default. Small retained-value groups, small per-sheet joint
 classes and small linked entity classes are mandatory failures.
 
-`controlled_pseudonymisation` is an explicit release profile. It retains all
+`controlled_pseudonymisation` is an explicit validation profile. It retains all
 structural, schema, domain, unsafe-text, identifier and integrity failures as
 mandatory blockers, but reports the three small-group findings as prominent
 warnings for explicit human review. It is not a validation bypass and does not

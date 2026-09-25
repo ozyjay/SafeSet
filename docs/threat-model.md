@@ -115,7 +115,7 @@ across worksheets concern the same entity and can observe which worksheets and
 categories that entity appears in. SafeSet evaluates linked frequency patterns but
 cannot prevent auxiliary-data re-identification, graph attacks or inference from
 participation. Only worksheets genuinely belonging to the same authorised entity
-domain may be grouped into one release.
+domain may be grouped into one protected workbook.
 
 A shared category codebook is separate, optional intentional linkability. It lets
 a recipient recognise that the same coded category occurs in different worksheets
@@ -140,7 +140,7 @@ real identities or credentials.
 | Quasi-identifier combinations | All-attribute equivalence classes, small cells, uniqueness indicators | Auxiliary information, homogeneity and semantic sensitivity remain |
 | Mapping disclosure | Fernet authenticated encryption, Argon2id, private directory and files | Weak passphrases, unlocked sessions, backups and compromised hosts |
 | Deterministic pseudonyms | Fresh UUIDv4 per record per run | ID alone does not remove attribute disclosure risk |
-| Cross-sheet linkage | Explicit shared entity domain, fresh UUIDv4 entity IDs, linked-class review | Equality and participation across released worksheets are deliberately visible |
+| Cross-sheet linkage | Explicit shared entity domain, fresh UUIDv4 entity IDs, linked-class review | Equality and participation across protected worksheets are deliberately visible |
 | Cross-sheet category linkage | Explicit confirmation for same-heading coded fields; fresh shared random codebook; authenticated bundle declaration | Category equality and frequency become deliberately visible; matching headings can still have different meanings |
 | Category label disclosure | Fresh random codes for approved categorical values in version 2 | Equality, frequencies and combinations remain visible; the encrypted version 2 bundle stores observed codebooks |
 | Exact numeric disclosure | Policy version 3 requires bounds and all-attribute group checks but has no precision limit; genuine blank numeric cells remain blank and enter those checks | Exact values, precision and missingness patterns remain visible and may be distinctive, even when category labels are coded |
