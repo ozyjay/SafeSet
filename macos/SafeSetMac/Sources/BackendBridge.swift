@@ -95,7 +95,7 @@ final class BackendBridge: @unchecked Sendable {
         case "protected_schema": message = "A protected worksheet is missing an original heading or has renamed it. Keep every heading from the SafeSet protected copy exactly, including spelling and case. You may reorder columns or place new result columns anywhere."
         case "result_schema": message = "The returned workbook has an unexpected or conflicting result heading. Give each new result column a unique heading that does not reuse an original source heading."
         case "record_ids": message = "A returned record ID is malformed or repeated. Restore the original record IDs."
-        case "record_coverage": message = "The returned records do not match the bundle. Restore every original record exactly once."
+        case "record_coverage": message = "The returned record_id values do not match this bundle. Use its original SafeSet-protected copy and keep every record_id exactly once on the same worksheet. If an analysis tool changed IDs or rows, regenerate the file; SafeSet cannot match rows by position."
         case "entity_linkage": message = "A returned entity ID or its record linkage changed. Restore the original entity IDs."
         case "protected_value": message = "A protected source value changed in the returned workbook. Restore the original protected values."
         case "result_text": message = "A new result cell is blank, too long or contains unsupported text. Use short, safe categorical labels."

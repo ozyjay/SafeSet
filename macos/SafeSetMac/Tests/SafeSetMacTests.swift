@@ -82,6 +82,8 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertTrue(restorationAnalysisGuidance.contains("change protected values"))
         XCTAssertTrue(restorationResultExample.contains("No change"))
         XCTAssertTrue(restorationResultExample.contains("blank result cells are not supported"))
+        XCTAssertTrue(restorationResultExample.contains("exact record_id values"))
+        XCTAssertTrue(restorationResultExample.contains("no new IDs"))
     }
 
     @MainActor func testWizardDecisionAndReviewGates() {
