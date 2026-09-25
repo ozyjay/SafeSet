@@ -84,9 +84,9 @@ In version 2/3 append-results mode, source-derived protected fields remain immut
 
 For example, use **Updated Classlist** to decide who belongs in **Allocations**:
 
-1. On Restore, turn on **Compare participants with a reference sheet**. Choose the
-   editable sheet to update and a different reference-only sheet. Both must belong
-   to this version 4 bundle, with one row per participant on each.
+1. On Restore, turn on **Compare participants with a membership sheet**. Choose the
+   editable sheet to update and a different reference-only membership sheet.
+   Both must belong to this version 4 bundle, with one row per participant on each.
 2. Choose whether to include reference-only participants and whether to remove
    participants absent from the reference. Removals are off initially.
 3. Validate and review. SafeSet shows the additions, removals and existing field
