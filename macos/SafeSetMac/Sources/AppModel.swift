@@ -674,9 +674,18 @@ struct SourceCellLocation: Identifiable {
 
     var participantConfig: [String: Any] {
         var mappings: [String: Any] = [:]
+        let sourceColumns = restorationReview?["source_columns"] as? [String: [String]] ?? [:]
         for (name, selection) in participantMappings {
             if selection == "blank" { mappings[name] = NSNull() }
             else if selection.hasPrefix("column:") { mappings[name] = String(selection.dropFirst(7)) }
+            else if selection.hasPrefix("source:") {
+                let parts = selection.dropFirst(7).split(separator: "\u{1F}", omittingEmptySubsequences: false)
+                guard parts.count == 2 else { continue }
+                let sheet = String(parts[0])
+                let column = String(parts[1])
+                guard sourceColumns[sheet]?.contains(column) == true else { continue }
+                mappings[name] = ["sheet": sheet, "column": column]
+            }
         }
         return ["target_sheet": participantTarget, "reference_sheet": participantReference,
                 "additions_sheet": participantProposalSheet,

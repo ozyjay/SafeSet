@@ -163,7 +163,9 @@ new disclosure assessment. It uses only participants already represented in the
 authenticated protected reference sheet. SafeSet validates entity linkage and
 assignment domains; it does not determine whether a reference list is current or
 whether an assignment is substantively correct. Added identities and explicitly
-mapped reference values appear only in the new sensitive local workbook. Original
+mapped local reference values appear only in the new sensitive local workbook. A
+field source may be any authenticated reference-only sheet with unique, complete
+entity coverage and selected field values for the incoming participants. Original
 protected rows remain mandatory, and additions/removals need explicit review.
 The reference worksheets remain unchanged. Static summaries and fixed formula or
 chart ranges need local review after participant counts change.

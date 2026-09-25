@@ -141,8 +141,12 @@ incomplete review with counts and a copyable prompt; publication stays disabled.
 No assignment is inferred. All other extra or hidden returned sheets are rejected.
 
 For additions, the source key comes from the encrypted entity mapping. Every other
-noneditable target field needs an explicit local reference-column selection or
-Leave blank decision. These original reference values stay local. Surviving rows
+noneditable target field needs an explicit local source sheet and column selection
+or Leave blank decision. Source sheets must be reference-only sheets in the same
+authenticated bundle, with at most one row per entity. A selected source must
+contain every incoming entity and a value for the selected field; missing matches
+or values block publication. These original
+source values stay local. Surviving rows
 retain source order and original cell types/styles; additions follow reference
 source order. Added mapped fields are literal text, and editable numeric additions
 are numeric cells subject to Excel precision checks. Review covers changed fields,
@@ -161,7 +165,8 @@ static summaries are not expanded; the user must review them locally in Excel.
 `update_participants` consumes a review token and new config without another
 passphrase. Config contains `target_sheet`, `reference_sheet`, `additions_sheet`,
 boolean `include_additions` / `include_removals`, and `column_sources` mapping target
-headings to reference headings or null. Unselected mappings remain missing, not
+headings to `{sheet, column}` or null. Legacy reference-column strings remain
+accepted for existing clients. Unselected mappings remain missing, not
 implicitly blank. `approve_participants` consumes the latest token with exact
 `approved_changes` and boolean `approve_additions` / `approve_removals`. Incomplete
 reviews cannot publish. Any token operation consumes the previous token. Full

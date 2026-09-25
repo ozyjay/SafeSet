@@ -1366,13 +1366,19 @@ struct ParticipantReviewView: View {
                         )) {
                             Text("Choose source…").tag("")
                             Text("Leave blank").tag("blank")
-                            ForEach(review["reference_columns"] as? [String] ?? [], id: \.self) { column in
-                                Text("Reference: \(column)").tag("column:" + column)
+                            let sourceColumns = review["source_columns"] as? [String: [String]] ?? [:]
+                            ForEach(sourceColumns.keys.sorted(), id: \.self) { sheet in
+                                ForEach(sourceColumns[sheet] ?? [], id: \.self) { column in
+                                    Text("\(sheet): \(column)").tag("source:\(sheet)\u{1F}\(column)")
+                                }
                             }
                         }
                     }
-                    Text("Identities are matched locally. Choose reference fields for other new-row values, or explicitly leave them blank. Editable values come from ChatGPT's proposals.")
+                    Text("Identities are matched locally. Choose fields from protected reference-only sheets for other new-row values, or explicitly leave them blank. Editable values come from ChatGPT's proposals.")
                         .foregroundStyle(.secondary)
+                }
+                if let missing = review["missing_source_fields"] as? [String], !missing.isEmpty {
+                    Text("Selected sources lack a participant or a value for: \(missing.joined(separator: ", ")). Choose another source or correct the source workbook and protect it again.")
                 }
                 if (review["missing_assignments"] as? Int ?? 0) > 0 {
                     Text("\(review["missing_assignments"] as? Int ?? 0) participants still need assignments. Copy the updated ChatGPT prompt above, obtain the proposal sheet, then select the returned workbook and validate again.")

@@ -95,8 +95,10 @@ For example, use **Updated Classlist** to decide who belongs in **Allocations**:
    row must remain intact, including departing participants. The proposal uses
    existing reference `entity_id`s and only the target's editable fields.
 4. Select the workbook returned with those proposals and validate again. For
-   other new-row fields, explicitly choose a column from the local reference sheet
-   or **Leave blank**. Identity matching happens locally. Click **Update comparison
+   other new-row fields, explicitly choose a column from any reference-only sheet
+   in the same protected bundle, or **Leave blank**. The selected sheet must have
+   exactly one matching row and a value for every new participant. Identity
+   matching happens locally. Click **Update comparison
    and review** after changing these choices; no repeated passphrase is needed.
 5. Approve additions, removals and changed fields, then authorise local restoration.
    Missing assignments block creation; SafeSet never invents them. You may explicitly

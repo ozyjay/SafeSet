@@ -236,10 +236,19 @@ def test_removal_and_local_mapping_with_authenticated_synthetic_bundle(editing):
     book["Participants"]["C1"] = "local_note"
     book["Participants"]["C2"] = "Synthetic reference note A"
     book["Participants"]["C3"] = "Synthetic newcomer note"
+    roles = book.create_sheet("Synthetic Roles")
+    roles.append(("student_key", "local_note"))
+    roles.append(("SYNTH-001", "Synthetic existing role"))
+    roles.append(("SYNTH-003", "Synthetic newcomer role"))
     book.save(editing.source)
     drafts = copy.deepcopy(editing.drafts)
     for sheet in drafts:
         drafts[sheet]["local_note"] = RuleDraft("drop", "direct_identifier")
+    drafts["Synthetic Roles"] = {
+        "student_key": RuleDraft("pseudonymise", "direct_identifier"),
+        "local_note": RuleDraft("drop", "direct_identifier"),
+    }
+    fields = {**editing.fields, "Synthetic Roles": []}
     new_bundle = editing.bundle.with_name("synthetic-new.enc")
     new_protected = editing.protected.with_name("synthetic-new.xlsx")
     protection = prepare_relational_protection(
@@ -251,10 +260,11 @@ def test_removal_and_local_mapping_with_authenticated_synthetic_bundle(editing):
         new_bundle,
         "controlled_pseudonymisation",
         ("team",),
-        editing.fields,
+        fields,
     )
     approve_relational_protection(protection, PASSPHRASE, approved=True)
     editing.bundle = new_bundle
+    editing.drafts = drafts
     editing.returned.write_bytes(new_protected.read_bytes())
     tables = returned_tables(editing)
     person = tables["Participants"].rows[1]
@@ -275,9 +285,24 @@ def test_removal_and_local_mapping_with_authenticated_synthetic_bundle(editing):
     review = prepare(editing, options)
     assert review.summary["missing_fields"] == ["local_note"]
     assert not review.summary["ready"]
-    options["column_sources"] = {"local_note": "local_note"}
+    for bad_source in (
+        {"sheet": "Allocations", "column": "local_note"},
+        {"sheet": "Synthetic Roles", "column": "unknown"},
+    ):
+        bad_options = copy.deepcopy(options)
+        bad_options["column_sources"] = {"local_note": bad_source}
+        with pytest.raises(SafetyError):
+            update_participants(review, bad_options)
+    options["column_sources"] = {
+        "local_note": {"sheet": "Synthetic Roles", "column": "local_note"}
+    }
     ready = update_participants(review, options)
+    assert set(ready.summary["source_columns"]) == {
+        "Participants", "Synthetic Roles"
+    }
+    assert ready.summary["missing_source_fields"] == []
     assert ready.summary["additions"] == ready.summary["removals"] == 1
+    assert "Synthetic newcomer role" not in json.dumps(ready.summary)
     with pytest.raises(SafetyError):
         approve_participants(
             ready, {"Allocations": (), "Participants": ()}, True, False, authorised=True
@@ -285,10 +310,57 @@ def test_removal_and_local_mapping_with_authenticated_synthetic_bundle(editing):
     approve(ready)
     result = load_workbook(editing.restored)
     assert result["Allocations"]["B5"].value == "SYNTH-003"
-    assert result["Allocations"]["F5"].value == "Synthetic newcomer note"
+    assert result["Allocations"]["F5"].value == "Synthetic newcomer role"
     assert result["Allocations"]["F4"].value == "Synthetic original note A"
     assert result["Participants"]["C3"].value == "Synthetic newcomer note"
     result.close()
+
+
+@pytest.mark.parametrize("newcomer_role", [None, ""])
+def test_other_reference_source_must_cover_new_participants(editing, newcomer_role):
+    from safeset.desktop_flow import approve_relational_protection, prepare_relational_protection
+    from safeset.policy_authoring import RuleDraft
+
+    book = load_workbook(editing.source)
+    book["Allocations"]["F3"] = "local_note"
+    book["Allocations"]["F4"] = "Synthetic existing note A"
+    book["Allocations"]["F5"] = "Synthetic existing note B"
+    book["Allocations"].tables["SyntheticAllocations"].ref = "B3:F5"
+    book["Allocations"].tables["SyntheticAllocations"].tableColumns.append(
+        TableColumn(id=5, name="local_note")
+    )
+    roles = book.create_sheet("Synthetic Roles")
+    roles.append(("student_key", "local_note"))
+    roles.append(("SYNTH-001", "Synthetic existing role"))
+    if newcomer_role is not None:
+        roles.append(("SYNTH-003", newcomer_role))
+    book.save(editing.source)
+    drafts = copy.deepcopy(editing.drafts)
+    drafts["Allocations"]["local_note"] = RuleDraft("drop", "direct_identifier")
+    drafts["Synthetic Roles"] = {
+        "student_key": RuleDraft("pseudonymise", "direct_identifier"),
+        "local_note": RuleDraft("drop", "direct_identifier"),
+    }
+    protected = editing.protected.with_name("synthetic-roles.xlsx")
+    bundle = editing.bundle.with_name("synthetic-roles.enc")
+    protection = prepare_relational_protection(
+        editing.source, tuple(drafts), drafts, "2", protected, bundle,
+        "controlled_pseudonymisation", ("team",),
+        {**editing.fields, "Synthetic Roles": []},
+    )
+    approve_relational_protection(protection, PASSPHRASE, approved=True)
+    editing.bundle = bundle
+    editing.returned.write_bytes(protected.read_bytes())
+    options = config()
+    options["column_sources"] = {
+        "local_note": {"sheet": "Synthetic Roles", "column": "local_note"}
+    }
+    review = prepare(editing, options)
+    assert review.summary["missing_source_fields"] == ["local_note"]
+    assert not review.summary["ready"]
+    with pytest.raises(SafetyError, match="Review every participant"):
+        approve(review)
+    assert not editing.restored.exists()
 
 
 def test_writer_rejects_collision_below_target(editing):
@@ -333,6 +405,8 @@ def test_reconciliation_preserves_reference_and_sheet_boundaries(editing, kind):
         ("include_removals", "true"),
         ("column_sources", {"student_key": "student_key"}),
         ("column_sources", {"team": "team"}),
+        ("column_sources", {"state": {"sheet": "Allocations", "column": "team"}}),
+        ("column_sources", {"state": {"sheet": "Participants", "column": "unknown"}}),
     ],
 )
 def test_reconciliation_configuration_cannot_override_permissions(editing, field, value):
