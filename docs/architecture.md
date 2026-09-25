@@ -53,6 +53,12 @@ omitted from the protected copy. The modified copy is untrusted. Reconstruction
 imports only individually approved new result columns; changes to any source-derived
 protected field, including coded categories, are blocked. Editable source-derived
 fields are deferred until a separate, explicit policy and review model exists.
+Returned protected columns may appear in any order, with new result columns
+interspersed. Restoration matches exact, unique headings to the authenticated
+protected schema, checks every protected value by record ID and requires explicit
+approval for every new heading. Missing or renamed protected headings still block
+restoration. When version 2 restoration combines returned worksheets, their
+headings must match as a set, even if their order differs.
 
 The version 2 bundle is a distinct authenticated envelope. Its encrypted payload
 holds an export identifier, canonical source-table SHA-256 binding, selected source

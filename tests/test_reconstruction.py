@@ -75,7 +75,9 @@ def test_reconstruction_round_trip(destinations):
     assert "student_number" not in protected.columns
     rows = tuple({**row, "Team": "Robot Team"} for row in protected.rows)
     returned_path = output.parent / "analysed.xlsx"
-    returned_path.write_bytes(excel_bytes(Table((*protected.columns, "Team"), rows)))
+    returned_path.write_bytes(
+        excel_bytes(Table(("Team", *reversed(protected.columns)), rows))
+    )
     restored_path = output.parent.parent / "private/restored.xlsx"
     review = prepare_reconstruction(returned_path, source, bundle_path, restored_path, PASSPHRASE)
     assert review.new_columns == ("Team",)
@@ -149,17 +151,16 @@ def test_reconstruction_combines_selected_worksheets_in_workbook_order(
     approve_protection(protection, PASSPHRASE, approved=True)
 
     protected = read_excel(output)
-    result_columns = (*protected.columns, "Team")
     returned = output.parent / "synthetic-multi-returned.xlsx"
     returned.write_bytes(
         excel_workbook_bytes(
             {
                 "First results": Table(
-                    result_columns,
+                    ("Team", *protected.columns),
                     tuple({**row, "Team": "Robot Team"} for row in protected.rows[:2]),
                 ),
                 "Second results": Table(
-                    result_columns,
+                    (*reversed(protected.columns), "Team"),
                     tuple({**row, "Team": "Robot Team"} for row in protected.rows[2:]),
                 ),
             }
@@ -343,7 +344,7 @@ def test_analysis_worksheet_change_after_review_blocks_publication(destinations)
 
 
 @pytest.mark.parametrize(
-    "change", ["duplicate", "missing", "unknown", "malformed", "changed", "extra", "reordered"]
+    "change", ["duplicate", "missing", "unknown", "malformed", "changed", "extra", "renamed"]
 )
 def test_reconstruction_rejects_tampering(destinations, change):
     source, output, bundle_path = _prepared(destinations)
@@ -363,8 +364,16 @@ def test_reconstruction_rejects_tampering(destinations, change):
         rows[0]["record_id"] = "bad-id"
     elif change == "changed":
         rows[0]["campus"] = new_id()
-    elif change == "reordered":
-        columns = (columns[1], columns[0], *columns[2:])
+        columns = tuple(reversed(columns))
+    elif change == "renamed":
+        columns = tuple("Changed heading" if name == "campus" else name for name in columns)
+        rows = [
+            {
+                ("Changed heading" if name == "campus" else name): value
+                for name, value in row.items()
+            }
+            for row in rows
+        ]
     else:
         columns = (*columns, "student_name")
         rows = [{**row, "student_name": "Invented Person"} for row in rows]

@@ -44,9 +44,9 @@ def review_reconstruction(source: Table, returned: Table, bundle: dict) -> tuple
     protected_columns = tuple(bundle["protected_columns"])
     if source.columns != original_columns or source_digest(source) != bundle["source_digest"]:
         raise SafetyError("Original source does not match the restoration bundle.")
-    if returned.columns[: len(protected_columns)] != protected_columns:
+    if not set(protected_columns).issubset(returned.columns):
         raise SafetyError("Protected workbook schema has changed unexpectedly.")
-    new_columns = returned.columns[len(protected_columns) :]
+    new_columns = tuple(name for name in returned.columns if name not in protected_columns)
     if (
         len(returned.columns) > MAX_COLUMNS
         or len(set(returned.columns)) != len(returned.columns)

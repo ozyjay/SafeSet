@@ -127,6 +127,9 @@ PUBLIC_SAFETY_ERRORS = {
     "Select one or more distinct worksheets.": "sheet_selection",
     "Selected worksheet is missing or hidden.": "sheet_selection",
     "Selected worksheets must have identical headings in the same order.": "sheet_schema",
+    "Selected worksheets must have identical headings.": "sheet_schema",
+    "Excel tables must have identical headings in the same order.": "table_schema",
+    "Excel tables must have identical headings.": "table_schema",
     "Excel output must have an .xlsx filename.": "output_format",
     "Mapping must be a private regular file owned by this user (mode 0600).": (
         "bundle_permissions"

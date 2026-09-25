@@ -297,7 +297,9 @@ def reconstruct_command(
     )
     returned_names = list_excel_sheets(input_path)
     selected_names = tuple(sheet) if sheet else returned_names
-    returned = read_excel(input_path, tuple(sheet) if sheet else None)
+    returned = read_excel(
+        input_path, tuple(sheet) if sheet else None, allow_reordered_headings=True
+    )
     new_sheet_names = tuple(name for name in returned_names if name not in selected_names)
     analysis_tables = (
         read_excel_sheets(
@@ -460,7 +462,7 @@ def reconstruct_relational_command(
     sources = read_excel_sheets(
         original_source, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
-    returned = read_excel_sheets(input_path, sheets)
+    returned = read_excel_sheets(input_path, sheets, allow_reordered_headings=True)
     new_sheet_names = tuple(name for name in returned_names if name not in sheets)
     analysis_tables = (
         read_excel_sheets(
