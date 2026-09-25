@@ -416,6 +416,45 @@ def test_reconciliation_configuration_cannot_override_permissions(editing, field
         prepare(editing, options)
 
 
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"reference_sheet": "Allocations"}, "Choose two different worksheets"),
+        ({"reference_sheet": "Missing"}, "absent from the private bundle"),
+        (
+            {"target_sheet": "Participants", "reference_sheet": "Allocations"},
+            "target worksheet has no editable fields",
+        ),
+        ({"additions_sheet": "Participants"}, "conflicts with a protected worksheet"),
+        ({"column_sources": {"team": "team"}}, "field source is not available"),
+    ],
+)
+def test_reconciliation_reports_specific_configuration_problem(editing, changes, message):
+    options = config()
+    options.update(changes)
+    with pytest.raises(SafetyError, match=message):
+        prepare(editing, options)
+
+
+def test_desktop_reports_stale_participant_field_source_without_values(editing):
+    options = config()
+    options["column_sources"] = {"team": "team"}
+    result = call(
+        Bridge(),
+        "prepare_participants",
+        {
+            "returned": str(editing.returned),
+            "source": str(editing.source),
+            "bundle": str(editing.bundle),
+            "output": str(editing.restored),
+            "passphrase": PASSPHRASE,
+            "config": options,
+        },
+    )
+    assert result["error"] == "participant_field_source"
+    assert "SYNTH-" not in json.dumps(result)
+
+
 def test_removal_compacts_surviving_cells_without_deleting_worksheet_rows(editing):
     from safeset.ingestion import read_excel_sheets
     from safeset.participant_workbook import replace_participants

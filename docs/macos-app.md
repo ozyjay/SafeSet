@@ -91,7 +91,7 @@ shows changed-cell counts and requires approval of each changed field before
 applying edits to a copy of the original workbook. The prompt contains no source
 cell values, identities, codebooks or passphrase. Version 2/3 append-results mode
 remains available by turning off the editing option during protection.
-Restore also offers **Compare participants with a reference sheet** for version 4.
+Restore also offers **Compare participants with a membership sheet** for version 4.
 It reviews reference-only additions, optional removals and existing field changes
 together. A copyable prompt requests a bounded additions proposal sheet when
 assignments are missing. Local mappings from authenticated reference-only sheets

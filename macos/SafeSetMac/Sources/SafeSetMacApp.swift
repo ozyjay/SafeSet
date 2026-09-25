@@ -1225,7 +1225,7 @@ struct RestoreView: View {
                 PathRow(title: "New restored workbook", path: $model.restoredOutput,
                         save: true, fileExtension: "xlsx")
                 if model.relationalRestore {
-                    Toggle("Compare participants with a reference sheet", isOn: Binding(
+                    Toggle("Compare participants with a membership sheet", isOn: Binding(
                         get: { model.reconcileParticipants },
                         set: { model.reconcileParticipants = $0; model.invalidate() }
                     ))
@@ -1356,7 +1356,7 @@ struct ParticipantConfigurationView: View {
     var body: some View {
         GroupBox("Participants to include") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Choose which editable sheet to update and which reference-only sheet defines the participants. The reference sheet stays unchanged.")
+                Text("Choose the editable sheet to update and the reference-only membership list that decides who belongs on it. Other reference-only sheets can supply new-row values. The membership sheet stays unchanged.")
                 Picker("Sheet to update", selection: Binding(
                     get: { model.participantTarget },
                     set: { model.participantTarget = $0; model.participantMappings = [:]; model.participantConfigurationChanged() }
@@ -1364,18 +1364,18 @@ struct ParticipantConfigurationView: View {
                     Text("Choose…").tag("")
                     ForEach(model.originalSheets, id: \.self) { Text($0).tag($0) }
                 }
-                Picker("Reference sheet", selection: Binding(
+                Picker("Membership sheet", selection: Binding(
                     get: { model.participantReference },
                     set: { model.participantReference = $0; model.participantMappings = [:]; model.participantConfigurationChanged() }
                 )) {
                     Text("Choose…").tag("")
                     ForEach(model.originalSheets, id: \.self) { Text($0).tag($0) }
                 }
-                Toggle("Include participants found only in the reference sheet", isOn: Binding(
+                Toggle("Include participants found only in the membership sheet", isOn: Binding(
                     get: { model.includeParticipantAdditions },
                     set: { model.includeParticipantAdditions = $0; model.participantConfigurationChanged() }
                 ))
-                Toggle("Remove participants absent from the reference sheet", isOn: Binding(
+                Toggle("Remove participants absent from the membership sheet", isOn: Binding(
                     get: { model.includeParticipantRemovals },
                     set: { model.includeParticipantRemovals = $0; model.participantConfigurationChanged() }
                 ))
@@ -1397,8 +1397,8 @@ struct ParticipantReviewView: View {
     var body: some View {
         GroupBox("Participant comparison") {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Reference-only participants: \(review["available_additions"] as? Int ?? 0)")
-                Text("Target participants absent from reference: \(review["available_removals"] as? Int ?? 0)")
+                Text("Membership-only participants: \(review["available_additions"] as? Int ?? 0)")
+                Text("Target participants absent from membership: \(review["available_removals"] as? Int ?? 0)")
                 Text("Selected changes: add \(review["additions"] as? Int ?? 0), remove \(review["removals"] as? Int ?? 0). Result: \(review["target_rows"] as? Int ?? 0) participants on the target sheet.")
                 if model.includeParticipantAdditions && (review["available_additions"] as? Int ?? 0) > 0 {
                     ForEach(review["mapping_fields"] as? [String] ?? [], id: \.self) { name in

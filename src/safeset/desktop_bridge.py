@@ -36,7 +36,13 @@ from .pseudonyms import new_id
 from .reconciliation import (
     APPROVAL_ERROR,
     CONFIG_ERROR,
+    MAPPING_ERROR,
     PROPOSAL_ERROR,
+    PROPOSAL_NAME_ERROR,
+    REFERENCE_NOT_READONLY_ERROR,
+    SHEET_NOT_IN_BUNDLE_ERROR,
+    SHEET_SELECTION_ERROR,
+    TARGET_NOT_EDITABLE_ERROR,
     approve_participants,
     prepare_participants,
     update_participants,
@@ -50,6 +56,12 @@ MAX_RESPONSE = 1024 * 1024
 # Only fixed, value-free codes cross the desktop boundary. Unknown errors stay generic.
 PUBLIC_SAFETY_ERRORS = {
     CONFIG_ERROR: "participant_configuration",
+    SHEET_SELECTION_ERROR: "participant_sheet_selection",
+    SHEET_NOT_IN_BUNDLE_ERROR: "participant_sheet_bundle",
+    TARGET_NOT_EDITABLE_ERROR: "participant_target_permissions",
+    REFERENCE_NOT_READONLY_ERROR: "participant_membership_permissions",
+    PROPOSAL_NAME_ERROR: "participant_proposal_name",
+    MAPPING_ERROR: "participant_field_source",
     PROPOSAL_ERROR: "participant_proposals",
     APPROVAL_ERROR: "participant_approval",
     LAYOUT_ERROR: "participant_layout",

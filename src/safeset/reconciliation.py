@@ -20,8 +20,14 @@ from .workbook_editing import (
 )
 
 CONFIG_ERROR = (
-    "Choose distinct editable and reference sheets and explicit sources for new participant fields."
+    "Participant comparison settings are malformed."
 )
+SHEET_SELECTION_ERROR = "Choose two different worksheets for participant comparison."
+SHEET_NOT_IN_BUNDLE_ERROR = "A selected participant worksheet is absent from the private bundle."
+TARGET_NOT_EDITABLE_ERROR = "The target worksheet has no editable fields in the private bundle."
+REFERENCE_NOT_READONLY_ERROR = "The membership worksheet is editable in the private bundle."
+PROPOSAL_NAME_ERROR = "The additions proposal name conflicts with a protected worksheet."
+MAPPING_ERROR = "A selected new-participant field source is not available for this comparison."
 PROPOSAL_ERROR = (
     "Participant proposals must contain each required known entity once and only permitted fields."
 )
@@ -89,17 +95,20 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
     target, reference, additions = (
         config[k] for k in ("target_sheet", "reference_sheet", "additions_sheet")
     )
-    if (
-        not all(isinstance(s, str) for s in (target, reference, additions))
-        or target == reference
-        or target not in bundle["sheets"]
-        or reference not in bundle["sheets"]
-        or not bundle["editable_fields"][target]
-        or bundle["editable_fields"][reference]
-        or additions in bundle["sheets"]
-        or any(type(config[k]) is not bool for k in ("include_additions", "include_removals"))
+    if not all(isinstance(s, str) for s in (target, reference, additions)) or any(
+        type(config[k]) is not bool for k in ("include_additions", "include_removals")
     ):
         raise SafetyError(CONFIG_ERROR)
+    if target == reference:
+        raise SafetyError(SHEET_SELECTION_ERROR)
+    if target not in bundle["sheets"] or reference not in bundle["sheets"]:
+        raise SafetyError(SHEET_NOT_IN_BUNDLE_ERROR)
+    if not bundle["editable_fields"][target]:
+        raise SafetyError(TARGET_NOT_EDITABLE_ERROR)
+    if bundle["editable_fields"][reference]:
+        raise SafetyError(REFERENCE_NOT_READONLY_ERROR)
+    if additions in bundle["sheets"]:
+        raise SafetyError(PROPOSAL_NAME_ERROR)
     sheets = tuple(bundle["sheets"])
     visible = list_excel_sheets(returned_path, reject_hidden=True)
     if not set(sheets).issubset(visible) or set(visible) - set(sheets) - (
@@ -142,7 +151,7 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
     fields = [n for n in sources[target].columns if n not in editable and n != policy.source_key]
     raw_mappings = config["column_sources"]
     if not isinstance(raw_mappings, dict) or set(raw_mappings) - set(fields):
-        raise SafetyError(CONFIG_ERROR)
+        raise SafetyError(MAPPING_ERROR)
     mappings = {}
     for name, value in raw_mappings.items():
         if value is None:
@@ -152,7 +161,7 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
         elif isinstance(value, dict) and set(value) == {"sheet", "column"}:
             mappings[name] = (value["sheet"], value["column"])
         else:
-            raise SafetyError(CONFIG_ERROR)
+            raise SafetyError(MAPPING_ERROR)
         if mappings[name] is not None:
             sheet, column = mappings[name]
             if (
@@ -162,7 +171,7 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
                 or not isinstance(column, str)
                 or column not in sources[sheet].columns
             ):
-                raise SafetyError(CONFIG_ERROR)
+                raise SafetyError(MAPPING_ERROR)
     missing_fields = (
         [name for name in fields if name not in mappings]
         if config["include_additions"] and incoming

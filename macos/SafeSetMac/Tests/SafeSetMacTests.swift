@@ -29,9 +29,6 @@ final class SafeSetMacTests: XCTestCase {
 
     @MainActor func testParticipantMappingsDistinguishMissingBlankAndReferenceFields() {
         let model = AppModel()
-        model.restorationReview = [
-            "source_columns": ["Synthetic Roles": ["Role"]]
-        ]
         model.participantMappings = [
             "Synthetic name": "column:Name", "Role": "source:Synthetic Roles\u{1F}Role", "Note": "blank", "Other": ""
         ]
