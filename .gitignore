@@ -27,6 +27,7 @@ exports/
 private/
 maps/
 !examples/synthetic_students.xlsx
+!examples/synthetic_participants.xlsx
 
 # Legacy generated project directory.
 windows/SafeSetWindows/

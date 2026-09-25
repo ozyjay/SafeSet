@@ -33,6 +33,10 @@ the same account or either process is outside this boundary. A stale review toke
 blocks approval; untrusted workbooks are rechecked by the Python domain layer.
 
 The ad-hoc signed local app is for development, not a trusted public release.
+Debug builds contain a known passphrase, used automatically only for exact
+allowlisted synthetic workbook fixtures. Those bundles provide no passphrase
+secrecy and must never contain real data. Release builds omit the shortcut; a
+modified fixture, even with the same filename, falls back to the normal prompt.
 Direct distribution needs Developer ID signing and notarisation. Packaging native
 Python libraries adds a nested-code signing surface that must be verified on the
 release host and on a clean target Mac.

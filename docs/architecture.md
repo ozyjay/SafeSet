@@ -81,6 +81,13 @@ The export and restore operations need no runtime network access.
 ## Editable workbook round trip (bundle version 4)
 
 The native Mac protection flow defaults to editing selected existing fields.
+The native Debug build has a synthetic-fixture convenience path: an exact
+allowlisted workbook digest selects a known development passphrase for workbook
+protection and restoration. Release builds compile out this path; other source
+workbooks use the normal passphrase flow. This does not alter the encrypted
+bundle format, validation or approval rules. The Debug app has a distinct bundle
+identifier and is launched from the build directory, separate from the installed
+Release app.
 Per-sheet `editable_fields` lists explicitly authorise `keep`, `code` and
 `keep_numeric` fields; an empty list makes a selected sheet reference only.
 Identifiers, dropped fields, bins, formula cells and date cells cannot be editable.

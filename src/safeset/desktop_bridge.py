@@ -47,6 +47,7 @@ from .reconciliation import (
     prepare_participants,
     update_participants,
 )
+from .relational import read_relational_bundle
 from .workbook_editing import editing_instructions
 
 PROTOCOL_VERSION = 1
@@ -646,6 +647,14 @@ class Bridge:
                 "output": str(review.output),
                 "bundle": str(review.bundle_path),
                 "validation": review.validation.summary(),
+            }
+        if command == "inspect_bundle_permissions":
+            data = _payload(raw, {"source", "bundle", "passphrase"})
+            bundle = read_relational_bundle(
+                _path(data["bundle"]), _string(data["passphrase"]), _path(data["source"])
+            )
+            return {
+                "editable_fields": bundle.get("editable_fields"),
             }
         if command == "prepare_reconstruction":
             data = _payload(

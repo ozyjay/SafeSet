@@ -455,6 +455,20 @@ def test_desktop_reports_stale_participant_field_source_without_values(editing):
     assert "SYNTH-" not in json.dumps(result)
 
 
+def test_bundle_permission_inspection_reports_saved_sheets_without_records(editing):
+    result = call(
+        Bridge(),
+        "inspect_bundle_permissions",
+        {
+            "source": str(editing.source),
+            "bundle": str(editing.bundle),
+            "passphrase": PASSPHRASE,
+        },
+    )
+    assert result["result"]["editable_fields"] == editing.fields
+    assert "SYNTH-001" not in json.dumps(result)
+
+
 def test_removal_compacts_surviving_cells_without_deleting_worksheet_rows(editing):
     from safeset.ingestion import read_excel_sheets
     from safeset.participant_workbook import replace_participants
