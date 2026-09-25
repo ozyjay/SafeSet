@@ -1,5 +1,41 @@
 # Verification
 
+## macOS editable workbook pass — 25 September 2026
+
+Implemented version 4 editable-field bundles, per-sheet reference permissions,
+aggregate change review and original-package restoration. Verification used
+synthetic fixtures only; no operational workbooks or private bundles were used.
+
+- Python suite: **265 passed, 24 Windows-only tests skipped**.
+- New editable-workbook coverage: **31 tests passed**, including real encrypted
+  bundle round trips, shared-code reassignment, reordered returned rows, exact
+  untouched ZIP-member preservation, charts/styles/formulas, missing/duplicate/
+  unknown IDs, reference edits, extra fields/sheets, domain violations, stale source
+  and returned inputs, source-package changes after protection review, explicit
+  change approvals, numeric precision and old-bundle immutability.
+- Swift package: **18 tests passed**, including per-sheet permission scoping and
+  the explicit changed-field approval gate.
+- Native app build and strict code-signature verification passed. The relocated
+  standalone helper passed both the original reconstruction and new editable-field
+  round trips with development Python settings removed from its environment.
+- Ruff passes for all changed Python files. Repository-wide Ruff reports **19
+  pre-existing issues** in `document_bundle.py`, `document_cli.py` and
+  `test_document.py`; these are outside this workbook change.
+
+Privacy review found no new blocking issue in the exercised flow. The encrypted
+bundle stores permissions and digests alongside existing minimal identity/code
+maps; protocol reviews expose headings/counts and prompt bounds, not source rows
+or codebooks. Tests block network use during editing restoration and assert that
+source identifiers and passphrases do not appear in protocol responses. Publication
+rechecks the original package and returned tables against the reviewed proposal.
+
+Remaining limitations: change counts do not establish analytical correctness;
+formula recalculation is requested from Excel and was not executed by SafeSet in
+these tests. Selected reference tables still require ordinary protection policies
+and a source key in the declared entity domain. Original unselected sheets remain
+local and are copied during restoration. Native Windows editable-workbook UI and
+publication were not enabled or tested in this pass.
+
 ## Current Windows development pass — 25 September 2026
 
 Baseline: clean checked-out `main`, commit `f5fdd05` (merged document/Windows

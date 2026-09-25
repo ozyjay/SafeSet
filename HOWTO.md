@@ -8,18 +8,19 @@ In the macOS app, use **⌘+** and **⌘−** to change text size, or **⌘0** t
 
 ## Protect a workbook
 
-1. Choose **Protect a workbook** and select the original `.xlsx` file. SafeSet selects a sole visible worksheet automatically. If several are visible, select every worksheet to protect and include in this release. Unselected worksheets are excluded; SafeSet never copies them through unchanged.
+1. Choose **Protect a workbook** and select the original `.xlsx` file. Select the sheets ChatGPT needs as editable data or reference information. Unselected sheets stay out of the protected copy; the editing workflow preserves them locally when restoring the original workbook.
 2. Review the field summary. It initially shows fields needing attention; turn off **Show only fields needing attention** to revisit completed decisions. Use the **X** on a card to remove that field; removed cards appear inactive when all fields are shown, and their undo button restores them. Choose one source identifier per worksheet, then use **Remove undecided fields** to remove all fields that have no action on any selected worksheet. Set actions for other fields needed for analysis before using that shortcut. Removed fields need no classification. Local suggestions explain possible concerns in ordinary language but remain hints only.
 3. Choose exactly one source identifier per worksheet for **Replace with random record ID**. SafeSet treats that field internally as a direct identifier used to link records; there is no separate classification picker. Remove other direct identifiers, free text and fields the analysis does not need.
 4. Review the values for each **Keep** or **Obfuscate values** field and approve its exact category list. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds; exact values may still disclose information.
-5. Set the minimum group size to at least 2. Choose a new protected workbook destination outside a repository, then review the validation summary. Mandatory failures block creation.
-6. Approve creation and enter a confirmed passphrase of at least 16 characters. Keep the passphrase separately: there is no recovery backdoor. Existing files are never overwritten.
+5. Under **What may ChatGPT change?**, leave **Edit selected fields and preserve the original workbook** enabled. Select permitted fields separately for each sheet, such as the team field on Allocations. A sheet with no selected fields is reference only. Keep, Obfuscate values and Keep exact number fields can be editable; identities, grouped ranges, formulas and dates cannot.
+6. Set the minimum group size to at least 2. Choose a new protected workbook destination outside a repository, then review the validation summary and editing permissions. Mandatory failures block creation.
+7. Approve creation and enter a confirmed passphrase of at least 16 characters. Copy the prompt shown after creation and send it with the protected workbook. Keep the passphrase separately: there is no recovery backdoor. Existing files are never overwritten.
 
-When you select multiple worksheets, SafeSet creates a relational protected workbook and version 3 bundle. They use shared random entity IDs and separate row IDs. A repeated heading appears once in the summary, and its decision applies to every listed worksheet. Confirm that same-named fields really mean the same thing. Category review combines the labels but retains an exact allowlist for each worksheet. The summary shows names, types and cardinality, never cell samples.
+Editing mode creates a version 4 bundle, including for one sheet. Related sheets use shared random entity IDs and separate row IDs. A repeated heading appears once for protection decisions, but editing permissions are chosen separately per sheet. Confirm that the source keys identify the same kind of entity across selected sheets. Selected reference tables still need a source identifier and normal protection decisions; a formula summary without that structure can stay local and recalculate after restoration. Category review retains each worksheet's observed allowlist. To reuse category codes across sheets, explicitly confirm the field under **Shared obfuscation**.
 
 The protected copy omits removed fields and the source identifier. It uses a fresh cryptographically random `record_id`. Obfuscated fields receive fresh random codes per field and export. Equal source categories still have equal codes within that export, so equality and frequency remain visible.
 
-SafeSet also creates an encrypted version 2 restoration bundle for a single-sheet release. The bundle defaults to private local storage; you can set its location under Advanced settings. Keep the bundle separate from the protected copy.
+The encrypted bundle defaults to private local storage; you can set its location under Advanced settings. Keep it separate from the protected copy. Turning editing mode off retains the earlier append-results workflow, using version 2 for a single sheet or version 3 for related sheets.
 
 ## Choose field classifications
 
@@ -49,6 +50,15 @@ Classification does not make a value safe or anonymous. Both quasi-identifiers a
 
 Analyse the protected workbook locally or in an environment you have separately decided is suitable.
 
+In editing mode, change only the fields listed in the generated prompt. Keep all
+record and entity IDs, headings, rows and reference values intact. Use existing
+categories or codes and the approved numeric bounds. Do not add sheets or result
+columns; put narrative findings in the ChatGPT reply. Known shared codes let an
+allocation use a category already present in a reference sheet. New categories,
+new participants and new fields need a new protection setup.
+
+For the earlier append-results mode:
+
 - Preserve every original worksheet, row, heading, `record_id`, `entity_id` and protected value exactly.
 - Add short, safe categorical result fields, such as `Team`. Fill every row with a result such as `Campus mismatch` or `No change`; blank result cells are not supported.
 - You may add separate analysis worksheets. They may contain blank cells or formulas with saved scalar results. SafeSet reads saved results; it does not calculate or preserve formulas.
@@ -58,15 +68,17 @@ Formulas in the original protected worksheets, unsafe text and unsupported sprea
 ## Restore locally
 
 1. Choose **Restore a workbook**. Select the modified protected copy, the exact original source workbook and the private bundle. Choose a new restored output filename.
-2. Enter the passphrase. SafeSet unlocks the bundle locally and checks source content and order, exact record coverage, schemas and every source-derived protected value. A mismatch blocks restoration; SafeSet never guesses an identity.
-3. Review the record count, source fields to restore, new result headings and added analysis worksheets. Approve each new field and worksheet explicitly. To exclude one, remove it from the returned workbook and repeat the review.
-4. Authorise restoration. SafeSet creates a **new** workbook containing the source fields and approved results. The original is not overwritten. The restored workbook contains identifiers and is sensitive plaintext.
+2. Enter the passphrase. SafeSet unlocks the bundle locally and checks the original, record coverage, schemas, reference values and permitted changes. A mismatch blocks restoration; SafeSet never guesses an identity.
+3. In editing mode, review and approve the changed-cell count for every changed field. The complete proposed workbook is checked before approval. In append-results mode, approve each new result field and analysis sheet.
+4. Authorise restoration. Editing mode creates a copy of the original workbook with only the approved field changes applied to the correct records. Other sheets, formatting, charts and original formulas are preserved. Open the result in Excel to recalculate formula summaries; static summaries need their own approved edits. The original is not overwritten. The restored workbook contains identifiers and is sensitive plaintext.
 
 For a version 2 bundle, select every same-schema protected and source worksheet in the release; SafeSet preserves workbook order. For a version 3 relational bundle, the authenticated bundle defines every mandatory worksheet automatically, so the desktop does not show a worksheet picker. After validation, added analysis worksheets appear separately and must each be approved for inclusion. Remove an unwanted added worksheet from the modified protected workbook and validate again. Hidden returned worksheets fail closed.
 
-Do not edit source-derived protected fields. An altered code, original category, kept value or range label blocks restoration, even if the change seems valid. Re-protect the source to start a new round trip after a source edit.
+Version 4 bundles use **Related sheets or editable workbook bundle** on the Restore page, including a one-sheet editing release. This setting is selected automatically after protection. A version 4 release binds the entire original file: even a later formatting change to that original requires a new protection run. Existing version 2/3 bundles never acquire editing permissions; start a new protection run to use this workflow.
 
-Approved analysis worksheets become static tables of cell text, including saved formula results. Formulas, formatting, drawings and charts are not preserved. IDs inside these added worksheets are not replaced with source identities. Put row-level findings in new columns on the original protected worksheets if they must appear beside restored source records.
+In version 2/3 append-results mode, source-derived protected fields remain immutable. An altered code, original category, kept value or range label blocks restoration.
+
+In append-results mode, approved analysis worksheets become static tables of cell text, including saved formula results. Formulas, formatting, drawings and charts are not preserved in that mode. IDs inside added worksheets are not replaced with source identities.
 
 ## Advanced and CLI
 

@@ -5,6 +5,7 @@ import json
 import socket
 import zipfile
 from types import SimpleNamespace
+from xml.etree import ElementTree
 
 import pytest
 from openpyxl import Workbook, load_workbook
@@ -53,8 +54,11 @@ def editing(tmp_path, destinations):
     allocations.add_table(ExcelTable(displayName="SyntheticAllocations", ref="B3:E5"))
     participants = workbook.create_sheet("Participants")
     participants.append(("student_key", "team"))
-    for key, team in [("SYNTH-001", "Synthetic Alpha"), ("SYNTH-002", "Synthetic Alpha"),
-                      ("SYNTH-003", "Synthetic Beta")]:
+    for key, team in [
+        ("SYNTH-001", "Synthetic Alpha"),
+        ("SYNTH-002", "Synthetic Alpha"),
+        ("SYNTH-003", "Synthetic Beta"),
+    ]:
         participants.append((key, team))
     summary = workbook.create_sheet("Summary")
     summary["A1"] = "Synthetic local summary"
@@ -74,22 +78,35 @@ def editing(tmp_path, destinations):
         },
         "Participants": {
             "student_key": RuleDraft("pseudonymise", "direct_identifier"),
-            "team": RuleDraft("code", "analytical_attribute",
-                              ("Synthetic Alpha", "Synthetic Beta")),
+            "team": RuleDraft(
+                "code", "analytical_attribute", ("Synthetic Alpha", "Synthetic Beta")
+            ),
         },
     }
     fields = {"Allocations": ["team", "state", "score"], "Participants": []}
     output, bundle = destinations
     review = prepare_relational_protection(
-        source, tuple(drafts), drafts, "2", output, bundle,
-        "controlled_pseudonymisation", ("team",), fields,
+        source,
+        tuple(drafts),
+        drafts,
+        "2",
+        output,
+        bundle,
+        "controlled_pseudonymisation",
+        ("team",),
+        fields,
     )
     approve_relational_protection(review, PASSPHRASE, approved=True)
     returned = tmp_path / "synthetic-returned.xlsx"
     returned.write_bytes(output.read_bytes())
     return SimpleNamespace(
-        source=source, protected=output, bundle=bundle, returned=returned,
-        restored=tmp_path / "synthetic-restored.xlsx", drafts=drafts, fields=fields,
+        source=source,
+        protected=output,
+        bundle=bundle,
+        returned=returned,
+        restored=tmp_path / "synthetic-restored.xlsx",
+        drafts=drafts,
+        fields=fields,
         protection=review,
     )
 
@@ -100,7 +117,11 @@ def returned_tables(files):
 
 def review(files):
     return prepare_relational_reconstruction(
-        files.returned, files.source, files.bundle, files.restored, PASSPHRASE,
+        files.returned,
+        files.source,
+        files.bundle,
+        files.restored,
+        PASSPHRASE,
     )
 
 
@@ -114,7 +135,8 @@ def change_allocation(files):
 
 
 def test_edit_round_trip_preserves_reference_parts_styles_formulas_and_source_order(
-    editing, monkeypatch,
+    editing,
+    monkeypatch,
 ):
     def denied(*_args, **_kwargs):
         raise AssertionError("Network access attempted")
@@ -124,14 +146,17 @@ def test_edit_round_trip_preserves_reference_parts_styles_formulas_and_source_or
     change_allocation(editing)
     prepared = review(editing)
     assert prepared.changes == {
-        "Allocations": {"team": 1, "state": 1, "score": 1}, "Participants": {},
+        "Allocations": {"team": 1, "state": 1, "score": 1},
+        "Participants": {},
     }
     assert not editing.restored.exists()
     with pytest.raises(SafetyError, match="changed field"):
         approve_relational_reconstruction(prepared, prepared.new_columns, authorised=True)
     assert not editing.restored.exists()
     approve_relational_reconstruction(
-        prepared, prepared.new_columns, authorised=True,
+        prepared,
+        prepared.new_columns,
+        authorised=True,
         approved_changes={"Allocations": ("team", "state", "score"), "Participants": ()},
     )
     restored = load_workbook(editing.restored)
@@ -156,10 +181,24 @@ def test_edit_round_trip_preserves_reference_parts_styles_formulas_and_source_or
     assert "SYNTH-001" not in protected and "Synthetic Beta" not in protected
 
 
-@pytest.mark.parametrize("mutation", [
-    "unknown_code", "blank_code", "numeric_bound", "category", "readonly", "entity",
-    "missing", "duplicate", "unknown_id", "extra_field", "extra_sheet", "formula", "hidden",
-])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unknown_code",
+        "blank_code",
+        "numeric_bound",
+        "category",
+        "readonly",
+        "entity",
+        "missing",
+        "duplicate",
+        "unknown_id",
+        "extra_field",
+        "extra_sheet",
+        "formula",
+        "hidden",
+    ],
+)
 def test_unapproved_changes_fail_closed(editing, mutation):
     workbook = load_workbook(editing.returned)
     sheet = workbook["Allocations"]
@@ -201,7 +240,9 @@ def test_unchanged_editing_workbook_is_an_exact_copy(editing):
     prepared = review(editing)
     assert prepared.changes == {"Allocations": {}, "Participants": {}}
     approve_relational_reconstruction(
-        prepared, prepared.new_columns, authorised=True,
+        prepared,
+        prepared.new_columns,
+        authorised=True,
         approved_changes={"Allocations": (), "Participants": ()},
     )
     assert editing.restored.read_bytes() == editing.source.read_bytes()
@@ -215,12 +256,14 @@ def test_full_source_and_returned_changes_invalidate_review(editing, where):
     if path == editing.source:
         workbook["Summary"]["B2"] = 3  # Unselected local content is also bound.
     else:
-        workbook["Allocations"]["F2"] = 4
+        workbook["Allocations"]["E2"] = 4
     workbook.save(path)
     with pytest.raises(SafetyError):
         if prepared:
             approve_relational_reconstruction(
-                prepared, prepared.new_columns, authorised=True,
+                prepared,
+                prepared.new_columns,
+                authorised=True,
                 approved_changes={"Allocations": (), "Participants": ()},
             )
         else:
@@ -228,13 +271,17 @@ def test_full_source_and_returned_changes_invalidate_review(editing, where):
     assert not editing.restored.exists()
 
 
-@pytest.mark.parametrize("fields", [
-    {}, {"Allocations": ["student_key"], "Participants": []},
-    {"Allocations": ["team", "team"], "Participants": []},
-    {"Allocations": ["missing"], "Participants": []},
-    {"Allocations": "team", "Participants": []},
-    {"Allocations": [True], "Participants": []},
-])
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {},
+        {"Allocations": ["student_key"], "Participants": []},
+        {"Allocations": ["team", "team"], "Participants": []},
+        {"Allocations": ["missing"], "Participants": []},
+        {"Allocations": "team", "Participants": []},
+        {"Allocations": [True], "Participants": []},
+    ],
+)
 def test_edit_permissions_are_strict_and_versioned(editing, fields):
     bundle = read_relational_bundle(editing.bundle, PASSPHRASE)
     bundle["editable_fields"] = fields
@@ -246,7 +293,10 @@ def test_bundle_version_migration_does_not_grant_edits_to_old_bundles(editing):
     bundle = read_relational_bundle(editing.bundle, PASSPHRASE)
     assert bundle["version"] == 4
     assert bundle["editable_fields"] == editing.fields
-    assert decrypt_relational_bundle(encrypt_relational_bundle(bundle, PASSPHRASE), PASSPHRASE) == bundle
+    assert (
+        decrypt_relational_bundle(encrypt_relational_bundle(bundle, PASSPHRASE), PASSPHRASE)
+        == bundle
+    )
     with pytest.raises(SafetyError):
         decrypt_relational_bundle(b"SAFESET3\n" + editing.bundle.read_bytes()[9:], PASSPHRASE)
     for key, value in [("unknown", []), ("source_file_digest", True)]:
@@ -260,7 +310,9 @@ def test_bundle_version_migration_does_not_grant_edits_to_old_bundles(editing):
     change_allocation(editing)
     with pytest.raises(SafetyError, match="protected source field"):
         review_relational_reconstruction(
-            editing.protection.source_tables, returned_tables(editing), old,
+            editing.protection.source_tables,
+            returned_tables(editing),
+            old,
         )
 
 
@@ -268,8 +320,11 @@ def test_bridge_reports_counts_and_requires_exact_change_approval(editing):
     change_allocation(editing)
     bridge = Bridge()
     payload = {
-        "returned": str(editing.returned), "source": str(editing.source),
-        "bundle": str(editing.bundle), "output": str(editing.restored), "passphrase": PASSPHRASE,
+        "returned": str(editing.returned),
+        "source": str(editing.source),
+        "bundle": str(editing.bundle),
+        "output": str(editing.restored),
+        "passphrase": PASSPHRASE,
     }
     response = call(bridge, "prepare_relational_reconstruction", payload)
     assert response["ok"]
@@ -278,15 +333,141 @@ def test_bridge_reports_counts_and_requires_exact_change_approval(editing):
     assert PASSPHRASE not in encoded
     prepared = response["result"]
     assert prepared["changes"]["Allocations"]["team"] == 1
-    rejected = call(bridge, "approve_relational_reconstruction", {
-        "review_id": prepared["review_id"], "approved_results": prepared["new_columns"],
-        "approved_changes": {"Allocations": ["team"], "Participants": []},
-    })
+    rejected = call(
+        bridge,
+        "approve_relational_reconstruction",
+        {
+            "review_id": prepared["review_id"],
+            "approved_results": prepared["new_columns"],
+            "approved_changes": {"Allocations": ["team"], "Participants": []},
+        },
+    )
     assert rejected["error"] == "edit_approval"
     assert not editing.restored.exists()
     prepared = call(bridge, "prepare_relational_reconstruction", payload)["result"]
-    response = call(bridge, "approve_relational_reconstruction", {
-        "review_id": prepared["review_id"], "approved_results": prepared["new_columns"],
-        "approved_changes": {"Allocations": ["team", "state", "score"], "Participants": []},
-    })
+    response = call(
+        bridge,
+        "approve_relational_reconstruction",
+        {
+            "review_id": prepared["review_id"],
+            "approved_results": prepared["new_columns"],
+            "approved_changes": {"Allocations": ["team", "state", "score"], "Participants": []},
+        },
+    )
     assert response["ok"] and editing.restored.exists()
+
+
+def test_bridge_protection_binds_permissions_and_provides_a_value_free_prompt(editing):
+    bridge = Bridge()
+    payload = {
+        "source": str(editing.source),
+        "sheets": list(editing.drafts),
+        "output": str(editing.protected.with_name("synthetic-second.xlsx")),
+        "bundle": str(editing.bundle.with_name("synthetic-second.enc")),
+        "threshold": "2",
+        "validation_profile": "controlled_pseudonymisation",
+        "shared_code_fields": ["team"],
+        "editable_fields": editing.fields,
+        "drafts": {
+            sheet: {
+                name: {
+                    "action": draft.action,
+                    "classification": draft.classification,
+                    "allowed_values": list(draft.allowed_values),
+                    "bins": [],
+                    "bounds": list(draft.bounds) if draft.bounds else None,
+                }
+                for name, draft in drafts.items()
+            }
+            for sheet, drafts in editing.drafts.items()
+        },
+    }
+    response = call(bridge, "prepare_relational_protection", payload)
+    assert response["ok"]
+    result = response["result"]
+    assert result["editable_fields"] == editing.fields
+    prompt = result["analysis_prompt"]
+    assert "SYNTH-001" not in prompt and "Synthetic Alpha" not in prompt
+    assert "from 0 to 10" in prompt and "record_id" in prompt
+    assert '"Participants": {}' in prompt
+    assert not editing.bundle.with_name("synthetic-second.enc").exists()
+    response = call(
+        bridge,
+        "approve_relational_protection",
+        {
+            "review_id": result["review_id"],
+            "passphrase": PASSPHRASE,
+        },
+    )
+    assert response["ok"]
+    assert editing.bundle.with_name("synthetic-second.enc").read_bytes().startswith(b"SAFESET4\n")
+
+
+def test_numeric_normalisation_does_not_create_a_spurious_change(editing):
+    workbook = load_workbook(editing.returned)
+    workbook["Allocations"]["E3"] = "02.000"
+    workbook.save(editing.returned)
+    prepared = review(editing)
+    assert prepared.changes == {"Allocations": {}, "Participants": {}}
+    assert prepared.workbook_bytes == editing.source.read_bytes()
+
+
+def test_numeric_precision_is_checked_before_user_approval(editing):
+    workbook = load_workbook(editing.returned)
+    workbook["Allocations"]["E2"] = "0.1234567890123456"
+    workbook.save(editing.returned)
+    with pytest.raises(SafetyError, match="precision"):
+        review(editing)
+    assert not editing.restored.exists()
+
+
+def test_formula_fields_cannot_be_authorised_for_editing(editing):
+    workbook = load_workbook(editing.source)
+    workbook["Allocations"]["E4"] = "=2+2"
+    workbook.save(editing.source)
+    with zipfile.ZipFile(editing.source) as archive:
+        entries = [(entry, archive.read(entry)) for entry in archive.infolist()]
+    with zipfile.ZipFile(editing.source, "w") as archive:
+        for entry, data in entries:
+            if entry.filename == "xl/worksheets/sheet1.xml":
+                root = ElementTree.fromstring(data)
+                ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+                cell = root.find(f".//{ns}c[@r='E4']")
+                cached = cell.find(f"{ns}v")
+                if cached is None:
+                    cached = ElementTree.SubElement(cell, f"{ns}v")
+                cached.text = "4"
+                data = ElementTree.tostring(root)
+            archive.writestr(entry, data)
+    with pytest.raises(SafetyError, match="Formula and date"):
+        prepare_relational_protection(
+            editing.source,
+            tuple(editing.drafts),
+            editing.drafts,
+            "2",
+            editing.protected.with_name("synthetic-formula.xlsx"),
+            editing.bundle.with_name("synthetic-formula.enc"),
+            "controlled_pseudonymisation",
+            ("team",),
+            editing.fields,
+        )
+
+
+def test_source_package_changes_block_protection_publication(editing):
+    prepared = prepare_relational_protection(
+        editing.source,
+        tuple(editing.drafts),
+        editing.drafts,
+        "2",
+        editing.protected.with_name("synthetic-stale.xlsx"),
+        editing.bundle.with_name("synthetic-stale.enc"),
+        "controlled_pseudonymisation",
+        ("team",),
+        editing.fields,
+    )
+    workbook = load_workbook(editing.source)
+    workbook["Summary"]["B2"] = 7
+    workbook.save(editing.source)
+    with pytest.raises(SafetyError, match="changed after"):
+        approve_relational_protection(prepared, PASSPHRASE, approved=True)
+    assert not prepared.output.exists() and not prepared.bundle_path.exists()

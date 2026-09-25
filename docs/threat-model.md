@@ -61,6 +61,35 @@ Original fields omitted from the protected copy are copied back only in the loca
 restored workbook. Formula-like source strings remain literal text in that
 `.xlsx`; control characters still block reconstruction.
 
+## Version 4 editable workbook boundary
+
+Editing is an explicit workflow permission authenticated separately from disclosure
+policy. The version 4 envelope binds exact per-sheet editable fields and the entire
+original package digest; previous bundle versions never grant editing rights.
+Identities, record IDs, entity links, row coverage and reference values remain
+mandatory invariants. Returned edits resolve only through approved categories,
+bounded numeric domains or known codebooks. Sharing a code domain requires the
+existing explicit same-field confirmation. No identity is guessed or reassigned.
+
+The original local workbook is trusted content. Only approved field changes are
+patched into it; original unselected sheets and package parts never enter the
+protected export and are copied locally during restoration. Original formulas and
+charts are retained, and Excel is asked to recalculate. Cached results and static
+summaries may be stale until recalculated or separately updated. Macro/external-link
+archive restrictions remain; signed packages requiring modification and ambiguous
+XML fail closed. XML parsing rejects DTDs/entities, including non-UTF-8 encodings.
+New result text, formulas and arbitrary package content from the returned workbook
+are not copied in this mode. Numeric precision checks prevent silent rounding of
+edited native numeric cells.
+
+The full proposed output is built before review. Review metadata contains field
+names and change counts only; the copyable prompt adds approved numeric bounds
+and domain instructions, never codebooks, identities or cell values. Every changed
+field needs explicit approval and source/returned data are rechecked at publication.
+Counts permit scope review but cannot establish that a particular assignment is
+correct. Operators should inspect the restored workbook locally before using it.
+Existing same-account/concurrent-filesystem assumptions and no-clobber rules apply.
+
 ## Version 3 relational restoration bundle
 
 A version 3 bundle binds multiple selected worksheets, their distinct schemas and

@@ -19,7 +19,7 @@ provide secure deletion or replace human review. Native ACL tests have passed;
 encrypted Windows workflow verification is still outstanding and the WinUI
 publication controls remain disabled.
 
-For the protected working-copy workflow, the original source is the authority
+For the version 2/3 protected working-copy workflow, the original source is the authority
 for all source fields during reconstruction. Every protected source-derived field
 must still equal its expected value under the bound policy and random codebook.
 New result columns need explicit heading allowlisting and safe cell text; they are
@@ -51,6 +51,25 @@ edited in place for an existing release. The local source-text locator verifies
 the source against the authenticated bundle and shows a count and up to 20
 coordinates of blocking control characters. It never sends cell contents to
 the desktop UI.
+
+Version 4 editable workbooks bind per-sheet editing permissions and the complete
+original file inside the encrypted bundle. The original remains authoritative for
+identities, reference fields and local-only worksheets. Only explicitly selected
+reversible fields can change: observed categorical values, known category codes
+(including explicitly shared codebooks) and bounded numeric values. Disclosure
+validation on the protected release is unchanged. Missing, duplicate or unknown
+record IDs, changed entity links and unapproved field changes still block restore.
+No new rows, fields or sheets are accepted by this mode.
+
+Restoration reviews changed-cell counts per field and requires explicit approval
+for every changed field. It applies those values to a copy of the original package,
+preserving local worksheets, original formulas and formatting. The package binding
+also covers local-only content and formatting, so changes to the original invalidate
+review. Source numeric cells remain numeric only when edited values fit Excel's
+15 significant-digit precision; numeric source strings remain text. Formula
+calculation is requested on opening in Excel, never performed by SafeSet. Static
+summaries may become inconsistent unless separately selected and edited. A valid
+change can still be an incorrect allocation; validation cannot judge its meaning.
 
 A **direct identifier** connects a record to a person; a **pseudonymous identifier**
 is the generated random `record_id`. A **quasi-identifier** may identify someone in
