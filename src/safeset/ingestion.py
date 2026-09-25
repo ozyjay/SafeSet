@@ -41,6 +41,12 @@ class Table:
     date_cells: int = 0
 
 
+def _same_headings(
+    actual: tuple[str, ...], expected: tuple[str, ...], allow_reordered: bool
+) -> bool:
+    return set(actual) == set(expected) if allow_reordered else actual == expected
+
+
 def read_bounded(path: Path, limit: int = MAX_BYTES) -> bytes:
     try:
         if not stat.S_ISREG(path.stat().st_mode):
@@ -228,6 +234,7 @@ def _read_worksheet(
     *,
     allow_source_dates: bool = False,
     allow_cached_formula_blanks: bool = False,
+    allow_reordered_headings: bool = False,
     observe_cell: CellObserver | None = None,
 ) -> Table:
     if worksheet.tables:
@@ -267,7 +274,12 @@ def _read_worksheet(
                 raise SafetyError("Excel table headings differ from its metadata.")
             tables.append(data)
         header = tables[0].columns
-        if any(table.columns != header for table in tables[1:]):
+        if any(
+            not _same_headings(table.columns, header, allow_reordered_headings)
+            for table in tables[1:]
+        ):
+            if allow_reordered_headings:
+                raise SafetyError("Excel tables must have identical headings.")
             raise SafetyError("Excel tables must have identical headings in the same order.")
         if sum(len(table.rows) for table in tables) > MAX_ROWS:
             raise SafetyError("Excel tables exceed the combined row limit.")
@@ -307,6 +319,7 @@ def read_excel(
     allow_cached_formulas: bool = False,
     allow_source_dates: bool = False,
     allow_cached_formula_blanks: bool = False,
+    allow_reordered_headings: bool = False,
     observe_cell: CellObserver | None = None,
 ) -> Table:
     if path.suffix.lower() != ".xlsx":
@@ -345,12 +358,18 @@ def read_excel(
                 cached_workbook[name] if cached_workbook is not None else None,
                 allow_source_dates=allow_source_dates,
                 allow_cached_formula_blanks=allow_cached_formula_blanks,
+                allow_reordered_headings=allow_reordered_headings,
                 observe_cell=observe_cell,
             )
             for name in selected
         ]
         header = tables[0].columns
-        if any(table.columns != header for table in tables[1:]):
+        if any(
+            not _same_headings(table.columns, header, allow_reordered_headings)
+            for table in tables[1:]
+        ):
+            if allow_reordered_headings:
+                raise SafetyError("Selected worksheets must have identical headings.")
             raise SafetyError("Selected worksheets must have identical headings in the same order.")
         if sum(len(table.rows) for table in tables) > MAX_ROWS:
             raise SafetyError("Selected worksheets exceed the combined row limit.")
@@ -373,6 +392,7 @@ def read_excel_sheets(
     allow_cached_formulas: bool = False,
     allow_source_dates: bool = False,
     allow_cached_formula_blanks: bool = False,
+    allow_reordered_headings: bool = False,
     observe_cell: CellObserver | None = None,
 ) -> dict[str, Table]:
     """Read selected worksheets separately, preserving their distinct schemas."""
@@ -400,6 +420,7 @@ def read_excel_sheets(
                 cached_workbook[name] if cached_workbook is not None else None,
                 allow_source_dates=allow_source_dates,
                 allow_cached_formula_blanks=allow_cached_formula_blanks,
+                allow_reordered_headings=allow_reordered_headings,
                 observe_cell=observe_cell,
             )
             for name in sheets

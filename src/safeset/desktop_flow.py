@@ -239,7 +239,7 @@ def prepare_reconstruction(
     source = read_excel(
         source_path, source_sheet, allow_cached_formulas=True, allow_source_dates=True
     )
-    returned = read_excel(returned_path, returned_sheet)
+    returned = read_excel(returned_path, returned_sheet, allow_reordered_headings=True)
     returned_names = list_excel_sheets(returned_path)
     selected_names = (
         (returned_sheet,)
@@ -292,7 +292,9 @@ def approve_reconstruction(
     current_source = read_excel(
         review.source_path, review.source_sheet, allow_cached_formulas=True, allow_source_dates=True
     )
-    current_returned = read_excel(review.returned_path, review.returned_sheet)
+    current_returned = read_excel(
+        review.returned_path, review.returned_sheet, allow_reordered_headings=True
+    )
     current_names = list_excel_sheets(review.returned_path)
     reviewed_names = (*review.returned_bound_sheets, *review.analysis_sheets)
     if set(current_names) != set(reviewed_names):
@@ -351,7 +353,7 @@ def prepare_relational_reconstruction(
     sources = read_excel_sheets(
         source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
-    returned = read_excel_sheets(returned_path, sheets)
+    returned = read_excel_sheets(returned_path, sheets, allow_reordered_headings=True)
     new_sheet_names = tuple(name for name in returned_names if name not in sheets)
     analysis_sheets = (
         read_excel_sheets(
@@ -399,7 +401,9 @@ def approve_relational_reconstruction(
     current_sources = read_excel_sheets(
         review.source_path, sheets, allow_cached_formulas=True, allow_source_dates=True
     )
-    current_returned = read_excel_sheets(review.returned_path, sheets)
+    current_returned = read_excel_sheets(
+        review.returned_path, sheets, allow_reordered_headings=True
+    )
     current_analysis = (
         read_excel_sheets(
             review.returned_path,

@@ -320,7 +320,8 @@ def test_relational_round_trip_and_minimal_bundle(tmp_path):
         excel_workbook_bytes(
             {
                 name: Table(
-                    (*table.columns, "Team"),
+                    (("Team", *reversed(table.columns)) if name == "Enrolments" else
+                     (*table.columns[2:], "Team", *table.columns[:2])),
                     tuple({**row, "Team": "Koala Team"} for row in table.rows),
                 )
                 for name, table in protected_tables.items()

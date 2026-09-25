@@ -635,9 +635,9 @@ def review_relational_reconstruction(
         protected = tuple(item["protected_columns"])
         if source.columns != tuple(item["source_columns"]):
             raise SafetyError("Original worksheet schema does not match the bundle.")
-        if table.columns[: len(protected)] != protected:
+        if not set(protected).issubset(table.columns):
             raise SafetyError("Protected worksheet schema has changed unexpectedly.")
-        new_columns = table.columns[len(protected) :]
+        new_columns = tuple(name for name in table.columns if name not in protected)
         if (
             len(table.columns) > MAX_COLUMNS
             or len(set(table.columns)) != len(table.columns)
