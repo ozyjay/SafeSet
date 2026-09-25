@@ -1048,9 +1048,17 @@ struct ProtectView: View {
                     }
                     Text("Passing validation does not establish anonymity or recipient suitability.")
                         .foregroundStyle(.secondary)
+                    if DevelopmentPassphrase.forWorkbook(model.source) != nil {
+                        Text("Debug synthetic fixture: this run uses a known development passphrase automatically. Never use its bundle with real data.")
+                            .foregroundStyle(.orange)
+                    }
                     Button("Approve and create") {
                         passphraseIssue = ""
-                        showApproval = true
+                        if let secret = DevelopmentPassphrase.forWorkbook(model.source) {
+                            model.approveProtection(passphrase: secret)
+                        } else {
+                            showApproval = true
+                        }
                     }
                         .appFont(13)
                         .disabled(validation["passed"] as? Bool != true)
@@ -1242,18 +1250,37 @@ struct RestoreView: View {
                 }
                 Text("Unlocking the private bundle is required to validate exact record coverage.")
                     .foregroundStyle(.secondary)
-                SecureField("Restoration passphrase", text: $passphrase).appFont(13)
+                if DevelopmentPassphrase.forWorkbook(model.original) == nil {
+                    SecureField("Restoration passphrase", text: $passphrase).appFont(13)
+                } else {
+                    Text("Debug synthetic fixture: the development passphrase is supplied automatically.")
+                        .appFont(13).foregroundStyle(.orange)
+                }
                 HStack {
                     Button("Validate and review") {
-                        let secret = passphrase; passphrase = ""
+                        let secret = DevelopmentPassphrase.forWorkbook(model.original) ?? passphrase
+                        passphrase = ""
                         model.prepareRestoration(passphrase: secret)
                     }.appFont(13).buttonStyle(.borderedProminent)
                         .disabled(model.relationalRestore && model.reconcileParticipants &&
                                   (model.participantTarget.isEmpty || model.participantReference.isEmpty))
                     Button("Locate unsafe source cells") {
-                        let secret = passphrase; passphrase = ""
+                        let secret = DevelopmentPassphrase.forWorkbook(model.original) ?? passphrase
+                        passphrase = ""
                         model.locateUnsafeSourceCells(passphrase: secret)
                     }.appFont(13).buttonStyle(.bordered)
+                }
+                if let permissions = model.bundlePermissions {
+                    GroupBox("Permissions saved in this private bundle") {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(permissions.keys.sorted(), id: \.self) { sheet in
+                                let names = permissions[sheet] ?? []
+                                Text(names.isEmpty ? "\(sheet): reference only"
+                                     : "\(sheet): editable fields — \(names.joined(separator: ", "))")
+                                    .appFont(13)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
                 if let count = model.unsafeSourceCount {
                     Text("Unsafe source cells: \(count)").appFont(13, weight: .semibold)

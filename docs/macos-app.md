@@ -29,6 +29,16 @@ The default configuration is `Release`. To build the native app using Xcode's
 & ./scripts/build-macos-app.ps1 -Configuration Debug
 ```
 
+Use **Terminal → Run Task → SafeSet: Build and run macOS Debug** in VS Code to
+build and open the separate **SafeSet Debug** app. The Debug app automatically
+uses a known development passphrase only when the
+original workbook exactly matches `examples/synthetic_students.xlsx` or
+`examples/synthetic_participants.xlsx`. Those bundles are for synthetic testing
+only. Other workbooks still prompt for a passphrase, and Release builds never
+use the development passphrase. The Debug build has a distinct bundle identifier
+and runs from `dist/SafeSet.app`; it does not replace the installed Release app.
+The Release and Debug build commands replace the same `dist` path.
+
 Both configurations create `dist/SafeSet.app` and `dist/SafeSet-local.zip`, replacing
 the previous local build. Building does not update the installed app. The bundled
 Python helper uses the same packaging and safety checks in either configuration.
@@ -64,6 +74,12 @@ To install an existing build for the current user, run:
 ```pwsh
 & ./scripts/install-macos-app.ps1
 ```
+
+In Restore, validating a participant comparison also shows each selected
+worksheet's saved editable fields from the private bundle. It uses the same
+passphrase entry as validation, displays no participant rows, and changes no
+workbook or bundle. The permission list remains visible if comparison validation
+reports a membership-sheet permission error.
 
 This verifies the bundle identifier and code signature before installing to
 `~/Applications/SafeSet.app`. It will not replace an existing installation

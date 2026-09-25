@@ -120,6 +120,7 @@ struct SourceCellLocation: Identifiable {
     @Published var restoreBundle = ""
     @Published var restoredOutput = ""
     @Published var restorationReview: [String: Any]?
+    @Published var bundlePermissions: [String: [String]]?
     @Published var unsafeSourceCount: Int?
     @Published var unsafeSourceLocations: [SourceCellLocation] = []
     @Published var approvedResults: Set<String> = []
@@ -402,6 +403,7 @@ struct SourceCellLocation: Identifiable {
         legacyReview = nil
         documentProtectionReview = nil
         documentRestorationReview = nil
+        bundlePermissions = nil
         unsafeSourceCount = nil
         unsafeSourceLocations = []
     }
@@ -667,8 +669,20 @@ struct SourceCellLocation: Identifiable {
             payload["source_sheet"] = orderedOriginalRestoreSheets
         }
         if relationalRestore && reconcileParticipants { payload["config"] = participantConfig }
-        send(command, payload) { result in
-            self.acceptRestorationReview(result)
+        if relationalRestore && reconcileParticipants {
+            bundlePermissions = nil
+            send("inspect_bundle_permissions", [
+                "source": original, "bundle": restoreBundle, "passphrase": passphrase
+            ]) { result in
+                self.bundlePermissions = result["editable_fields"] as? [String: [String]]
+                self.send(command, payload) { review in
+                    self.acceptRestorationReview(review)
+                }
+            }
+        } else {
+            send(command, payload) { result in
+                self.acceptRestorationReview(result)
+            }
         }
     }
 

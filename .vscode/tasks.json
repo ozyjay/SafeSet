@@ -60,6 +60,18 @@
             "runOptions": {
                 "instanceLimit": 1
             }
+        },
+        {
+            "label": "SafeSet: Build and run macOS Debug",
+            "type": "process",
+            "command": "/usr/bin/open",
+            "args": ["-n", "-a", "${workspaceFolder}/dist/SafeSet.app"],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "SafeSet: Build macOS Debug",
+            "dependsOrder": "sequence",
+            "problemMatcher": []
         }
     ]
 }

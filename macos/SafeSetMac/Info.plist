@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>org.ozyjay.SafeSet</string>
-<key>CFBundleName</key><string>SafeSet</string>
-<key>CFBundleDisplayName</key><string>SafeSet</string>
+<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+<key>CFBundleName</key><string>$(SAFESET_DISPLAY_NAME)</string>
+<key>CFBundleDisplayName</key><string>$(SAFESET_DISPLAY_NAME)</string>
 <key>CFBundleExecutable</key><string>SafeSetMac</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundleIconName</key><string>AppIcon</string>

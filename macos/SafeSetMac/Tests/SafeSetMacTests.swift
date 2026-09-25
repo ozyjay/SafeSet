@@ -2,6 +2,23 @@ import XCTest
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    #if DEBUG
+    func testDevelopmentPassphraseAcceptsOnlyExactSyntheticFixture() throws {
+        let repository = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let fixture = repository.appendingPathComponent("examples/synthetic_participants.xlsx")
+        XCTAssertNotNil(DevelopmentPassphrase.forWorkbook(fixture.path))
+        let changed = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".xlsx")
+        defer { try? FileManager.default.removeItem(at: changed) }
+        var bytes = try Data(contentsOf: fixture)
+        bytes.append(0)
+        try bytes.write(to: changed)
+        XCTAssertNil(DevelopmentPassphrase.forWorkbook(changed.path))
+    }
+    #endif
+
     @MainActor func testParticipantChangesNeedReadyReviewAndSeparateApprovals() {
         let model = AppModel()
         model.relationalRestore = true
