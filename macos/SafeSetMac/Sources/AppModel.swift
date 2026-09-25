@@ -91,6 +91,8 @@ struct SourceCellLocation: Identifiable {
     @Published var page: Page = .home
     @Published var busy = false
     @Published var alert = ""
+    @Published var showAnalysisPrompt = false
+    @Published var hasRecentProtectedWorkbook = false
     @Published var source = ""
     @Published var sourceSheets: [String] = []
     @Published var sourceSheet = ""
@@ -572,8 +574,9 @@ struct SourceCellLocation: Identifiable {
             self.selectedOriginalSheets = self.selectedSourceSheets
             self.rememberRestoreBundle(review["bundle"] as? String ?? "")
             self.protectionReview = nil
-            self.alert = "Protected workbook and private restoration bundle created."
+            self.hasRecentProtectedWorkbook = true
             self.page = .home
+            self.showAnalysisPrompt = true
         }
     }
 

@@ -36,6 +36,11 @@ let restorationAnalysisGuidance = "Please analyse the protected Excel workbook a
 let restorationResultExample = "For each new result column on a protected worksheet, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Do not put formulas in protected worksheets. Added analysis worksheets may contain blank cells; use static values where possible. If they contain formulas, the workbook must include saved scalar results. Before returning the file, compare each protected worksheet's row count and exact record_id values with the input workbook; every original ID must appear once on the same worksheet, with no new IDs in protected worksheets. SafeSet copies approved results into static tables, so formulas, formatting and drawings are not preserved. If you cannot keep the original workbook intact, explain the limitation instead of returning a changed file."
 let restorationCopyText = "\(restorationAnalysisGuidance)\n\n\(restorationResultExample)"
 
+func copyRestorationPrompt() {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(restorationCopyText, forType: .string)
+}
+
 private struct AppTextScaleKey: EnvironmentKey {
     static let defaultValue = 1.0
 }
@@ -304,6 +309,10 @@ struct RootView: View {
         .alert("SafeSet", isPresented: Binding(
             get: { !model.alert.isEmpty }, set: { if !$0 { model.alert = "" } }
         )) { Button("OK") { model.alert = "" } } message: { Text(model.alert) }
+        .sheet(isPresented: $model.showAnalysisPrompt) {
+            AnalysisPromptSheet()
+                .environmentObject(model)
+        }
         .onChange(of: model.fields) {
             if !model.sourceSheet.isEmpty { model.fieldsBySheet[model.sourceSheet] = model.fields }
             model.sharedCodeFields.formIntersection(model.sharedCodeCandidates)
@@ -361,11 +370,48 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, minHeight: 92)
                 }.buttonStyle(.bordered)
             }
+            if model.hasRecentProtectedWorkbook {
+                GroupBox("Before using ChatGPT") {
+                    HStack(alignment: .center, spacing: 16) {
+                        Text("Send the protected workbook with the preservation prompt. Keep the original source, private bundle and passphrase local.")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("View and copy prompt") { model.showAnalysisPrompt = true }
+                            .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, 6)
+                }
+            }
             Text("Passing checks reduces some disclosure risks. It does not establish anonymity or recipient suitability.")
                 .foregroundStyle(.secondary)
             Spacer()
         }
         .padding(28)
+    }
+}
+
+struct AnalysisPromptSheet: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Protected workbook created").appFont(20, weight: .bold)
+            Text("Before sending it to ChatGPT, copy this prompt and include it with the exact protected workbook. Keep the original source, private bundle and passphrase local.")
+            ScrollView {
+                Text(restorationCopyText)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+            }
+            .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+            HStack {
+                Spacer()
+                Button("Done") { model.showAnalysisPrompt = false }
+                Button("Copy prompt") { copyRestorationPrompt() }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .frame(width: 650, height: 470)
     }
 }
 
@@ -1021,8 +1067,7 @@ struct RestoreView: View {
                         Text(restorationAnalysisGuidance)
                         Text(restorationResultExample)
                         Button("Copy prompt") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(restorationCopyText, forType: .string)
+                            copyRestorationPrompt()
                         }
                         .buttonStyle(.bordered)
                         .foregroundStyle(.primary)

@@ -56,6 +56,11 @@ copied from the repository's `HOWTO.md` before the app is signed. It provides
 section links and a larger, narrower reading layout.
 The View menu provides persistent text-size controls: Command-Plus increases,
 Command-Minus decreases and Command-0 restores the default size.
+After workbook protection succeeds, a sheet displays the copyable ChatGPT
+analysis prompt. A reminder on the home view opens it again during that session;
+the same prompt is also available on the Restore workbook page. The prompt asks
+for exact record-ID and row preservation. It contains no source values, bundle
+content or passphrase.
 Passphrases pass only through its local standard-input pipe. The protocol is
 versioned and rejects malformed requests, stale review tokens and oversized
 frames. Every publish operation remains subject to Python's validation and
