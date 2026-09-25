@@ -200,6 +200,10 @@ After a protected workbook is created, the desktop shows the static
 returning-analysis prompt in a copyable sheet and keeps a reminder on the home
 view for that session. The same prompt remains available from restoration; its
 copy action places only those fixed instructions on the clipboard.
+The prompt tells recipients to use one rectangular table per added analysis sheet,
+without merged titles or spacer rows, and to keep workbook results as short
+categories. Longer narrative findings belong in the recipient's separate reply,
+because added analysis cells still pass the shared engine's unsafe-text checks.
 Optional coded-label restoration reads the original source workbook and policy
 locally after separate authorisation. It requires exact source-key coverage and
 matching coded-category groupings, replaces only approved `code` result columns,
