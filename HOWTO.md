@@ -55,7 +55,9 @@ record and entity IDs, headings, rows and reference values intact. Use existing
 categories or codes and the approved numeric bounds. Do not add sheets or result
 columns; put narrative findings in the ChatGPT reply. Known shared codes let an
 allocation use a category already present in a reference sheet. New categories,
-new participants and new fields need a new protection setup.
+new fields and participants absent from all protected sheets need a new protection
+setup. Participants already present in a protected reference sheet can be added to
+an editable target during Restore, using the participant comparison below.
 
 For the earlier append-results mode:
 
@@ -77,6 +79,38 @@ For a version 2 bundle, select every same-schema protected and source worksheet 
 Version 4 bundles use **Related sheets or editable workbook bundle** on the Restore page, including an editable workbook with only one sheet. This setting is selected automatically after protection. A version 4 bundle binds the entire original file: even a later formatting change to that original requires a new protection run. Existing version 2/3 bundles never acquire editing permissions; start a new protection run to use this workflow.
 
 In version 2/3 append-results mode, source-derived protected fields remain immutable. An altered code, original category, kept value or range label blocks restoration.
+
+### Update participants from a reference sheet
+
+For example, use **Updated Classlist** to decide who belongs in **Allocations**:
+
+1. On Restore, turn on **Compare participants with a reference sheet**. Choose the
+   editable sheet to update and a different reference-only sheet. Both must belong
+   to this version 4 bundle, with one row per participant on each.
+2. Choose whether to include reference-only participants and whether to remove
+   participants absent from the reference. Removals are off initially.
+3. Validate and review. SafeSet shows the additions, removals and existing field
+   changes. If assignments are missing, **Copy prompt** supplies instructions for
+   ChatGPT to add a **SafeSet additions** proposal sheet. Every original protected
+   row must remain intact, including departing participants. The proposal uses
+   existing reference `entity_id`s and only the target's editable fields.
+4. Select the workbook returned with those proposals and validate again. For
+   other new-row fields, explicitly choose a column from the local reference sheet
+   or **Leave blank**. Identity matching happens locally. Click **Update comparison
+   and review** after changing these choices; no repeated passphrase is needed.
+5. Approve additions, removals and changed fields, then authorise local restoration.
+   Missing assignments block creation; SafeSet never invents them. You may explicitly
+   turn off additions to restore existing participants only.
+
+Reference sheets remain unchanged. Participant changes support one plain range or
+Excel table, without totals or formulas in its data, and need empty space below
+the table to add rows. Merged/hidden data, comments, hyperlinks, data validation
+and conditional formatting on the target are not supported for participant changes.
+Surviving cells retain their original types and styles. New fields copied from the
+reference are literal text; new editable numeric values are numeric cells. Check
+summaries and charts in Excel afterwards: fixed formula ranges and static summaries
+do not expand automatically. This operation creates a new private workbook and
+does not modify the source or the reference worksheets.
 
 In append-results mode, approved analysis worksheets become static tables of cell text, including saved formula results. Formulas, formatting, drawings and charts are not preserved in that mode. IDs inside added worksheets are not replaced with source identities.
 

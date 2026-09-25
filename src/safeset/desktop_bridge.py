@@ -29,9 +29,18 @@ from .document_flow import (
 )
 from .errors import SafetyError
 from .ingestion import list_excel_sheets
+from .participant_workbook import LAYOUT_ERROR
 from .policy import parse_policy
 from .policy_authoring import RuleDraft, load_drafts, local_category_review, save_policy
 from .pseudonyms import new_id
+from .reconciliation import (
+    APPROVAL_ERROR,
+    CONFIG_ERROR,
+    PROPOSAL_ERROR,
+    approve_participants,
+    prepare_participants,
+    update_participants,
+)
 from .workbook_editing import editing_instructions
 
 PROTOCOL_VERSION = 1
@@ -40,6 +49,15 @@ MAX_RESPONSE = 1024 * 1024
 
 # Only fixed, value-free codes cross the desktop boundary. Unknown errors stay generic.
 PUBLIC_SAFETY_ERRORS = {
+    CONFIG_ERROR: "participant_configuration",
+    PROPOSAL_ERROR: "participant_proposals",
+    APPROVAL_ERROR: "participant_approval",
+    LAYOUT_ERROR: "participant_layout",
+    "Participant reconciliation requires an editable workbook bundle.": "participant_bundle",
+    "Participant comparison requires one row per entity on each selected sheet.": (
+        "participant_unique"
+    ),
+    "Participant changes exceed supported workbook row limits.": "participant_limits",
     "Policy schema or safety constraints are invalid; see policy-format.md.": (
         "policy_configuration"
     ),
@@ -333,6 +351,34 @@ class Bridge:
         self.pending: tuple[str, str, object] | None = None
 
     def dispatch(self, command: str, raw: object) -> dict:
+        if command in {"update_participants", "approve_participants"}:
+            pending = self.pending
+            self.pending = None
+            data = _payload(
+                raw,
+                {"review_id", "config"}
+                if command == "update_participants"
+                else {"review_id", "approved_changes", "approve_additions", "approve_removals"},
+            )
+            if (
+                pending is None
+                or pending[0] != "approve_participants"
+                or pending[1] != _string(data["review_id"])
+            ):
+                raise SafetyError("Review is stale; prepare and review again.")
+            if command == "update_participants":
+                review = update_participants(pending[2], data["config"])
+                token = new_id()
+                self.pending = ("approve_participants", token, review)
+                return {**review.summary, "review_id": token}
+            rows = approve_participants(
+                pending[2],
+                _approved_results(data["approved_changes"]),
+                data["approve_additions"],
+                data["approve_removals"],
+                authorised=True,
+            )
+            return {"created": True, "rows": rows}
         if command == "hello":
             _payload(raw, set())
             return {
@@ -412,6 +458,19 @@ class Bridge:
             )
             return {"created": True, "rows": rows}
         self.pending = None
+        if command == "prepare_participants":
+            data = _payload(raw, {"returned", "source", "bundle", "output", "passphrase", "config"})
+            review = prepare_participants(
+                _path(data["returned"]),
+                _path(data["source"]),
+                _path(data["bundle"]),
+                _path(data["output"]),
+                _string(data["passphrase"]),
+                data["config"],
+            )
+            token = new_id()
+            self.pending = ("approve_participants", token, review)
+            return {**review.summary, "review_id": token}
         if command == "cancel":
             _payload(raw, set())
             return {"cancelled": True}

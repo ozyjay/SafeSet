@@ -96,8 +96,9 @@ Protected output remains minimal static tables; original formatting, local-only
 worksheets and original formulas are never sent to the analysis recipient.
 
 Returned workbooks must retain exact row IDs, entity links, protected headings
-and reference values. Row and column reordering is allowed. No extra sheets or
-columns are accepted in editing mode. Edited categories must be observed values;
+and reference values. Row and column reordering is allowed. Standard editing accepts
+no extra sheets or columns; the explicit participant comparison below accepts one
+bounded proposal sheet. Edited categories must be observed values;
 edited codes must resolve in their authenticated codebook, or the union of an
 explicitly shared same-field codebook. Numeric edits obey policy bounds and blank
 semantics. The engine reports changed-cell counts per field without exposing row
@@ -123,6 +124,51 @@ desktop protocol options are `editable_fields` on relational protection and
 `approved_changes` on relational approval; the review returns `changes` as
 per-sheet/per-field counts and `analysis_prompt` as copyable instructions. Existing
 requests without editing permissions retain their version 3 behaviour.
+
+### Participant comparison during Restore
+
+Version 4 Restore can explicitly compare one editable target sheet with a distinct
+reference-only sheet in the same authenticated bundle. Each must contain at most
+one record per entity. The operator selects additions and/or removals locally;
+removals default off. All original returned records must still occur exactly once,
+including departing participants. Missing original records never imply removal.
+
+An explicitly named extra proposal worksheet may contain only `entity_id` and the
+target's editable fields. Proposal IDs must be unique members of the authenticated
+reference-minus-target set. Existing entity IDs, unknown IDs, extra fields and
+invalid categories/codes/numbers fail closed. Missing assignments produce an
+incomplete review with counts and a copyable prompt; publication stays disabled.
+No assignment is inferred. All other extra or hidden returned sheets are rejected.
+
+For additions, the source key comes from the encrypted entity mapping. Every other
+noneditable target field needs an explicit local reference-column selection or
+Leave blank decision. These original reference values stay local. Surviving rows
+retain source order and original cell types/styles; additions follow reference
+source order. Added mapped fields are literal text, and editable numeric additions
+are numeric cells subject to Excel precision checks. Review covers changed fields,
+addition count, removal count and local field sources. Separate approval is required
+for each nonzero participant change type as well as every changed field.
+
+Structural updates support one plain rectangular range or one Excel table without
+totals. They replace cells within that target rectangle, resize its table/filter,
+and require empty space for expansion. Physical worksheet rows are not deleted.
+Formulas, merged/hidden data, comments, hyperlinks, worksheet data validation and
+conditional formatting block structural changes. Other package entries remain
+byte-for-byte unchanged except calculation flags. Fixed formula/chart ranges and
+static summaries are not expanded; the user must review them locally in Excel.
+
+`prepare_participants` takes restoration paths, passphrase and `config`;
+`update_participants` consumes a review token and new config without another
+passphrase. Config contains `target_sheet`, `reference_sheet`, `additions_sheet`,
+boolean `include_additions` / `include_removals`, and `column_sources` mapping target
+headings to reference headings or null. Unselected mappings remain missing, not
+implicitly blank. `approve_participants` consumes the latest token with exact
+`approved_changes` and boolean `approve_additions` / `approve_removals`. Incomplete
+reviews cannot publish. Any token operation consumes the previous token. Full
+original and returned file digests are rechecked; the output is rebuilt and
+compared to the reviewed proposal before exclusive publication. Bundle contents
+remain in helper memory; protocol responses contain counts, headings and config,
+never participant values or codebooks. Legacy restoration remains unchanged.
 
 ## Relational workbook round trip (bundle version 3)
 
