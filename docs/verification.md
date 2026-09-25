@@ -1,5 +1,50 @@
 # Verification
 
+## Restore participant comparison — 25 September 2026
+
+Added explicit target/reference comparison to version 4 Restore, bounded proposal
+validation, local field mappings, separate addition/removal approvals and surgical
+target-range replacement. No operational input, bundle or passphrase was used.
+
+- Full Python suite: **292 passed, 24 Windows-only tests skipped**.
+- New participant coverage: **27 tests passed**. Real encrypted synthetic bundles
+  exercise additions plus edits, removal with local reference mapping, missing
+  assignments/mappings, duplicate/unknown/existing-target IDs, extra fields/sheets,
+  hidden sheets, altered reference values, invalid domains, exact original record
+  coverage, stale full-file digests, explicit approvals and single-use bridge
+  tokens. Writer checks cover space collisions, row compaction, numeric addition
+  cells, surviving styles and byte-for-byte unchanged unrelated ZIP members.
+- Swift package: **20 tests passed**, including incomplete-review, participant
+  approval and configuration-change gates and explicit blank-vs-missing mappings.
+- The ad-hoc signed native Mac app built successfully. A relocated packaged helper
+  completed participant-addition restoration with development Python settings
+  removed from its environment; responses contained no synthetic identity values
+  or passphrase. Legacy/editing packaged smoke checks, strict code-signature
+  verification and bundled-guide freshness checks also passed. The tested app was
+  installed locally at `~/Applications/SafeSet.app`.
+- Wheel built and inspected: Python modules and package metadata only, including
+  both new modules. CLI help smoke passed after local wheel installation with no
+  dependency downloads. The declared Hatchling build backend was installed in the
+  development environment to build the wheel.
+- Changed Python files pass Ruff. Whole-repository Ruff still reports the same
+  **19 pre-existing document-related issues**. Tracked artefact extension checks
+  found no encrypted maps, keys or operational outputs.
+
+Privacy review found no blocking issue in the exercised paths. Identity resolution
+uses the authenticated entity map, original record coverage stays mandatory, and
+new values are constrained to editable domains or explicit local reference-field
+choices. No networking was added; a round-trip test blocks socket creation.
+Review metadata contains counts, headings and configuration, never participant
+values or codebooks. Output approval rechecks full input-file digests and rebuilds
+the proposal; exclusive publication preserves no-clobber behaviour.
+
+Limits: participant changes require the bounded target layouts documented in
+HOWTO.md. New mapped reference values are literal text. Formula recalculation and
+range expansion were not performed; fixed summaries/charts need local review.
+The reference choice and substantive correctness of assignments are human
+decisions. Windows publication/UI, independent security review, signing with a
+Developer ID and notarisation were not tested or enabled by this change.
+
 ## macOS editable workbook pass — 25 September 2026
 
 Implemented version 4 editable-field bundles, per-sheet reference permissions,

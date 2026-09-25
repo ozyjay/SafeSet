@@ -156,6 +156,18 @@ Human review and purpose limitation remain mandatory. No automatic suppression,
 privacy budget, probabilistic inference, redaction or safety override exists.
 
 
+## Participant comparison during Restore
+
+Participant comparison during workbook Restore is local reconciliation, not a
+new disclosure assessment. It uses only participants already represented in the
+authenticated protected reference sheet. SafeSet validates entity linkage and
+assignment domains; it does not determine whether a reference list is current or
+whether an assignment is substantively correct. Added identities and explicitly
+mapped reference values appear only in the new sensitive local workbook. Original
+protected rows remain mandatory, and additions/removals need explicit review.
+The reference worksheets remain unchanged. Static summaries and fixed formula or
+chart ranges need local review after participant counts change.
+
 ## Document protection model
 
 The DOCX workflow uses a separate protection model from spreadsheet policies. It does not infer that a manuscript is safe because no identifier pattern was found.

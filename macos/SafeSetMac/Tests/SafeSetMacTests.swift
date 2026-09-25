@@ -2,6 +2,40 @@ import XCTest
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    @MainActor func testParticipantChangesNeedReadyReviewAndSeparateApprovals() {
+        let model = AppModel()
+        model.relationalRestore = true
+        model.acceptRestorationReview([
+            "review_id": "synthetic-participant-review", "reconciliation": true,
+            "ready": false, "additions": 22, "removals": 1,
+            "new_columns": ["Allocations": [String](), "Participants": [String]()],
+            "changes": ["Allocations": ["Team": 1], "Participants": [String: Int]()]
+        ])
+        model.approvedChanges = ["Allocations": ["Team"]]
+        model.approvedParticipantAdditions = true
+        model.approvedParticipantRemovals = true
+        XCTAssertFalse(model.canApproveRestoration)
+        model.restorationReview?["ready"] = true
+        XCTAssertTrue(model.canApproveRestoration)
+        model.approvedParticipantRemovals = false
+        XCTAssertFalse(model.canApproveRestoration)
+        model.approvedParticipantRemovals = true
+        model.participantConfigurationChanged()
+        XCTAssertFalse(model.canApproveRestoration)
+        XCTAssertFalse(model.approvedParticipantAdditions)
+        XCTAssertFalse(model.approvedParticipantRemovals)
+        XCTAssertTrue(model.approvedChanges.isEmpty)
+    }
+
+    @MainActor func testParticipantMappingsDistinguishMissingBlankAndReferenceFields() {
+        let model = AppModel()
+        model.participantMappings = ["Synthetic name": "column:Name", "Note": "blank", "Other": ""]
+        let mappings = model.participantConfig["column_sources"] as? [String: Any]
+        XCTAssertEqual(mappings?["Synthetic name"] as? String, "Name")
+        XCTAssertTrue(mappings?["Note"] is NSNull)
+        XCTAssertNil(mappings?["Other"])
+    }
+
     @MainActor func testEditableFieldsAreScopedToSheetsAndReversibleActions() {
         let model = AppModel()
         model.sourceSheet = "Allocations"

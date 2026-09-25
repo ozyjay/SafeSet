@@ -126,6 +126,16 @@ struct SourceCellLocation: Identifiable {
     @Published var approvedSheets: Set<String> = []
     @Published var approvedChanges: [String: Set<String>] = [:]
     @Published var relationalRestore = false
+    @Published var reconcileParticipants = false
+    @Published var participantTarget = ""
+    @Published var participantReference = ""
+    @Published var participantProposalSheet = "SafeSet additions"
+    @Published var includeParticipantAdditions = true
+    @Published var includeParticipantRemovals = false
+    @Published var participantMappings: [String: String] = [:]
+    @Published var participantConfigChanged = false
+    @Published var approvedParticipantAdditions = false
+    @Published var approvedParticipantRemovals = false
     @Published var legacyPolicy = ""
     @Published var legacyMap = ""
     @Published var legacyOutput = ""
@@ -311,6 +321,12 @@ struct SourceCellLocation: Identifiable {
 
     var canApproveRestoration: Bool {
         guard let review = restorationReview, review["review_id"] is String else { return false }
+        if review["reconciliation"] as? Bool == true {
+            guard !participantConfigChanged, review["ready"] as? Bool == true,
+                  approvedParticipantAdditions == ((review["additions"] as? Int ?? 0) > 0),
+                  approvedParticipantRemovals == ((review["removals"] as? Int ?? 0) > 0)
+            else { return false }
+        }
         if let changes = review["changes"] as? [String: [String: Int]] {
             guard changes.allSatisfy({ sheet, columns in
                 Set(columns.keys) == (approvedChanges[sheet] ?? [])
@@ -639,7 +655,9 @@ struct SourceCellLocation: Identifiable {
         }
         let output = restoredOutput.isEmpty
             ? (returned as NSString).deletingPathExtension + "-restored.xlsx" : restoredOutput
-        let command = relationalRestore ? "prepare_relational_reconstruction" : "prepare_reconstruction"
+        let command = relationalRestore
+            ? (reconcileParticipants ? "prepare_participants" : "prepare_relational_reconstruction")
+            : "prepare_reconstruction"
         var payload: [String: Any] = [
             "returned": returned, "source": original, "bundle": restoreBundle,
             "output": output, "passphrase": passphrase
@@ -648,12 +666,46 @@ struct SourceCellLocation: Identifiable {
             payload["returned_sheet"] = orderedReturnedRestoreSheets
             payload["source_sheet"] = orderedOriginalRestoreSheets
         }
+        if relationalRestore && reconcileParticipants { payload["config"] = participantConfig }
         send(command, payload) { result in
-            self.restorationReview = result
-            self.latestAnalysisPrompt = result["analysis_prompt"] as? String ?? restorationCopyText
-            self.approvedResults = []
-            self.approvedSheets = []
-            self.approvedChanges = [:]
+            self.acceptRestorationReview(result)
+        }
+    }
+
+    var participantConfig: [String: Any] {
+        var mappings: [String: Any] = [:]
+        for (name, selection) in participantMappings {
+            if selection == "blank" { mappings[name] = NSNull() }
+            else if selection.hasPrefix("column:") { mappings[name] = String(selection.dropFirst(7)) }
+        }
+        return ["target_sheet": participantTarget, "reference_sheet": participantReference,
+                "additions_sheet": participantProposalSheet,
+                "include_additions": includeParticipantAdditions,
+                "include_removals": includeParticipantRemovals, "column_sources": mappings]
+    }
+
+    func participantConfigurationChanged() {
+        participantConfigChanged = true
+        approvedParticipantAdditions = false
+        approvedParticipantRemovals = false
+        approvedChanges = [:]
+    }
+
+    func acceptRestorationReview(_ result: [String: Any]) {
+        restorationReview = result
+        latestAnalysisPrompt = result["analysis_prompt"] as? String ?? restorationCopyText
+        approvedResults = []
+        approvedSheets = []
+        approvedChanges = [:]
+        approvedParticipantAdditions = false
+        approvedParticipantRemovals = false
+        participantConfigChanged = false
+    }
+
+    func updateParticipantReview() {
+        guard let token = restorationReview?["review_id"] as? String else { return }
+        send("update_participants", ["review_id": token, "config": participantConfig]) { result in
+            self.acceptRestorationReview(result)
         }
     }
 
@@ -689,6 +741,20 @@ struct SourceCellLocation: Identifiable {
         }
         let command: String
         let approved: Any
+        if review["reconciliation"] as? Bool == true {
+            send("approve_participants", [
+                "review_id": token,
+                "approved_changes": (review["changes"] as? [String: [String: Int]] ?? [:])
+                    .mapValues { Array($0.keys).sorted() },
+                "approve_additions": approvedParticipantAdditions,
+                "approve_removals": approvedParticipantRemovals
+            ]) { _ in
+                self.restorationReview = nil
+                self.alert = "A new locally reidentified workbook was created. Keep it private."
+                self.page = .home
+            }
+            return
+        }
         if relationalRestore, let groups = review["new_columns"] as? [String: [String]] {
             command = "approve_relational_reconstruction"
             approved = groups

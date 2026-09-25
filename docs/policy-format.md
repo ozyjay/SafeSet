@@ -17,6 +17,16 @@ need their own explicit restoration approval. These permissions cannot be added
 to old bundles; a new protection run creates a `SAFESET4` envelope. Adding
 `editable_fields` to policy YAML remains an unknown-key error.
 
+Participant comparison is an explicit local Restore operation for version 4,
+separate from policy YAML and the original editing permissions. It requires one
+editable target and one reference-only sheet from the same bundle. Original
+returned row coverage remains exact. A selected proposal sheet may supply only
+known reference-only entity IDs and target editable values within the authenticated
+domains. Local mappings or explicit blank choices supply other new-row fields.
+Additions and removals require separate approval; neither creates new codebook
+entries, identities or protection permissions. See architecture.md for the bounded
+desktop protocol and supported structural workbook layouts.
+
 The guided protected-workbook desktop constructs a strict version 3 policy in
 memory from explicit field decisions. Saving YAML is optional. Source-derived protected
 fields are immutable during version 2 bundle reconstruction; newly added result

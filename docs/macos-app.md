@@ -66,6 +66,12 @@ shows changed-cell counts and requires approval of each changed field before
 applying edits to a copy of the original workbook. The prompt contains no source
 cell values, identities, codebooks or passphrase. Version 2/3 append-results mode
 remains available by turning off the editing option during protection.
+Restore also offers **Compare participants with a reference sheet** for version 4.
+It reviews reference-only additions, optional removals and existing field changes
+together. A copyable prompt requests a bounded additions proposal sheet when
+assignments are missing. Local reference-field mappings and separate participant
+approvals are required before publication. See HOWTO.md for the complete flow and
+the supported target layouts; fixed summary ranges need local review in Excel.
 Passphrases pass only through its local standard-input pipe. The protocol is
 versioned and rejects malformed requests, stale review tokens and oversized
 frames. Every publish operation remains subject to Python's validation and

@@ -1125,7 +1125,7 @@ struct RestoreView: View {
                     model.chooseRestoreFile($0, sourceFile: false)
                 }
                 if model.relationalRestore, !model.returned.isEmpty {
-                    Text("No worksheet selection is needed. Required worksheets are verified against the private bundle after it is unlocked; unexpected hidden worksheets are rejected.")
+                    Text("Required worksheets are verified against the private bundle after it is unlocked. To compare participants, choose the target and reference sheets below. Unexpected hidden worksheets are rejected.")
                         .appFont(12)
                         .foregroundStyle(.secondary)
                 }
@@ -1182,6 +1182,13 @@ struct RestoreView: View {
                 }
                 PathRow(title: "New restored workbook", path: $model.restoredOutput,
                         save: true, fileExtension: "xlsx")
+                if model.relationalRestore {
+                    Toggle("Compare participants with a reference sheet", isOn: Binding(
+                        get: { model.reconcileParticipants },
+                        set: { model.reconcileParticipants = $0; model.invalidate() }
+                    ))
+                    if model.reconcileParticipants { ParticipantConfigurationView() }
+                }
                 Text("Unlocking the private bundle is required to validate exact record coverage.")
                     .foregroundStyle(.secondary)
                 SecureField("Restoration passphrase", text: $passphrase).appFont(13)
@@ -1190,6 +1197,8 @@ struct RestoreView: View {
                         let secret = passphrase; passphrase = ""
                         model.prepareRestoration(passphrase: secret)
                     }.appFont(13).buttonStyle(.borderedProminent)
+                        .disabled(model.relationalRestore && model.reconcileParticipants &&
+                                  (model.participantTarget.isEmpty || model.participantReference.isEmpty))
                     Button("Locate unsafe source cells") {
                         let secret = passphrase; passphrase = ""
                         model.locateUnsafeSourceCells(passphrase: secret)
@@ -1212,6 +1221,9 @@ struct RestoreView: View {
                     Text("Restoration review").appFont(18, weight: .bold)
                     Text("Exact coverage: \(review["rows"] as? Int ?? 0) records")
                     Text("Original identity and removed fields will be restored from the source.")
+                    if review["reconciliation"] as? Bool == true {
+                        ParticipantReviewView(review: review)
+                    }
                     if let changes = review["changes"] as? [String: [String: Int]] {
                         Text("Approve changes to existing fields")
                         ForEach(changes.keys.sorted(), id: \.self) { sheet in
@@ -1284,6 +1296,7 @@ struct RestoreView: View {
                     Button("Authorise local restoration") { showAuthorise = true }
                         .appFont(13)
                         .buttonStyle(.borderedProminent)
+                        .disabled(!model.canApproveRestoration)
                     Button("Cancel review") { model.cancelReview() }.appFont(13)
                 }
             }.padding(28).frame(maxWidth: 850, alignment: .leading)
@@ -1291,6 +1304,94 @@ struct RestoreView: View {
         .confirmationDialog("Create a new locally reidentified workbook?",
                             isPresented: $showAuthorise) {
             Button("Authorise restoration") { model.approveRestoration() }.appFont(13)
+        }
+    }
+}
+
+struct ParticipantConfigurationView: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        GroupBox("Participants to include") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Choose which editable sheet to update and which reference-only sheet defines the participants. The reference sheet stays unchanged.")
+                Picker("Sheet to update", selection: Binding(
+                    get: { model.participantTarget },
+                    set: { model.participantTarget = $0; model.participantMappings = [:]; model.participantConfigurationChanged() }
+                )) {
+                    Text("Choose…").tag("")
+                    ForEach(model.originalSheets, id: \.self) { Text($0).tag($0) }
+                }
+                Picker("Reference sheet", selection: Binding(
+                    get: { model.participantReference },
+                    set: { model.participantReference = $0; model.participantMappings = [:]; model.participantConfigurationChanged() }
+                )) {
+                    Text("Choose…").tag("")
+                    ForEach(model.originalSheets, id: \.self) { Text($0).tag($0) }
+                }
+                Toggle("Include participants found only in the reference sheet", isOn: Binding(
+                    get: { model.includeParticipantAdditions },
+                    set: { model.includeParticipantAdditions = $0; model.participantConfigurationChanged() }
+                ))
+                Toggle("Remove participants absent from the reference sheet", isOn: Binding(
+                    get: { model.includeParticipantRemovals },
+                    set: { model.includeParticipantRemovals = $0; model.participantConfigurationChanged() }
+                ))
+                TextField("ChatGPT additions sheet", text: Binding(
+                    get: { model.participantProposalSheet },
+                    set: { model.participantProposalSheet = $0; model.participantConfigurationChanged() }
+                ))
+                Text("Validate first to see the differences and copy a prompt for any missing assignments. Keep the original protected rows intact; additions go in the named proposal sheet.")
+                    .foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+struct ParticipantReviewView: View {
+    @EnvironmentObject var model: AppModel
+    let review: [String: Any]
+
+    var body: some View {
+        GroupBox("Participant comparison") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Reference-only participants: \(review["available_additions"] as? Int ?? 0)")
+                Text("Target participants absent from reference: \(review["available_removals"] as? Int ?? 0)")
+                Text("Selected changes: add \(review["additions"] as? Int ?? 0), remove \(review["removals"] as? Int ?? 0). Result: \(review["target_rows"] as? Int ?? 0) participants on the target sheet.")
+                if model.includeParticipantAdditions && (review["available_additions"] as? Int ?? 0) > 0 {
+                    ForEach(review["mapping_fields"] as? [String] ?? [], id: \.self) { name in
+                        Picker("New participant: \(name)", selection: Binding(
+                            get: { model.participantMappings[name] ?? "" },
+                            set: { model.participantMappings[name] = $0; model.participantConfigurationChanged() }
+                        )) {
+                            Text("Choose source…").tag("")
+                            Text("Leave blank").tag("blank")
+                            ForEach(review["reference_columns"] as? [String] ?? [], id: \.self) { column in
+                                Text("Reference: \(column)").tag("column:" + column)
+                            }
+                        }
+                    }
+                    Text("Identities are matched locally. Choose reference fields for other new-row values, or explicitly leave them blank. Editable values come from ChatGPT's proposals.")
+                        .foregroundStyle(.secondary)
+                }
+                if (review["missing_assignments"] as? Int ?? 0) > 0 {
+                    Text("\(review["missing_assignments"] as? Int ?? 0) participants still need assignments. Copy the updated ChatGPT prompt above, obtain the proposal sheet, then select the returned workbook and validate again.")
+                }
+                if model.participantConfigChanged {
+                    Text("Settings changed. Update the review before approving.")
+                }
+                Button("Update comparison and review") { model.updateParticipantReview() }
+                if review["ready"] as? Bool == true && !model.participantConfigChanged {
+                    if (review["additions"] as? Int ?? 0) > 0 {
+                        Toggle("Approve \(review["additions"] as? Int ?? 0) participant additions and their field sources", isOn: $model.approvedParticipantAdditions)
+                    }
+                    if (review["removals"] as? Int ?? 0) > 0 {
+                        Toggle("Approve \(review["removals"] as? Int ?? 0) participant removals", isOn: $model.approvedParticipantRemovals)
+                    }
+                }
+                Text("Other sheets stay unchanged. After changing participants, review summaries and charts in Excel: fixed formula ranges and static summaries do not expand automatically.")
+                    .foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

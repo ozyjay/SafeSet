@@ -63,6 +63,20 @@ restored workbook. Formula-like source strings remain literal text in that
 
 ## Version 4 editable workbook boundary
 
+The opt-in Restore participant comparison permits only authenticated reference
+entities to become new target participants. It never relaxes original returned
+record coverage. Removals are derived from the operator-selected reference set,
+not missing rows supplied by an analysis tool, and require explicit review and
+approval. New assignments come from a separately selected proposal sheet with an
+exact field allowlist and the existing field domains. Duplicate, existing-target,
+unknown and unrelated IDs are rejected. Missing assignments block publication.
+The operator explicitly selects local sources or blank values for other new-row
+fields; sensitive reference values do not enter the external prompt or protocol.
+Full input-file digest checks and single-use review tokens prevent stale approvals.
+Reference choice and the substantive correctness of assignments remain human
+decisions. Fixed summary/formula/chart ranges may require local adjustment after
+participant changes; package preservation does not establish analytical correctness.
+
 Editing is an explicit workflow permission authenticated separately from disclosure
 policy. The version 4 envelope binds exact per-sheet editable fields and the entire
 original package digest; previous bundle versions never grant editing rights.
