@@ -101,6 +101,14 @@ PUBLIC_SAFETY_ERRORS = {
     "Returned relational record coverage does not match the bundle.": "record_coverage",
     "Returned relational entity linkage has changed.": "entity_linkage",
     "A protected source field was changed.": "protected_value",
+    "Editable fields must be explicitly selected reversible fields.": "edit_configuration",
+    "Formula and date cells cannot be selected for editing.": "edit_formula",
+    "An edited value is outside its approved category or numeric domain.": "edit_domain",
+    "Editing workbooks must preserve the original protected fields only.": "edit_structure",
+    "Every changed field requires explicit approval.": "edit_approval",
+    "Editable workbook cell locations are ambiguous.": "edit_layout",
+    "Editable workbook XML is unsupported.": "edit_layout",
+    "Restored workbook exceeds the supported size limit.": "edit_layout",
     "New result contains unsafe or unsupported spreadsheet text.": "result_text",
     "Original source contains unsafe spreadsheet text.": "source_text",
     "A workbook changed after restoration review.": "stale_review",
@@ -346,7 +354,8 @@ class Bridge:
             "approve_export",
         }:
             data = _payload(
-                raw, {"review_id"}, {"passphrase", "approved_results", "approved_sheets"}
+                raw, {"review_id"},
+                {"passphrase", "approved_results", "approved_sheets", "approved_changes"}
             )
             token = _string(data["review_id"])
             pending = self.pending
@@ -366,7 +375,7 @@ class Bridge:
                 _payload(data, {"review_id", "passphrase"})
                 approve_export(review, _string(data["passphrase"]), approved=True)
                 return {"created": True}
-            _payload(data, {"review_id", "approved_results"}, {"approved_sheets"})
+            _payload(data, {"review_id", "approved_results"}, {"approved_sheets", "approved_changes"})
             approved_sheets = _columns(data.get("approved_sheets", []))
             if command == "approve_relational_reconstruction":
                 rows = approve_relational_reconstruction(
@@ -374,6 +383,10 @@ class Bridge:
                     _approved_results(data["approved_results"]),
                     approved_sheets,
                     authorised=True,
+                    approved_changes=(
+                        _approved_results(data["approved_changes"])
+                        if "approved_changes" in data else None
+                    ),
                 )
                 return {"created": True, "rows": rows}
             rows = approve_reconstruction(
@@ -508,7 +521,7 @@ class Bridge:
             data = _payload(
                 raw,
                 {"source", "sheets", "output", "drafts", "threshold", "validation_profile"},
-                {"bundle", "shared_code_fields"},
+                {"bundle", "shared_code_fields", "editable_fields"},
             )
             review = prepare_relational_protection(
                 _path(data["source"]),
@@ -519,6 +532,9 @@ class Bridge:
                 _path(data.get("bundle"), optional=True),
                 _string(data["validation_profile"]),
                 _columns(data.get("shared_code_fields", [])),
+                ({name: list(columns) for name, columns in
+                  _approved_results(data["editable_fields"]).items()}
+                 if "editable_fields" in data else None),
             )
             token = new_id()
             self.pending = ("approve_relational_protection", token, review)
@@ -528,6 +544,7 @@ class Bridge:
                 "worksheets": len(review.sheets),
                 "entities": len(review.candidate.entities),
                 "shared_code_fields": list(review.candidate.shared_code_fields),
+                "editable_fields": review.editable_fields,
                 "output": str(review.output),
                 "bundle": str(review.bundle_path),
                 "validation": review.validation.summary(),
@@ -586,6 +603,7 @@ class Bridge:
                     sheet: list(columns) for sheet, columns in review.new_columns.items()
                 },
                 "new_sheets": list(review.analysis_sheets),
+                "changes": review.changes,
                 "output": str(review.output),
             }
         if command == "prepare_export":

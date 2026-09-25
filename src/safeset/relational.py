@@ -33,8 +33,10 @@ from .pseudonyms import new_id, valid_id
 from .reconstruction import approved_analysis_sheets
 from .storage import check_map_read, map_destination, output_destination, private_directory, publish
 from .validation import ValidationReport, validate
+from .workbook_editing import decoded_edit, edit_codebooks, file_digest, validate_editable_fields
 
 MAGIC = b"SAFESET3\n"
+EDIT_MAGIC = b"SAFESET4\n"
 PROFILES = {"strict", "controlled_pseudonymisation"}
 
 
@@ -310,6 +312,8 @@ def create_relational_bundle(
     policies: dict[str, Policy],
     candidate: RelationalCandidate,
     profile: str,
+    editable_fields: dict | None = None,
+    source_file_digest: str | None = None,
 ) -> dict:
     if (
         not isinstance(profile, str)
@@ -320,7 +324,9 @@ def create_relational_bundle(
         raise SafetyError("Relational protection inputs do not match.")
     return validate_relational_bundle(
         {
-            "version": 3,
+            "version": 4 if editable_fields is not None else 3,
+            **({"editable_fields": editable_fields, "source_file_digest": source_file_digest}
+               if editable_fields is not None else {}),
             "export_id": new_id(),
             "profile": profile,
             "workbook_digest": workbook_digest(sources),
@@ -337,13 +343,16 @@ def create_relational_bundle(
 def validate_relational_bundle(value: object) -> dict:
     legacy_keys = {"version", "export_id", "profile", "workbook_digest", "entities", "sheets"}
     keys = legacy_keys | {"shared_code_fields"}
+    editing = isinstance(value, dict) and type(value.get("version")) is int and value["version"] == 4
+    if editing:
+        keys |= {"editable_fields", "source_file_digest"}
     if isinstance(value, dict) and set(value) == legacy_keys:
         value = {**value, "shared_code_fields": []}
     if (
         not isinstance(value, dict)
         or set(value) != keys
         or type(value["version"]) is not int
-        or value["version"] != 3
+        or value["version"] not in {3, 4}
         or not valid_id(value["export_id"])
         or not isinstance(value["profile"], str)
         or value["profile"] not in PROFILES
@@ -396,6 +405,12 @@ def validate_relational_bundle(value: object) -> dict:
             raise SafetyError("Relational row mapping is malformed or ambiguous.")
         declared_record_ids.extend(item["records"])
     _validated_shared_code_fields(policies, shared_code_fields)
+    if editing:
+        validate_editable_fields(value["editable_fields"], policies)
+        digest = value["source_file_digest"]
+        if (not isinstance(digest, str) or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)):
+            raise SafetyError("Relational restoration bundle version or structure is unsupported.")
     if len(declared_record_ids) != len(set(declared_record_ids)) or any(
         not valid_id(record_id) for record_id in declared_record_ids
     ):
@@ -489,19 +504,24 @@ def encrypt_relational_bundle(bundle: dict, passphrase: str) -> bytes:
     validate_relational_bundle(bundle)
     salt = os.urandom(16)
     payload = json.dumps(bundle, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
-    result = MAGIC + salt + _fernet(passphrase, salt).encrypt(payload)
+    magic = EDIT_MAGIC if bundle["version"] == 4 else MAGIC
+    result = magic + salt + _fernet(passphrase, salt).encrypt(payload)
     if len(result) > MAP_LIMIT:
         raise SafetyError("Relational restoration bundle exceeds the supported size limit.")
     return result
 
 
 def decrypt_relational_bundle(data: bytes, passphrase: str) -> dict:
-    if len(data) > MAP_LIMIT or not data.startswith(MAGIC) or len(data) < len(MAGIC) + 17:
+    magic = EDIT_MAGIC if data.startswith(EDIT_MAGIC) else MAGIC
+    if len(data) > MAP_LIMIT or not data.startswith(magic) or len(data) < len(magic) + 17:
         raise SafetyError("Relational restoration bundle envelope is unsupported.")
     salt = data[len(MAGIC) : len(MAGIC) + 16]
     try:
         payload = _fernet(passphrase, salt).decrypt(data[len(MAGIC) + 16 :])
-        return validate_relational_bundle(json.loads(payload, object_pairs_hook=_unique_object))
+        bundle = validate_relational_bundle(json.loads(payload, object_pairs_hook=_unique_object))
+        if (bundle["version"] == 4) != (magic == EDIT_MAGIC):
+            raise SafetyError("Relational restoration bundle envelope is unsupported.")
+        return bundle
     except (InvalidToken, UnicodeError, ValueError, RecursionError, TypeError):
         raise SafetyError(
             "Relational restoration bundle could not be authenticated or decoded."
@@ -563,6 +583,8 @@ def publish_relational_candidate(
     passphrase: str,
     *,
     approved: bool,
+    editable_fields: dict | None = None,
+    source_file_digest: str | None = None,
 ) -> None:
     """Recheck a reviewed workbook set and publish its bundle before its workbook."""
     if not approved:
@@ -575,7 +597,11 @@ def publish_relational_candidate(
         raise SafetyError("Source workbook changed after relational protection review.")
     fresh_validation = validate_relational(candidate, policies, validation.profile)
     fresh_validation.require_pass()
-    bundle = create_relational_bundle(sources, policies, candidate, validation.profile)
+    if editable_fields is not None and file_digest(source_path) != source_file_digest:
+        raise SafetyError("Source workbook changed after relational protection review.")
+    bundle = create_relational_bundle(
+        sources, policies, candidate, validation.profile, editable_fields, source_file_digest
+    )
     require_excel_path(output)
     destination = output_destination(output, source_path)
     private_bundle = map_destination(bundle_path, destination, source_path)
@@ -621,6 +647,7 @@ def review_relational_reconstruction(
     sources: dict[str, Table], returned: dict[str, Table], bundle: dict
 ) -> dict[str, tuple[str, ...]]:
     validate_relational_bundle(bundle)
+    edit_books = edit_codebooks(bundle) if bundle["version"] == 4 else {}
     if set(sources) != set(bundle["sheets"]) or set(returned) != set(bundle["sheets"]):
         raise SafetyError("Relational workbook worksheet coverage does not match the bundle.")
     if workbook_digest(sources) != bundle["workbook_digest"]:
@@ -638,6 +665,9 @@ def review_relational_reconstruction(
         if not set(protected).issubset(table.columns):
             raise SafetyError("Protected worksheet schema has changed unexpectedly.")
         new_columns = tuple(name for name in table.columns if name not in protected)
+        editable = bundle.get("editable_fields", {}).get(sheet, [])
+        if bundle["version"] == 4 and new_columns:
+            raise SafetyError("Editing workbooks must preserve the original protected fields only.")
         if (
             len(table.columns) > MAX_COLUMNS
             or len(set(table.columns)) != len(table.columns)
@@ -657,6 +687,9 @@ def review_relational_reconstruction(
             if row["entity_id"] != entity_id or original[policy.source_key] != entities[entity_id]:
                 raise SafetyError("Returned relational entity linkage has changed.")
             for name in policy.output_columns[1:]:
+                if name in editable:
+                    decoded_edit(row[name], policy.columns[name], edit_books.get((sheet, name), {}))
+                    continue
                 if row[name] != _expected(
                     original[name], name, policy.columns[name], item["codebooks"]
                 ):
@@ -678,8 +711,22 @@ def reconstruct_relational(
     approved_results: dict[str, tuple[str, ...]],
     analysis_sheets: dict[str, Table] | None = None,
     approved_sheets: tuple[str, ...] = (),
+    approved_changes: dict[str, tuple[str, ...]] | None = None,
 ) -> dict[str, Table]:
     available = review_relational_reconstruction(sources, returned, bundle)
+    if bundle["version"] == 4:
+        if analysis_sheets or approved_sheets:
+            raise SafetyError("Editing workbooks must preserve the original protected fields only.")
+        changes = relational_changes(sources, returned, bundle)
+        expected_changes = {sheet: set(columns) for sheet, columns in changes.items()}
+        if (
+            not isinstance(approved_changes, dict)
+            or set(approved_changes) != set(expected_changes)
+            or any(len(columns) != len(set(columns))
+                   or set(columns) != expected_changes[sheet]
+                   for sheet, columns in approved_changes.items())
+        ):
+            raise SafetyError("Every changed field requires explicit approval.")
     if set(approved_results) != set(available) or any(
         len(set(approved_results[sheet])) != len(approved_results[sheet])
         or set(approved_results[sheet]) != set(columns)
@@ -687,14 +734,26 @@ def reconstruct_relational(
     ):
         raise SafetyError("Every new relational result field requires explicit approval.")
     result = {}
+    edit_books = edit_codebooks(bundle) if bundle["version"] == 4 else {}
     for sheet, item in bundle["sheets"].items():
         source = sources[sheet]
+        policy = parse_policy(item["policy"])
         rows = []
-        for row in returned[sheet].rows:
+        returned_rows = (
+            sorted(returned[sheet].rows, key=lambda row: item["records"][row["record_id"]]["row"])
+            if bundle["version"] == 4 else returned[sheet].rows
+        )
+        for row in returned_rows:
             original = source.rows[item["records"][row["record_id"]]["row"]]
+            edits = {}
+            for name in bundle.get("editable_fields", {}).get(sheet, []):
+                rule = policy.columns[name]
+                if row[name] != _expected(original[name], name, rule, item["codebooks"]):
+                    edits[name] = decoded_edit(row[name], rule, edit_books.get((sheet, name), {}))
             rows.append(
                 {
                     **original,
+                    **edits,
                     **{name: row[name] for name in approved_results[sheet]},
                 }
             )
@@ -708,3 +767,20 @@ def reconstruct_relational(
         )
     )
     return result
+
+
+def relational_changes(sources: dict, returned: dict, bundle: dict) -> dict[str, dict[str, int]]:
+    """Only counts and headings cross the desktop boundary, never source or result values."""
+    review_relational_reconstruction(sources, returned, bundle)
+    changes = {}
+    for sheet, names in bundle.get("editable_fields", {}).items():
+        item = bundle["sheets"][sheet]
+        policy = parse_policy(item["policy"])
+        counts = {name: 0 for name in names}
+        for row in returned[sheet].rows:
+            original = sources[sheet].rows[item["records"][row["record_id"]]["row"]]
+            for name in names:
+                if row[name] != _expected(original[name], name, policy.columns[name], item["codebooks"]):
+                    counts[name] += 1
+        changes[sheet] = {name: count for name, count in counts.items() if count}
+    return changes

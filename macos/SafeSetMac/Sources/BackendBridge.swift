@@ -66,6 +66,12 @@ final class BackendBridge: @unchecked Sendable {
         let message: String
         switch code {
         case "safety_rejected": message = "SafeSet rejected this operation. Review the files and decisions."
+        case "edit_configuration": message = "Select editable fields that use Keep, Obfuscate values or Keep exact number. Identifiers, removed fields and grouped ranges cannot be edited."
+        case "edit_formula": message = "An editable field contains a formula or date. Keep that field as reference data; select direct category or numeric values for editing."
+        case "edit_domain": message = "An edited value is outside its approved categories, known codes or numeric bounds. Use an existing permitted value, or start a new protection run with revised decisions."
+        case "edit_structure": message = "This workbook permits edits to selected existing fields. Preserve its original protected sheets and headings. Put narrative findings in the ChatGPT reply rather than extra columns or sheets."
+        case "edit_approval": message = "Review and approve every changed field before restoration."
+        case "edit_layout": message = "SafeSet could not safely apply edits to the original workbook layout. No restored workbook was created."
         case "policy_configuration": message = "One or more field decisions are incomplete or incompatible. Check the identifier, classifications, approved categories and numeric settings on every selected worksheet."
         case "field_decisions": message = "Every field on every selected worksheet needs an explicit protection decision."
         case "source_key_invalid": message = "A selected worksheet contains a blank or unsafe source identifier. Source identifiers must be non-empty text."

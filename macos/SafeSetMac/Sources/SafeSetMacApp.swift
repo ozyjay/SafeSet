@@ -36,9 +36,34 @@ let restorationAnalysisGuidance = "Please analyse the protected Excel workbook a
 let restorationResultExample = "For each new result column on a protected worksheet, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Do not put formulas in protected worksheets. Put each added analysis table on its own worksheet, with unique column headings in row 1 and data immediately below. Do not merge cells or add title rows, spacer rows or narrative paragraphs inside the workbook. Added analysis cells may be blank; non-blank results must be short categories of at most four words and 64 characters, without names, email addresses, dates, times or other identifiers. Put longer explanations in your ChatGPT reply, outside the workbook. Use static values where possible. If added analysis cells contain formulas, the workbook must include saved scalar results. Before returning the file, compare each protected worksheet's row count and exact record_id values with the input workbook; every original ID must appear once on the same worksheet, with no new IDs in protected worksheets. SafeSet copies approved results into static tables, so formulas, formatting and drawings are not preserved. If you cannot keep the original workbook intact, explain the limitation instead of returning a changed file."
 let restorationCopyText = "\(restorationAnalysisGuidance)\n\n\(restorationResultExample)"
 
-func copyRestorationPrompt() {
+func editingAnalysisPrompt(_ permissions: [String: [String]]) -> String {
+    let scope = permissions.keys.sorted().map { sheet in
+        let columns = permissions[sheet] ?? []
+        return columns.isEmpty ? "\(sheet): reference only; preserve all values."
+            : "\(sheet): editable fields: \(columns.joined(separator: ", "))."
+    }.joined(separator: "\n")
+    return """
+    Update the attached SafeSet-protected workbook using the editing permissions below.
+    Edit the permitted existing fields directly. Preserve every worksheet, heading and row.
+    Keep every record_id and entity_id exactly as supplied and attached to the same record.
+    Use entity_id to relate the same participant across sheets. All other fields are reference only.
+    Reassign coded categories using existing codes for that field; never invent codes or decode identities.
+    Keep categorical edits within the supplied categories and numeric edits within the approved bounds.
+    Do not add result columns, worksheets, merged cells, title rows, formulas or narrative text.
+    Explain your findings in your reply, outside the workbook. Return a modified .xlsx file.
+    Before returning it, check every ID occurs exactly once on its original sheet, every reference
+    value is unchanged, and only permitted fields differ. If an edit requires a new category or
+    unknown numeric bounds, explain what is needed before changing it.
+    Do not request the original source, private bundle or passphrase.
+
+    Editing permissions:
+    \(scope)
+    """
+}
+
+func copyRestorationPrompt(_ text: String = restorationCopyText) {
     NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(restorationCopyText, forType: .string)
+    NSPasteboard.general.setString(text, forType: .string)
 }
 
 private struct AppTextScaleKey: EnvironmentKey {
@@ -397,7 +422,7 @@ struct AnalysisPromptSheet: View {
             Text("Protected workbook created").appFont(20, weight: .bold)
             Text("Before sending it to ChatGPT, copy this prompt and include it with the exact protected workbook. Keep the original source, private bundle and passphrase local.")
             ScrollView {
-                Text(restorationCopyText)
+                Text(model.latestAnalysisPrompt)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -406,7 +431,7 @@ struct AnalysisPromptSheet: View {
             HStack {
                 Spacer()
                 Button("Done") { model.showAnalysisPrompt = false }
-                Button("Copy prompt") { copyRestorationPrompt() }
+                Button("Copy prompt") { copyRestorationPrompt(model.latestAnalysisPrompt) }
                     .buttonStyle(.borderedProminent)
             }
         }
@@ -927,6 +952,41 @@ struct ProtectView: View {
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
+                    GroupBox("What may ChatGPT change?") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Toggle("Edit selected fields and preserve the original workbook",
+                                   isOn: $model.workbookEditing)
+                                .onChange(of: model.workbookEditing) { _ in model.invalidate() }
+                            if model.workbookEditing {
+                                Text("Select editable fields separately for each sheet. Sheets with no selected fields are reference only. Unselected source sheets stay local and are preserved during restoration. Identities and grouped ranges cannot be edited.")
+                                    .foregroundStyle(.secondary)
+                                ForEach(model.orderedSelectedSourceSheets, id: \.self) { sheet in
+                                    Text(sheet).appFont(13, weight: .semibold)
+                                    if model.editingPermissions[sheet]?.isEmpty != false {
+                                        Text("Reference only").foregroundStyle(.secondary)
+                                    }
+                                    ForEach(model.editableCandidates(sheet), id: \.self) { name in
+                                        Toggle(name, isOn: Binding(
+                                            get: { model.editableFields[sheet]?.contains(name) == true },
+                                            set: { selected in
+                                                if selected {
+                                                    model.editableFields[sheet, default: []].insert(name)
+                                                } else {
+                                                    model.editableFields[sheet]?.remove(name)
+                                                }
+                                                model.invalidate()
+                                            }
+                                        ))
+                                    }
+                                }
+                                Text("Categorical edits use approved categories or known codes; numeric edits use approved bounds. Formula and date cells cannot be editable. Formula summaries recalculate when the restored workbook opens in Excel.")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("Analysis mode restores the original data and appends approved result columns and analysis sheets as static tables.")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     PathRow(title: "Protected workbook", path: $model.protectedOutput,
                             save: true, fileExtension: "xlsx")
                     DisclosureGroup("Advanced settings") {
@@ -1053,7 +1113,7 @@ struct RestoreView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Restore a workbook").appFont(26, weight: .bold)
-                Toggle("Multi-sheet relational bundle", isOn: Binding(
+                Toggle("Related sheets or editable workbook bundle", isOn: Binding(
                     get: { model.relationalRestore },
                     set: { model.relationalRestore = $0; model.invalidate() }
                 ))
@@ -1167,6 +1227,26 @@ struct RestoreView: View {
                     Text("Restoration review").appFont(18, weight: .bold)
                     Text("Exact coverage: \(review["rows"] as? Int ?? 0) records")
                     Text("Original identity and removed fields will be restored from the source.")
+                    if let changes = review["changes"] as? [String: [String: Int]] {
+                        Text("Approve changes to existing fields")
+                        ForEach(changes.keys.sorted(), id: \.self) { sheet in
+                            Text(sheet).appFont(13, weight: .semibold)
+                            if changes[sheet]?.isEmpty != false {
+                                Text("No changes").foregroundStyle(.secondary)
+                            }
+                            ForEach((changes[sheet] ?? [:]).keys.sorted(), id: \.self) { name in
+                                Toggle("\(name): \(changes[sheet]?[name] ?? 0) changed cells", isOn: Binding(
+                                    get: { model.approvedChanges[sheet]?.contains(name) == true },
+                                    set: { selected in
+                                        if selected { model.approvedChanges[sheet, default: []].insert(name) }
+                                        else { model.approvedChanges[sheet]?.remove(name) }
+                                    }
+                                ))
+                            }
+                        }
+                        Text("Approved edits are applied to a copy of the original workbook. Other sheets and formatting are preserved. Open the result in Excel to recalculate formula summaries; static summaries require their own approved edits.")
+                            .foregroundStyle(.secondary)
+                    }
                     if let coded = review["coded_columns"] as? [String], !coded.isEmpty {
                         Text("Coded fields restored from source: \(coded.joined(separator: ", "))")
                     }
@@ -1186,7 +1266,8 @@ struct RestoreView: View {
                             .appFont(13)
                         }
                     }
-                    if let groups = review["new_columns"] as? [String: [String]] {
+                    if let groups = review["new_columns"] as? [String: [String]],
+                       groups.values.contains(where: { !$0.isEmpty }) {
                         Text("Approve each new result field in every worksheet")
                         ForEach(groups.keys.sorted(), id: \.self) { sheet in
                             Text(sheet).appFont(13, weight: .semibold)

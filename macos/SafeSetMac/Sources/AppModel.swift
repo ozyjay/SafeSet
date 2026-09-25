@@ -100,6 +100,9 @@ struct SourceCellLocation: Identifiable {
     @Published var fieldsBySheet: [String: [FieldDraft]] = [:]
     @Published var fields: [FieldDraft] = []
     @Published var sharedCodeFields: Set<String> = []
+    @Published var workbookEditing = true
+    @Published var editableFields: [String: Set<String>] = [:]
+    @Published var latestAnalysisPrompt = restorationCopyText
     @Published var threshold = "2"
     @Published var validationProfile = "strict"
     @Published var protectedOutput = ""
@@ -121,6 +124,7 @@ struct SourceCellLocation: Identifiable {
     @Published var unsafeSourceLocations: [SourceCellLocation] = []
     @Published var approvedResults: Set<String> = []
     @Published var approvedSheets: Set<String> = []
+    @Published var approvedChanges: [String: Set<String>] = [:]
     @Published var relationalRestore = false
     @Published var legacyPolicy = ""
     @Published var legacyMap = ""
@@ -293,8 +297,27 @@ struct SourceCellLocation: Identifiable {
         return counts.filter { $0.value >= 2 }.map(\.key).sorted()
     }
 
+    func editableCandidates(_ sheet: String) -> [String] {
+        let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
+        return configured.filter { ["keep", "code", "keep_numeric"].contains($0.action) }
+            .map(\.id)
+    }
+
+    var editingPermissions: [String: [String]] {
+        Dictionary(uniqueKeysWithValues: selectedSourceSheets.map { sheet in
+            (sheet, editableCandidates(sheet).filter { editableFields[sheet]?.contains($0) == true })
+        })
+    }
+
     var canApproveRestoration: Bool {
         guard let review = restorationReview, review["review_id"] is String else { return false }
+        if let changes = review["changes"] as? [String: [String: Int]] {
+            guard changes.allSatisfy({ sheet, columns in
+                Set(columns.keys) == (approvedChanges[sheet] ?? [])
+            }), approvedChanges.allSatisfy({ sheet, columns in
+                columns == Set(changes[sheet]?.keys.map { $0 } ?? [])
+            }) else { return false }
+        }
         let sheets = Set(review["new_sheets"] as? [String] ?? [])
         guard sheets == approvedSheets else { return false }
         if relationalRestore, let groups = review["new_columns"] as? [String: [String]] {
@@ -309,6 +332,7 @@ struct SourceCellLocation: Identifiable {
 
     init(preferences: UserDefaults = .standard) {
         self.preferences = preferences
+        self.relationalRestore = preferences.bool(forKey: "recentRestoreBundleRelational")
         if let remembered = preferences.string(forKey: Self.recentRestoreBundleKey),
            Self.isUsableRestoreBundlePath(remembered) {
             restoreBundle = remembered
@@ -373,6 +397,7 @@ struct SourceCellLocation: Identifiable {
 
     func chooseSource(_ url: URL) {
         source = url.path; fields = []; fieldsBySheet = [:]; sharedCodeFields = []
+        editableFields = [:]
         selectedSourceSheets = []; invalidate()
         send("list_sheets", ["path": source]) { result in
             self.sourceSheets = result["sheets"] as? [String] ?? []
@@ -388,6 +413,7 @@ struct SourceCellLocation: Identifiable {
             selectedSourceSheets.insert(sheet)
         } else {
             selectedSourceSheets.remove(sheet)
+            editableFields.removeValue(forKey: sheet)
             fieldsBySheet.removeValue(forKey: sheet)
             if sourceSheet == sheet {
                 sourceSheet = ""
@@ -536,7 +562,7 @@ struct SourceCellLocation: Identifiable {
         guard canPrepareProtection else { alert = "Complete every selected worksheet."; return }
         let output = protectedOutput.isEmpty
             ? (source as NSString).deletingPathExtension + "-protected.xlsx" : protectedOutput
-        let relational = selectedSourceSheets.count > 1
+        let relational = workbookEditing || selectedSourceSheets.count > 1
         var payload: [String: Any]
         if relational {
             let drafts = Dictionary(uniqueKeysWithValues: selectedSourceSheets.map { sheet in
@@ -549,6 +575,9 @@ struct SourceCellLocation: Identifiable {
                 "validation_profile": validationProfile,
                 "shared_code_fields": sharedCodeFields.sorted()
             ]
+            if workbookEditing {
+                payload["editable_fields"] = editingPermissions
+            }
         } else {
             payload = [
                 "source": source, "sheet": sourceSheet, "output": output,
@@ -568,6 +597,13 @@ struct SourceCellLocation: Identifiable {
         let relational = review["worksheets"] != nil
         send(relational ? "approve_relational_protection" : "approve_protection",
              ["review_id": token, "passphrase": passphrase]) { _ in
+            self.relationalRestore = relational
+            self.preferences.set(relational, forKey: "recentRestoreBundleRelational")
+            if let permissions = review["editable_fields"] as? [String: [String]] {
+                self.latestAnalysisPrompt = editingAnalysisPrompt(permissions)
+            } else {
+                self.latestAnalysisPrompt = restorationCopyText
+            }
             self.original = self.source
             self.originalSheets = self.sourceSheets
             self.originalSheet = self.sourceSheet
@@ -620,6 +656,7 @@ struct SourceCellLocation: Identifiable {
             self.restorationReview = result
             self.approvedResults = []
             self.approvedSheets = []
+            self.approvedChanges = [:]
         }
     }
 
@@ -663,11 +700,15 @@ struct SourceCellLocation: Identifiable {
             command = "approve_reconstruction"
             approved = names
         }
-        send(command, [
+        var payload: [String: Any] = [
             "review_id": token,
             "approved_results": approved,
             "approved_sheets": Array(approvedSheets).sorted()
-        ]) { _ in
+        ]
+        if let changes = review["changes"] as? [String: [String: Int]] {
+            payload["approved_changes"] = changes.mapValues { Array($0.keys).sorted() }
+        }
+        send(command, payload) { _ in
             self.restorationReview = nil
             self.alert = "A new locally reidentified workbook was created. Keep it private."
             self.page = .home
