@@ -1020,6 +1020,15 @@ struct ProtectView: View {
                     }
                     Text("Protected copy: \(review["output"] as? String ?? "")")
                     Text("Private restoration bundle: \(review["bundle"] as? String ?? "")")
+                    if let permissions = review["editable_fields"] as? [String: [String]] {
+                        Text("Saved worksheet permissions").appFont(13, weight: .semibold)
+                        ForEach(permissions.keys.sorted(), id: \.self) { sheet in
+                            let names = permissions[sheet] ?? []
+                            Text(names.isEmpty ? "\(sheet): reference only"
+                                 : "\(sheet): editable fields — \(names.joined(separator: ", "))")
+                                .appFont(13)
+                        }
+                    }
                     Text((validation["passed"] as? Bool == true) ? "Mandatory validation passed" : "Mandatory validation blocked")
                         .foregroundStyle((validation["passed"] as? Bool == true) ? .green : .red)
                     if let warnings = validation["warnings"] as? [String] {
