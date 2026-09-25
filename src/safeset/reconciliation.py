@@ -119,34 +119,69 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
         {s: () for s in sheets},
         approved_changes={s: tuple(c) for s, c in changes.items()},
     )
+    source_sheets = tuple(
+        sheet for sheet in sheets if sheet != target and not bundle["editable_fields"][sheet]
+    )
     entities = {}
-    for sheet in (target, reference):
+    duplicate_source_sheets = set()
+    for sheet in (target, *source_sheets):
         entities[sheet] = {}
         for record in bundle["sheets"][sheet]["records"].values():
             entity = record["entity_id"]
             if entity in entities[sheet]:
-                raise SafetyError(
-                    "Participant comparison requires one row per entity on each selected sheet."
-                )
+                if sheet in (target, reference):
+                    raise SafetyError(
+                        "Participant comparison requires one row per entity on each selected sheet."
+                    )
+                duplicate_source_sheets.add(sheet)
             entities[sheet][entity] = record["row"]
     incoming = set(entities[reference]) - set(entities[target])
     outgoing = set(entities[target]) - set(entities[reference])
     policy = parse_policy(bundle["sheets"][target]["policy"])
     editable = bundle["editable_fields"][target]
     fields = [n for n in sources[target].columns if n not in editable and n != policy.source_key]
-    mappings = config["column_sources"]
-    if (
-        not isinstance(mappings, dict)
-        or set(mappings) - set(fields)
-        or any(
-            v is not None and (not isinstance(v, str) or v not in sources[reference].columns)
-            for v in mappings.values()
-        )
-    ):
+    raw_mappings = config["column_sources"]
+    if not isinstance(raw_mappings, dict) or set(raw_mappings) - set(fields):
         raise SafetyError(CONFIG_ERROR)
+    mappings = {}
+    for name, value in raw_mappings.items():
+        if value is None:
+            mappings[name] = None
+        elif isinstance(value, str):  # Existing clients select from the membership sheet.
+            mappings[name] = (reference, value)
+        elif isinstance(value, dict) and set(value) == {"sheet", "column"}:
+            mappings[name] = (value["sheet"], value["column"])
+        else:
+            raise SafetyError(CONFIG_ERROR)
+        if mappings[name] is not None:
+            sheet, column = mappings[name]
+            if (
+                not isinstance(sheet, str)
+                or sheet not in source_sheets
+                or sheet in duplicate_source_sheets
+                or not isinstance(column, str)
+                or column not in sources[sheet].columns
+            ):
+                raise SafetyError(CONFIG_ERROR)
     missing_fields = (
         [name for name in fields if name not in mappings]
         if config["include_additions"] and incoming
+        else []
+    )
+    missing_source_fields = (
+        [
+            name
+            for name, source in mappings.items()
+            if source is not None
+            and (
+                incoming - set(entities[source[0]])
+                or any(
+                    sources[source[0]].rows[entities[source[0]][entity]][source[1]] in ("", None)
+                    for entity in incoming & set(entities[source[0]])
+                )
+            )
+        ]
+        if config["include_additions"]
         else []
     )
     proposals = {}
@@ -166,7 +201,7 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
                 for n in editable
             }
     missing_assignments = len(incoming - set(proposals)) if config["include_additions"] else 0
-    ready = not missing_fields and not missing_assignments
+    ready = not missing_fields and not missing_source_fields and not missing_assignments
     additions_count = len(incoming) if config["include_additions"] else 0
     removals_count = len(outgoing) if config["include_removals"] else 0
     count = len(sources[target].rows) + additions_count - removals_count
@@ -211,8 +246,13 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
         "removals": removals_count,
         "missing_assignments": missing_assignments,
         "missing_fields": missing_fields,
+        "missing_source_fields": missing_source_fields,
         "mapping_fields": fields,
-        "reference_columns": list(sources[reference].columns),
+        "source_columns": {
+            sheet: list(sources[sheet].columns)
+            for sheet in source_sheets
+            if sheet not in duplicate_source_sheets
+        },
         "changes": changes,
         "new_columns": {s: [] for s in sheets},
         "new_sheets": [],
@@ -229,9 +269,11 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, config):
             rows = [restored[target].rows[i] for i in origins]
             if additions_count:
                 for entity in sorted(incoming, key=entities[reference].get):
-                    original = sources[reference].rows[entities[reference][entity]]
                     values = {
-                        n: original[mappings[n]] if mappings[n] is not None else "" for n in fields
+                        n: sources[mappings[n][0]].rows[entities[mappings[n][0]][entity]][
+                            mappings[n][1]
+                        ] if mappings[n] is not None else ""
+                        for n in fields
                     }
                     rows.append(
                         {

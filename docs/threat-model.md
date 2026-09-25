@@ -70,8 +70,11 @@ not missing rows supplied by an analysis tool, and require explicit review and
 approval. New assignments come from a separately selected proposal sheet with an
 exact field allowlist and the existing field domains. Duplicate, existing-target,
 unknown and unrelated IDs are rejected. Missing assignments block publication.
-The operator explicitly selects local sources or blank values for other new-row
-fields; sensitive reference values do not enter the external prompt or protocol.
+The operator explicitly selects a column on an authenticated reference-only sheet
+or a blank value for each other new-row field. Every selected sheet must match
+incoming entities uniquely and provide the selected values; row order is never
+used as identity.
+Sensitive source values do not enter the external prompt or protocol.
 Full input-file digest checks and single-use review tokens prevent stale approvals.
 Reference choice and the substantive correctness of assignments remain human
 decisions. Fixed summary/formula/chart ranges may require local adjustment after
