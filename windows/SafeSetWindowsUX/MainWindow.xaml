@@ -202,7 +202,7 @@
                                         <Button Grid.Column="1" Content="Browse…" Click="BrowseWorkbookSource_Click" />
                                     </Grid>
                                     <TextBlock
-                                        Text="The release will eventually use the same field-by-field decisions, validation profiles and explicit approval flow as the macOS app."
+                                        Text="The Windows app will eventually use the same field-by-field decisions, validation profiles and explicit approval flow as the macOS app."
                                         TextWrapping="Wrap"
                                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>

@@ -14,7 +14,7 @@ All Windows publications use private staged files and no-clobber hard links.
 Private bundle reads also check the parent directory and reject multiply linked
 files. Reparse paths, alternate streams and unsupported/nonlocal volumes are
 rejected. These controls reduce local access exposure, not disclosure through a
-released document. They do not identify ordinary cloud-synchronised directories,
+shared document. They do not identify ordinary cloud-synchronised directories,
 provide secure deletion or replace human review. Native ACL tests have passed;
 encrypted Windows workflow verification is still outstanding and the WinUI
 publication controls remain disabled.
@@ -47,7 +47,7 @@ The writer explicitly marks every output cell as text, so a formula-like prefix
 in an original source value is copied as literal text. Control characters in
 source values still block restoration. Correcting a blocked cell requires a new
 source, protection run and matching private bundle; the bound source cannot be
-edited in place for an existing release. The local source-text locator verifies
+edited in place for an existing protected workbook. The local source-text locator verifies
 the source against the authenticated bundle and shows a count and up to 20
 coordinates of blocking control characters. It never sends cell contents to
 the desktop UI.
@@ -57,7 +57,7 @@ original file inside the encrypted bundle. The original remains authoritative fo
 identities, reference fields and local-only worksheets. Only explicitly selected
 reversible fields can change: observed categorical values, known category codes
 (including explicitly shared codebooks) and bounded numeric values. Disclosure
-validation on the protected release is unchanged. Missing, duplicate or unknown
+validation on the protected workbook is unchanged. Missing, duplicate or unknown
 record IDs, changed entity links and unapproved field changes still block restore.
 No new rows, fields or sheets are accepted by this mode.
 
@@ -106,7 +106,7 @@ malformed identifiers and restoration-integrity failures still block export with
 no override. This profile accepts additional residual disclosure risk for a
 controlled pseudonymised use; it does not establish anonymity.
 
-For a relational release, every source row has a unique `record_id` and every
+For a relational workbook, every source row has a unique `record_id` and every
 distinct source key in the declared shared entity domain has one reusable random
 `entity_id`. Both are excluded from equivalence grouping. Each sheet is assessed
 independently, then all retained source-derived values and worksheet participation
@@ -114,7 +114,7 @@ are combined into an entity fingerprint for linked-class reporting. Reusing the
 entity ID exposes equality and participation by design.
 
 Same-named categorical fields configured with `code` remain independently
-randomised by default. In a relational release, the operator may explicitly
+randomised by default. In a relational workbook, the operator may explicitly
 confirm an eligible heading as one shared category domain. Exact matching source
 labels then receive the same fresh random code in every selected worksheet where
 that heading is coded. This exposes cross-worksheet category equality and

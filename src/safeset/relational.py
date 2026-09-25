@@ -285,7 +285,7 @@ def validate_relational(
             "Shared obfuscation codebooks expose cross-worksheet category equality and frequency."
         )
     if small:
-        finding = "Small linked equivalence classes fall below the release threshold."
+        finding = "Small linked equivalence classes fall below the minimum group size."
         if profile == "strict":
             errors.append(finding)
         else:
