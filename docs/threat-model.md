@@ -78,7 +78,13 @@ The operator explicitly selects a column on an authenticated reference-only shee
 or a blank value for each other new-row field. Every selected sheet must match
 incoming entities uniquely and provide the selected values; row order is never
 used as identity.
-Sensitive source values do not enter the external prompt or protocol.
+An operator-written task can be appended to the copyable ChatGPT prompt using
+worksheet and field names. It is not sent to the helper or stored in the bundle,
+and it grants no new workbook permissions. The returned workbook is still checked
+against authenticated fields, codes and participant membership.
+The UI asks the operator to omit names and student numbers, but arbitrary typed
+text is not screened before copying. Engine-generated prompt text and protocol
+responses contain no sensitive source values.
 Full input-file digest checks and single-use review tokens prevent stale approvals.
 Reference choice and the substantive correctness of assignments remain human
 decisions. Fixed summary/formula/chart ranges may require local adjustment after
