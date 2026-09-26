@@ -54,7 +54,9 @@ For a newly structured result workbook, choose **ChatGPT will create a new resul
 workbook** in the copyable prompt. Work out the rules in ChatGPT. Its returned
 workbook may contain different sheets, fields and rows. Keep exact `entity_id`
 values on participant rows and include `record_id` only when a result refers to
-one particular source row. New team labels may be short result values. Do not
+one particular source row. If a `record_id` column is present, leave it blank
+for newly created result rows; never generate a new ID. New team labels may be
+short result values. Do not
 include original names or student numbers; SafeSet adds selected original fields
 locally during Restore. Summary sheets may have no participant IDs.
 
@@ -86,7 +88,8 @@ choose an original source worksheet and only the fields you want restored. Choos
 an `entity_id` join when that source sheet has one row per participant, or an
 exact `record_id` join when the result refers to source rows. The default requires
 one result row per participant; explicitly allow repeats where the analysis needs
-them. Select **Update result joins and review**.
+them. Rows with a blank `record_id` require the `entity_id` join. Select **Update
+result joins and review**.
 
 SafeSet checks every referenced ID, exact record-to-entity linkage, source joins,
 safe result text and known codebooks. It shows result-sheet and field counts and

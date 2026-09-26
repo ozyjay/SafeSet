@@ -1,5 +1,19 @@
 # Verification
 
+## New result rows without original record IDs — 26 September 2026
+
+Result workbook review now accepts blank `record_id` cells when a new result row
+has a known `entity_id` and uses an entity join. It continues to reject invented
+non-blank IDs, mismatched record/entity links and exact-record joins for blank
+IDs. Synthetic regression tests cover these cases. A value-free local diagnostic
+of the operator's returned workbook found 22 blank `record_id` cells and no
+unknown `entity_id` values; it did not read a private bundle or print cell values.
+
+- Python suite: **319 passed, 24 Windows-only tests skipped**.
+- Swift package: **24 tests passed** with sandbox disabled for this local build.
+- Changed Python files pass Ruff; the whole repository retains the 19 existing
+  document-related Ruff findings.
+
 ## Result-only workbook restoration — 26 September 2026
 
 Added a separate related-sheet Restore path that accepts new result sheets and

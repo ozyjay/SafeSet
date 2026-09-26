@@ -190,6 +190,7 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, joins):
         if not fields:
             raise SafetyError(RESULT_ERROR)
         seen_entities = set()
+        blank_record_ids = 0
         new_values = {field: set() for field in fields}
         decoded_rows = []
         for row in table.rows:
@@ -198,7 +199,9 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, joins):
                 if not valid_id(entity) or entity not in bundle["entities"]:
                     raise SafetyError(RESULT_ERROR)
                 record_id = row.get("record_id")
-                if record_id is not None and (
+                if record_id == "":
+                    blank_record_ids += 1
+                elif record_id is not None and (
                     record_id not in records or records[record_id][1] != entity
                 ):
                     raise SafetyError(RESULT_ERROR)
@@ -218,6 +221,7 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, joins):
             "rows": len(table.rows),
             "linked": linked,
             "has_record_id": "record_id" in table.columns,
+            "blank_record_ids": blank_record_ids,
             "result_fields": list(fields),
             "new_categories": {
                 field: len(values) for field, values in new_values.items() if values
@@ -241,7 +245,7 @@ def _prepare(returned_path, source_path, bundle_path, output, bundle, joins):
         for row, decoded in zip(table.rows, decoded_rows, strict=True):
             if config["join_by"] == "record_id":
                 record_id = row["record_id"]
-                if records[record_id][0] != source_sheet:
+                if not record_id or records[record_id][0] != source_sheet:
                     raise SafetyError(JOIN_ERROR)
                 key = record_id
             else:
