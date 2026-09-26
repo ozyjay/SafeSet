@@ -125,12 +125,19 @@ Digitally signed packages requiring edits and ambiguous XML layouts fail closed.
 The complete proposed workbook is built in memory before review, then rebuilt
 and compared at approval after rechecking the full original file and returned
 tables. Publication remains local and no-clobber. No source rows or workbook bytes
-are added to the encrypted bundle or protocol responses. The copyable prompt lists
-only authorised headings, domain instructions and approved numeric bounds. New
+are added to the encrypted bundle or protocol responses. The engine-generated
+prompt lists only authorised headings, domain instructions and approved numeric bounds. New
 desktop protocol options are `editable_fields` on relational protection and
 `approved_changes` on relational approval; the review returns `changes` as
 per-sheet/per-field counts and `analysis_prompt` as copyable instructions. Existing
 requests without editing permissions retain their version 3 behaviour.
+
+The macOS prompt view can append an operator-written task using exact worksheet
+and field names. This text stays in desktop UI state and is neither a bundle
+permission nor a protocol input. The UI asks the operator not to include direct
+identifiers; SafeSet cannot verify arbitrary text before the operator copies it.
+The copied prompt states that the task cannot authorise new codes, categories or
+workbook structure.
 
 ### Participant comparison during Restore
 

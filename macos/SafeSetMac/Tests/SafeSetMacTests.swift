@@ -2,6 +2,18 @@ import XCTest
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    @MainActor func testTaskInstructionsDoNotReplaceWorkbookPermissions() {
+        let model = AppModel()
+        model.latestAnalysisPrompt = "Synthetic protected-workbook permissions."
+        model.analysisTaskInstructions = "  Fill existing teams first, then request a new team.  "
+        let prompt = model.copyableAnalysisPrompt
+        XCTAssertTrue(prompt.hasPrefix("Synthetic protected-workbook permissions."))
+        XCTAssertTrue(prompt.contains("Fill existing teams first, then request a new team."))
+        XCTAssertTrue(prompt.contains("Do not invent a code"))
+        model.analysisTaskInstructions = "  \n  "
+        XCTAssertEqual(model.copyableAnalysisPrompt, model.latestAnalysisPrompt)
+    }
+
     #if DEBUG
     func testDevelopmentPassphraseAcceptsOnlyExactSyntheticFixture() throws {
         let repository = URL(fileURLWithPath: #filePath)

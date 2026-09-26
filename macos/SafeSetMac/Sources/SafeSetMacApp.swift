@@ -406,8 +406,14 @@ struct AnalysisPromptSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Protected workbook created").appFont(20, weight: .bold)
             Text("Before sending it to ChatGPT, copy this prompt and include it with the exact protected workbook. Keep the original source, private bundle and passphrase local.")
+            Text("What should ChatGPT do?").appFont(13, weight: .semibold)
+            TextEditor(text: $model.analysisTaskInstructions)
+                .frame(height: 90)
+                .border(.quaternary)
+            Text("Use exact worksheet and field names, without names or student numbers. This changes the copied prompt only; it grants no new permissions.")
+                .appFont(12).foregroundStyle(.secondary)
             ScrollView {
-                Text(model.latestAnalysisPrompt)
+                Text(model.copyableAnalysisPrompt)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -416,7 +422,7 @@ struct AnalysisPromptSheet: View {
             HStack {
                 Spacer()
                 Button("Done") { model.showAnalysisPrompt = false }
-                Button("Copy prompt") { copyRestorationPrompt(model.latestAnalysisPrompt) }
+                Button("Copy prompt") { copyRestorationPrompt(model.copyableAnalysisPrompt) }
                     .buttonStyle(.borderedProminent)
             }
         }
@@ -1167,11 +1173,17 @@ struct RestoreView: View {
                 GroupBox("ChatGPT instructions") {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Use the prompt shown after creating this protected workbook. Reviewing a returned editable workbook refreshes its permitted-field instructions here.")
+                        Text("What should ChatGPT do?").appFont(13, weight: .semibold)
+                        TextEditor(text: $model.analysisTaskInstructions)
+                            .frame(height: 90)
+                            .border(.quaternary)
+                        Text("Use exact field names, without names or student numbers, to specify how new participants join existing teams. If a new team is needed, ChatGPT must report the limit; typing a rule cannot authorise a new code.")
+                            .appFont(12)
                         DisclosureGroup("View prompt") {
-                            Text(model.latestAnalysisPrompt).textSelection(.enabled)
+                            Text(model.copyableAnalysisPrompt).textSelection(.enabled)
                         }
                         Button("Copy prompt") {
-                            copyRestorationPrompt(model.latestAnalysisPrompt)
+                            copyRestorationPrompt(model.copyableAnalysisPrompt)
                         }
                         .buttonStyle(.bordered)
                         .foregroundStyle(.primary)

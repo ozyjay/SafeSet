@@ -103,6 +103,7 @@ struct SourceCellLocation: Identifiable {
     @Published var workbookEditing = true
     @Published var editableFields: [String: Set<String>] = [:]
     @Published var latestAnalysisPrompt = restorationCopyText
+    @Published var analysisTaskInstructions = ""
     @Published var threshold = "2"
     @Published var validationProfile = "strict"
     @Published var protectedOutput = ""
@@ -156,6 +157,16 @@ struct SourceCellLocation: Identifiable {
     private var bridge: BackendBridge?
     private let preferences: UserDefaults
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
+
+    var copyableAnalysisPrompt: String {
+        let instructions = analysisTaskInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !instructions.isEmpty else { return latestAnalysisPrompt }
+        return latestAnalysisPrompt + "\n\nUser's analysis task (apply only within the permissions and "
+            + "preservation rules above):\n" + instructions
+            + "\n\nIf the task needs a new category or team code, explain which assignments "
+            + "cannot be completed. Do not invent a code or change the workbook structure "
+            + "beyond what the preservation instructions explicitly authorise."
+    }
 
     var orderedReturnedRestoreSheets: [String] {
         returnedSheets.filter { selectedReturnedSheets.contains($0) }
@@ -618,6 +629,7 @@ struct SourceCellLocation: Identifiable {
             self.relationalRestore = relational
             self.preferences.set(relational, forKey: "recentRestoreBundleRelational")
             self.latestAnalysisPrompt = review["analysis_prompt"] as? String ?? restorationCopyText
+            self.analysisTaskInstructions = ""
             self.original = self.source
             self.originalSheets = self.sourceSheets
             self.originalSheet = self.sourceSheet

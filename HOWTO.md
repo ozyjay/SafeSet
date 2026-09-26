@@ -14,7 +14,7 @@ In the macOS app, use **⌘+** and **⌘−** to change text size, or **⌘0** t
 4. Review the values for each **Keep** or **Obfuscate values** field and approve its exact category list. **Group into ranges** needs numeric intervals. **Keep exact number** needs bounds; exact values may still disclose information.
 5. Under **What may ChatGPT change?**, leave **Edit selected fields and preserve the original workbook** enabled. Select permitted fields separately for each sheet, such as the team field on Allocations. A sheet with no selected fields is reference only. Keep, Obfuscate values and Keep exact number fields can be editable; identities, grouped ranges, formulas and dates cannot.
 6. Set the minimum group size to at least 2. Choose a new protected workbook destination outside a repository, then review the validation summary and editing permissions. Mandatory failures block creation.
-7. Approve creation and enter a confirmed passphrase of at least 16 characters. Copy the prompt shown after creation and send it with the protected workbook. Keep the passphrase separately: there is no recovery backdoor. Existing files are never overwritten.
+7. Approve creation and enter a confirmed passphrase of at least 16 characters. In **What should ChatGPT do?**, describe the analysis or allocation rules using the exact worksheet and field names, without names or student numbers. Then copy the prompt and send it with the protected workbook. This text changes the copied prompt only; it cannot expand editing permissions. Keep the passphrase separately: there is no recovery backdoor. Existing files are never overwritten.
 
 Editing mode creates a version 4 bundle, including for one sheet. Related sheets use shared random entity IDs and separate row IDs. A repeated heading appears once for protection decisions, but editing permissions are chosen separately per sheet. Confirm that the source keys identify the same kind of entity across selected sheets. Selected reference tables still need a source identifier and normal protection decisions; a formula summary without that structure can stay local and recalculate after restoration. Category review retains each worksheet's observed allowlist. To reuse category codes across sheets, explicitly confirm the field under **Shared obfuscation**.
 
@@ -93,7 +93,11 @@ For example, use **Updated Classlist** to decide who belongs in **Allocations**:
    changes. If assignments are missing, **Copy prompt** supplies instructions for
    ChatGPT to add a **SafeSet additions** proposal sheet. Every original protected
    row must remain intact, including departing participants. The proposal uses
-   existing reference `entity_id`s and only the target's editable fields.
+   existing reference `entity_id`s and only the target's editable fields. In
+   **What should ChatGPT do?**, state the existing allocation rules using exact
+   field names (for example, `Team`, `Role` and `Subject Campus`) and ask for
+   valid placements in existing teams first. The copied prompt includes this
+   text without changing the authenticated field permissions.
 4. Select the workbook returned with those proposals and validate again. For
    other new-row fields, explicitly choose a column from any reference-only sheet
    in the same protected bundle, or **Leave blank**. The selected sheet must have
@@ -103,6 +107,12 @@ For example, use **Updated Classlist** to decide who belongs in **Allocations**:
 5. Approve additions, removals and changed fields, then authorise local restoration.
    Missing assignments block creation; SafeSet never invents them. You may explicitly
    turn off additions to restore existing participants only.
+
+If the existing teams cannot take every incoming participant under those rules,
+ChatGPT must report the unresolved assignments. A typed instruction cannot create
+a new team code in the existing protected workbook. New team categories require a
+new local protection setup with the intended categories authorised before another
+protected copy is shared.
 
 Reference sheets remain unchanged. Participant changes support one plain range or
 Excel table, without totals or formulas in its data, and need empty space below
