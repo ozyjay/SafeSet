@@ -1,5 +1,11 @@
 # Architecture and decisions
 
+Result-workbook restoration uses one explicit **Create restored workbook** action
+after displaying the validated summary. The desktop supplies all reviewed result
+fields, new-category groups and participant joins in that request. The shared
+engine retains its exact approval-set, review-token and input-integrity checks.
+Changed source selections require revalidation before the action is enabled.
+
 The local source-cell diagnostic preserves an active desktop review when it
 succeeds. Failed protocol requests still invalidate the engine review, and the
 macOS interface clears its matching review state. Expired review tokens return a
