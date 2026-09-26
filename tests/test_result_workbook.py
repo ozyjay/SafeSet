@@ -236,12 +236,27 @@ def test_result_bridge_review_does_not_expose_identity_values(editing):
     assert first["ready"] is False
     assert "SYNTH-001" not in str(first)
     assert "Synthetic New Team" not in str(first)
+    located = call(
+        bridge,
+        "locate_unsafe_source_cells",
+        {
+            "source": str(editing.source), "bundle": str(editing.bundle),
+            "passphrase": PASSPHRASE, "relational": True, "sheet": None,
+        },
+    )
+    assert located["ok"] is True
+    assert bridge.pending is not None
+    assert bridge.pending[1] == first["review_id"]
     invalid = join()
     invalid["New Allocations"]["source_fields"] = ["team"]
     rejected = call(
         bridge, "update_result_workbook", {"review_id": first["review_id"], "joins": invalid}
     )
     assert rejected["ok"] is False and rejected["error"] == "result_workbook_join"
+    expired = call(
+        bridge, "update_result_workbook", {"review_id": first["review_id"], "joins": join()}
+    )
+    assert expired["ok"] is False and expired["error"] == "review_expired"
     again = call(
         bridge,
         "prepare_result_workbook",

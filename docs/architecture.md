@@ -1,5 +1,11 @@
 # Architecture and decisions
 
+The local source-cell diagnostic preserves an active desktop review when it
+succeeds. Failed protocol requests still invalidate the engine review, and the
+macOS interface clears its matching review state. Expired review tokens return a
+fixed error code directing the operator to validate again. Publication continues
+to recheck the source and returned workbooks before writing any output.
+
 ## Windows private-storage implementation contract
 
 The Windows boundary uses the standard-library `ctypes` bindings to local Win32
