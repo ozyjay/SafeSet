@@ -104,6 +104,7 @@ struct SourceCellLocation: Identifiable {
     @Published var editableFields: [String: Set<String>] = [:]
     @Published var latestAnalysisPrompt = restorationCopyText
     @Published var analysisTaskInstructions = ""
+    @Published var resultWorkbookPrompt = false
     @Published var threshold = "2"
     @Published var validationProfile = "strict"
     @Published var protectedOutput = ""
@@ -128,6 +129,7 @@ struct SourceCellLocation: Identifiable {
     @Published var approvedSheets: Set<String> = []
     @Published var approvedChanges: [String: Set<String>] = [:]
     @Published var relationalRestore = false
+    @Published var resultWorkbookRestore = false
     @Published var reconcileParticipants = false
     @Published var participantTarget = ""
     @Published var participantReference = ""
@@ -138,6 +140,13 @@ struct SourceCellLocation: Identifiable {
     @Published var participantConfigChanged = false
     @Published var approvedParticipantAdditions = false
     @Published var approvedParticipantRemovals = false
+    @Published var resultJoinSources: [String: String] = [:]
+    @Published var resultJoinFields: [String: Set<String>] = [:]
+    @Published var resultJoinByRecord: Set<String> = []
+    @Published var resultAllowRepeatedEntities: Set<String> = []
+    @Published var resultConfigChanged = false
+    @Published var approvedResultCategories: Set<String> = []
+    @Published var approvedResultJoins: Set<String> = []
     @Published var legacyPolicy = ""
     @Published var legacyMap = ""
     @Published var legacyOutput = ""
@@ -159,9 +168,15 @@ struct SourceCellLocation: Identifiable {
     private let worker = DispatchQueue(label: "org.ozyjay.SafeSet.bridge", qos: .userInitiated)
 
     var copyableAnalysisPrompt: String {
+        let base = resultWorkbookPrompt ? resultWorkbookCopyText : latestAnalysisPrompt
         let instructions = analysisTaskInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !instructions.isEmpty else { return latestAnalysisPrompt }
-        return latestAnalysisPrompt + "\n\nUser's analysis task (apply only within the permissions and "
+        guard !instructions.isEmpty else { return base }
+        if resultWorkbookPrompt {
+            return base + "\n\nOptional analysis task:\n" + instructions
+                + "\n\nKeep every entity_id and record_id link exact. New result labels may be "
+                + "created; do not invent pseudonymous IDs or source codes."
+        }
+        return base + "\n\nUser's analysis task (apply only within the permissions and "
             + "preservation rules above):\n" + instructions
             + "\n\nIf the task needs a new category or team code, explain which assignments "
             + "cannot be completed. Do not invent a code or change the workbook structure "
@@ -333,6 +348,19 @@ struct SourceCellLocation: Identifiable {
 
     var canApproveRestoration: Bool {
         guard let review = restorationReview, review["review_id"] is String else { return false }
+        if review["result_workbook"] as? Bool == true {
+            guard review["ready"] as? Bool == true, !resultConfigChanged,
+                  let sheets = review["sheets"] as? [String: [String: Any]] else { return false }
+            let fields = Set(sheets.flatMap { sheet, info in
+                (info["result_fields"] as? [String] ?? []).map { "\(sheet)::\($0)" }
+            })
+            let categories = Set(sheets.flatMap { sheet, info in
+                (info["new_categories"] as? [String: Int] ?? [:]).keys.map { "\(sheet)::\($0)" }
+            })
+            let linked = Set(sheets.filter { $0.value["linked"] as? Bool == true }.map(\.key))
+            return approvedSheets == Set(sheets.keys) && approvedResults == fields
+                && approvedResultCategories == categories && approvedResultJoins == linked
+        }
         if review["reconciliation"] as? Bool == true {
             guard !participantConfigChanged, review["ready"] as? Bool == true,
                   approvedParticipantAdditions == ((review["additions"] as? Int ?? 0) > 0),
@@ -630,6 +658,8 @@ struct SourceCellLocation: Identifiable {
             self.preferences.set(relational, forKey: "recentRestoreBundleRelational")
             self.latestAnalysisPrompt = review["analysis_prompt"] as? String ?? restorationCopyText
             self.analysisTaskInstructions = ""
+            self.resultWorkbookPrompt = false
+            self.resultWorkbookRestore = false
             self.original = self.source
             self.originalSheets = self.sourceSheets
             self.originalSheet = self.sourceSheet
@@ -645,6 +675,13 @@ struct SourceCellLocation: Identifiable {
     func chooseRestoreFile(_ url: URL, sourceFile: Bool) {
         invalidate()
         let path = url.path
+        if path != (sourceFile ? original : returned) {
+            resultJoinSources = [:]
+            resultJoinFields = [:]
+            resultJoinByRecord = []
+            resultAllowRepeatedEntities = []
+            resultConfigChanged = false
+        }
         if sourceFile { original = path } else { returned = path }
         send("list_sheets", ["path": path]) { result in
             let sheets = result["sheets"] as? [String] ?? []
@@ -670,7 +707,8 @@ struct SourceCellLocation: Identifiable {
         let output = restoredOutput.isEmpty
             ? (returned as NSString).deletingPathExtension + "-restored.xlsx" : restoredOutput
         let command = relationalRestore
-            ? (reconcileParticipants ? "prepare_participants" : "prepare_relational_reconstruction")
+            ? (resultWorkbookRestore ? "prepare_result_workbook"
+               : reconcileParticipants ? "prepare_participants" : "prepare_relational_reconstruction")
             : "prepare_reconstruction"
         var payload: [String: Any] = [
             "returned": returned, "source": original, "bundle": restoreBundle,
@@ -724,6 +762,28 @@ struct SourceCellLocation: Identifiable {
         approvedChanges = [:]
     }
 
+    var resultJoins: [String: Any] {
+        var joins: [String: Any] = [:]
+        for (sheet, source) in resultJoinSources where !source.isEmpty {
+            let fields = Array(resultJoinFields[sheet] ?? []).sorted()
+            if fields.isEmpty { continue }
+            joins[sheet] = [
+                "source_sheet": source, "source_fields": fields,
+                "join_by": resultJoinByRecord.contains(sheet) ? "record_id" : "entity_id",
+                "unique_entities": !resultAllowRepeatedEntities.contains(sheet)
+            ] as [String: Any]
+        }
+        return joins
+    }
+
+    func resultConfigurationChanged() {
+        resultConfigChanged = true
+        approvedSheets = []
+        approvedResults = []
+        approvedResultCategories = []
+        approvedResultJoins = []
+    }
+
     func acceptRestorationReview(_ result: [String: Any]) {
         restorationReview = result
         latestAnalysisPrompt = result["analysis_prompt"] as? String ?? restorationCopyText
@@ -733,11 +793,21 @@ struct SourceCellLocation: Identifiable {
         approvedParticipantAdditions = false
         approvedParticipantRemovals = false
         participantConfigChanged = false
+        approvedResultCategories = []
+        approvedResultJoins = []
+        resultConfigChanged = false
     }
 
     func updateParticipantReview() {
         guard let token = restorationReview?["review_id"] as? String else { return }
         send("update_participants", ["review_id": token, "config": participantConfig]) { result in
+            self.acceptRestorationReview(result)
+        }
+    }
+
+    func updateResultWorkbookReview() {
+        guard let token = restorationReview?["review_id"] as? String else { return }
+        send("update_result_workbook", ["review_id": token, "joins": resultJoins]) { result in
             self.acceptRestorationReview(result)
         }
     }
@@ -774,6 +844,22 @@ struct SourceCellLocation: Identifiable {
         }
         let command: String
         let approved: Any
+        if review["result_workbook"] as? Bool == true,
+           let sheets = review["sheets"] as? [String: [String: Any]] {
+            send("approve_result_workbook", [
+                "review_id": token,
+                "approved_fields": sheets.mapValues { $0["result_fields"] as? [String] ?? [] },
+                "approved_categories": sheets.mapValues {
+                    Array(($0["new_categories"] as? [String: Int] ?? [:]).keys).sorted()
+                },
+                "approved_joins": Array(approvedResultJoins).sorted()
+            ]) { _ in
+                self.restorationReview = nil
+                self.alert = "A new locally reidentified result workbook was created. Keep it private."
+                self.page = .home
+            }
+            return
+        }
         if review["reconciliation"] as? Bool == true {
             send("approve_participants", [
                 "review_id": token,

@@ -2,6 +2,46 @@ import XCTest
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    @MainActor func testNewResultPromptAndApprovalGates() {
+        let model = AppModel()
+        model.resultWorkbookPrompt = true
+        model.analysisTaskInstructions = "Assign Team using Subject Campus."
+        XCTAssertTrue(model.copyableAnalysisPrompt.contains("new result .xlsx workbook"))
+        XCTAssertTrue(model.copyableAnalysisPrompt.contains("new team labels are allowed"))
+        XCTAssertTrue(model.copyableAnalysisPrompt.contains("Assign Team using Subject Campus."))
+        model.acceptRestorationReview([
+            "review_id": "synthetic-result-review", "result_workbook": true, "ready": true,
+            "sheets": [
+                "New Allocations": ["rows": 3, "linked": true,
+                                    "result_fields": ["Team", "Role"],
+                                    "new_categories": ["Team": 1]],
+                "Team Summary": ["rows": 2, "linked": false,
+                                 "result_fields": ["Team", "Count"],
+                                 "new_categories": [String: Int]()]
+            ]
+        ])
+        XCTAssertFalse(model.canApproveRestoration)
+        model.approvedSheets = ["New Allocations", "Team Summary"]
+        model.approvedResults = ["New Allocations::Team", "New Allocations::Role",
+                                 "Team Summary::Team", "Team Summary::Count"]
+        model.approvedResultCategories = ["New Allocations::Team"]
+        model.approvedResultJoins = ["New Allocations"]
+        XCTAssertTrue(model.canApproveRestoration)
+        model.resultConfigurationChanged()
+        XCTAssertFalse(model.canApproveRestoration)
+    }
+
+    @MainActor func testResultJoinsIncludeOnlySelectedSourceFields() {
+        let model = AppModel()
+        model.resultJoinSources = ["New Allocations": "Updated Classlist"]
+        model.resultJoinFields = ["New Allocations": ["Student key", "Course"]]
+        let join = model.resultJoins["New Allocations"] as? [String: Any]
+        XCTAssertEqual(join?["source_sheet"] as? String, "Updated Classlist")
+        XCTAssertEqual(join?["source_fields"] as? [String], ["Course", "Student key"])
+        XCTAssertEqual(join?["join_by"] as? String, "entity_id")
+        XCTAssertEqual(join?["unique_entities"] as? Bool, true)
+    }
+
     @MainActor func testTaskInstructionsDoNotReplaceWorkbookPermissions() {
         let model = AppModel()
         model.latestAnalysisPrompt = "Synthetic protected-workbook permissions."

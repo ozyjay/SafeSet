@@ -48,6 +48,23 @@ from .reconciliation import (
     update_participants,
 )
 from .relational import read_relational_bundle
+from .result_workbook import (
+    APPROVAL_ERROR as RESULT_WORKBOOK_APPROVAL_ERROR,
+)
+from .result_workbook import (
+    JOIN_ERROR as RESULT_WORKBOOK_JOIN_ERROR,
+)
+from .result_workbook import (
+    RESULT_ERROR as RESULT_WORKBOOK_ERROR,
+)
+from .result_workbook import (
+    STALE_ERROR as RESULT_WORKBOOK_STALE_ERROR,
+)
+from .result_workbook import (
+    approve_result_workbook,
+    prepare_result_workbook,
+    update_result_workbook,
+)
 from .workbook_editing import editing_instructions
 
 PROTOCOL_VERSION = 1
@@ -56,6 +73,10 @@ MAX_RESPONSE = 1024 * 1024
 
 # Only fixed, value-free codes cross the desktop boundary. Unknown errors stay generic.
 PUBLIC_SAFETY_ERRORS = {
+    RESULT_WORKBOOK_ERROR: "result_workbook_invalid",
+    RESULT_WORKBOOK_JOIN_ERROR: "result_workbook_join",
+    RESULT_WORKBOOK_APPROVAL_ERROR: "result_workbook_approval",
+    RESULT_WORKBOOK_STALE_ERROR: "stale_review",
     CONFIG_ERROR: "participant_configuration",
     SHEET_SELECTION_ERROR: "participant_sheet_selection",
     SHEET_NOT_IN_BUNDLE_ERROR: "participant_sheet_bundle",
@@ -364,6 +385,34 @@ class Bridge:
         self.pending: tuple[str, str, object] | None = None
 
     def dispatch(self, command: str, raw: object) -> dict:
+        if command in {"update_result_workbook", "approve_result_workbook"}:
+            pending = self.pending
+            self.pending = None
+            data = _payload(
+                raw,
+                {"review_id", "joins"}
+                if command == "update_result_workbook"
+                else {"review_id", "approved_fields", "approved_categories", "approved_joins"},
+            )
+            if (
+                pending is None
+                or pending[0] != "approve_result_workbook"
+                or pending[1] != _string(data["review_id"])
+            ):
+                raise SafetyError("Review is stale; prepare and review again.")
+            if command == "update_result_workbook":
+                review = update_result_workbook(pending[2], data["joins"])
+                token = new_id()
+                self.pending = ("approve_result_workbook", token, review)
+                return {**review.summary, "review_id": token}
+            rows = approve_result_workbook(
+                pending[2],
+                _approved_results(data["approved_fields"]),
+                _approved_results(data["approved_categories"]),
+                _columns(data["approved_joins"]),
+                authorised=True,
+            )
+            return {"created": True, "rows": rows}
         if command in {"update_participants", "approve_participants"}:
             pending = self.pending
             self.pending = None
@@ -471,6 +520,18 @@ class Bridge:
             )
             return {"created": True, "rows": rows}
         self.pending = None
+        if command == "prepare_result_workbook":
+            data = _payload(raw, {"returned", "source", "bundle", "output", "passphrase"})
+            review = prepare_result_workbook(
+                _path(data["returned"]),
+                _path(data["source"]),
+                _path(data["bundle"]),
+                _path(data["output"]),
+                _string(data["passphrase"]),
+            )
+            token = new_id()
+            self.pending = ("approve_result_workbook", token, review)
+            return {**review.summary, "review_id": token}
         if command == "prepare_participants":
             data = _payload(raw, {"returned", "source", "bundle", "output", "passphrase", "config"})
             review = prepare_participants(

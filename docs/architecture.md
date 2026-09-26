@@ -139,6 +139,26 @@ identifiers; SafeSet cannot verify arbitrary text before the operator copies it.
 The copied prompt states that the task cannot authorise new codes, categories or
 workbook structure.
 
+### Result-only workbook restoration
+
+A separate Restore path accepts a new workbook of result sheets for a version 3
+or 4 related-sheet bundle. The returned workbook need not contain any protected
+source worksheet. A participant result row carries a known `entity_id`; an
+optional `record_id` must belong to that entity. Summary sheets contain no ID
+control columns. The operator selects a bound source sheet, exact source fields,
+join key and per-sheet duplicate-entity rule. Missing or ambiguous joins block
+publication. The output contains only the result sheets, with control IDs removed
+and selected original fields joined locally.
+
+Known category codes are decoded by authenticated field/codebook association.
+Novel short result values, including new team labels, are counted and approved as
+new output categories; they do not alter source codebooks. Unknown UUID-shaped
+codes and ambiguous codebook associations fail. Every result sheet, result field,
+new-category field and source join requires review. The helper rereads both
+workbooks and rebuilds the proposal at approval before no-clobber publication.
+The copied result-workbook prompt is a short output contract; allocation rules
+may be worked out in ChatGPT and are not enforced by SafeSet.
+
 ### Participant comparison during Restore
 
 Version 4 Restore can explicitly compare one editable target sheet with a distinct

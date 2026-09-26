@@ -66,6 +66,9 @@ final class BackendBridge: @unchecked Sendable {
         let message: String
         switch code {
         case "safety_rejected": message = "SafeSet rejected this operation. Review the files and decisions."
+        case "result_workbook_invalid": message = "The result workbook contains an unknown or mismatched pseudonymous ID, an unsafe value, or an unsupported structure. Keep result cells to short safe values and use only IDs from the protected workbook."
+        case "result_workbook_join": message = "Choose source fields and a matching source worksheet for each participant result sheet. Every result ID must have one unambiguous source match. Correct the selection, then validate again."
+        case "result_workbook_approval": message = "Review and approve every result field and new category before creating the restored workbook."
         case "edit_configuration": message = "Select editable fields that use Keep, Obfuscate values or Keep exact number. Identifiers, removed fields and grouped ranges cannot be edited."
         case "edit_formula": message = "An editable field contains a formula or date. Keep that field as reference data; select direct category or numeric values for editing."
         case "edit_domain": message = "An edited value is outside its approved categories, known codes or numeric bounds. Use an existing permitted value, or start a new protection run with revised decisions."

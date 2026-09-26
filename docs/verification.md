@@ -1,5 +1,33 @@
 # Verification
 
+## Result-only workbook restoration — 26 September 2026
+
+Added a separate related-sheet Restore path that accepts new result sheets and
+rows. Synthetic version 3 and 4 bundles exercise local entity and exact-record
+joins, known-code decoding, new team labels, aggregate sheets and result-only
+publication. The original workbook supplies only the source fields explicitly
+selected for each joined result sheet.
+
+- Python suite: **317 passed, 24 Windows-only tests skipped**. The new result
+  coverage includes unknown/mismatched IDs, duplicate-entity policy, missing or
+  colliding source joins, invented UUID-shaped codes, formula-like result text,
+  stale original and returned workbooks, explicit field/category/join approvals,
+  protocol metadata minimisation and no network access.
+- Swift package: **24 tests passed**, including result prompt selection, explicit
+  review gates and precise source-field configuration.
+- Local macOS app build and ad-hoc signature verification passed. The packaged
+  helper answered `hello` and recognised the new result-workbook command using
+  synthetic missing-file paths. No operational data, private bundle or passphrase
+  was used for packaged smoke checks.
+- Changed Python files pass Ruff. Whole-repository Ruff still reports the same
+  **19 pre-existing document-related issues**.
+
+The result path keeps formula cells, hidden sheets, unsafe text, unknown IDs and
+ambiguous joins fail closed. New short category values require review but SafeSet
+cannot verify substantive allocation rules. The restored workbook is static and
+does not carry source formatting or formulas. Windows desktop publication was not
+enabled or tested by this change.
+
 ## Restore participant comparison — 25 September 2026
 
 Added explicit target/reference comparison to version 4 Restore, bounded proposal

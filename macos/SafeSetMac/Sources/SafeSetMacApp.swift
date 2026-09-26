@@ -35,6 +35,7 @@ func plainLanguageSuggestion(_ classification: String) -> String {
 let restorationAnalysisGuidance = "Please analyse the protected Excel workbook and return a modified .xlsx file that SafeSet can restore. Use the protected workbook as the base. Preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly, including heading spelling and case. Keep each original record_id exactly once on its original worksheet. You may reorder columns and add new result columns anywhere, or add separate analysis worksheets. Give new result columns unique headings and do not change protected values. Do not request the original source, private bundle or passphrase."
 let restorationResultExample = "For each new result column on a protected worksheet, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Do not put formulas in protected worksheets. Put each added analysis table on its own worksheet, with unique column headings in row 1 and data immediately below. Do not merge cells or add title rows, spacer rows or narrative paragraphs inside the workbook. Added analysis cells may be blank; non-blank results must be short categories of at most four words and 64 characters, without names, email addresses, dates, times or other identifiers. Put longer explanations in your ChatGPT reply, outside the workbook. Use static values where possible. If added analysis cells contain formulas, the workbook must include saved scalar results. Before returning the file, compare each protected worksheet's row count and exact record_id values with the input workbook; every original ID must appear once on the same worksheet, with no new IDs in protected worksheets. SafeSet copies approved results into static tables, so formulas, formatting and drawings are not preserved. If you cannot keep the original workbook intact, explain the limitation instead of returning a changed file."
 let restorationCopyText = "\(restorationAnalysisGuidance)\n\n\(restorationResultExample)"
+let resultWorkbookCopyText = "Create a new result .xlsx workbook from the attached SafeSet-protected workbook. You may create, rename or omit result worksheets, fields and rows; you do not need to copy the original protected sheets. For every participant-level result row, include its exact entity_id from the protected workbook. Include record_id only when the result refers to a particular original row, and keep its matching entity_id. Never invent or alter either ID or infer an identity. Aggregate sheets may omit IDs. Use short, safe result values; new team labels are allowed, but do not invent UUID-shaped source codes. Keep the original field heading when reusing an obfuscated category code so SafeSet can decode it. Do not include names, student numbers, formulas, merged cells, hidden sheets, title rows or narrative cells. Put explanations in your reply. Return a new .xlsx file. SafeSet will locally validate the IDs and join only source fields explicitly selected by the operator. Do not request the original source, private bundle or passphrase."
 
 func copyRestorationPrompt(_ text: String = restorationCopyText) {
     NSPasteboard.general.clearContents()
@@ -406,11 +407,20 @@ struct AnalysisPromptSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Protected workbook created").appFont(20, weight: .bold)
             Text("Before sending it to ChatGPT, copy this prompt and include it with the exact protected workbook. Keep the original source, private bundle and passphrase local.")
-            Text("What should ChatGPT do?").appFont(13, weight: .semibold)
+            if model.relationalRestore {
+                Toggle("ChatGPT will create a new result workbook", isOn: Binding(
+                    get: { model.resultWorkbookPrompt },
+                    set: {
+                        model.resultWorkbookPrompt = $0
+                        model.resultWorkbookRestore = $0
+                    }
+                ))
+            }
+            Text("Optional task note for ChatGPT").appFont(13, weight: .semibold)
             TextEditor(text: $model.analysisTaskInstructions)
                 .frame(height: 90)
                 .border(.quaternary)
-            Text("Use exact worksheet and field names, without names or student numbers. This changes the copied prompt only; it grants no new permissions.")
+            Text("You can work out the rules in ChatGPT. If you add a note here, use field names without names or student numbers.")
                 .appFont(12).foregroundStyle(.secondary)
             ScrollView {
                 Text(model.copyableAnalysisPrompt)
@@ -1163,21 +1173,42 @@ struct RestoreView: View {
                 Text("Restore a workbook").appFont(26, weight: .bold)
                 Toggle("Related sheets or editable workbook bundle", isOn: Binding(
                     get: { model.relationalRestore },
-                    set: { model.relationalRestore = $0; model.invalidate() }
+                    set: {
+                        model.relationalRestore = $0
+                        if !$0 { model.resultWorkbookRestore = false }
+                        model.invalidate()
+                    }
                 ))
                     .appFont(13)
+                if model.relationalRestore {
+                    Toggle("Restore ChatGPT's new result sheets", isOn: Binding(
+                        get: { model.resultWorkbookRestore },
+                        set: {
+                            model.resultWorkbookRestore = $0
+                            model.resultWorkbookPrompt = $0
+                            if $0 { model.reconcileParticipants = false }
+                            model.invalidate()
+                        }
+                    ))
+                }
                 Text(model.relationalRestore
-                     ? "The private bundle defines the required worksheets and permitted edits. SafeSet verifies them automatically."
+                     ? (model.resultWorkbookRestore
+                        ? "Result sheets may have new names, rows and fields. SafeSet validates their pseudonymous IDs and joins selected original fields locally."
+                        : "The private bundle defines the required worksheets and permitted edits. SafeSet verifies them automatically.")
                      : "Restore one or more same-schema worksheets from a version 2 bundle.")
                     .foregroundStyle(.secondary)
                 GroupBox("ChatGPT instructions") {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Use the prompt shown after creating this protected workbook. Reviewing a returned editable workbook refreshes its permitted-field instructions here.")
-                        Text("What should ChatGPT do?").appFont(13, weight: .semibold)
+                        Text(model.resultWorkbookRestore
+                             ? "Send this short output contract with the protected workbook. Work out the analysis rules in ChatGPT."
+                             : "Use the prompt shown after creating this protected workbook. Reviewing a returned editable workbook refreshes its permitted-field instructions here.")
+                        Text("Optional task note for ChatGPT").appFont(13, weight: .semibold)
                         TextEditor(text: $model.analysisTaskInstructions)
                             .frame(height: 90)
                             .border(.quaternary)
-                        Text("Use exact field names, without names or student numbers, to specify how new participants join existing teams. If a new team is needed, ChatGPT must report the limit; typing a rule cannot authorise a new code.")
+                        Text(model.resultWorkbookRestore
+                             ? "The result may contain new teams and sheets. Use field names in any note; keep names and student numbers out of it."
+                             : "Use exact field names, without names or student numbers, to specify how new participants join existing teams. If a new team is needed, ChatGPT must report the limit; typing a rule cannot authorise a new code.")
                             .appFont(12)
                         DisclosureGroup("View prompt") {
                             Text(model.copyableAnalysisPrompt).textSelection(.enabled)
@@ -1191,11 +1222,11 @@ struct RestoreView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .foregroundStyle(.secondary)
                 }
-                PathRow(title: "Modified protected copy", path: $model.returned,
+                PathRow(title: model.resultWorkbookRestore ? "ChatGPT result workbook" : "Modified protected copy", path: $model.returned,
                         save: false, fileExtension: "xlsx") {
                     model.chooseRestoreFile($0, sourceFile: false)
                 }
-                if model.relationalRestore, !model.returned.isEmpty {
+                if model.relationalRestore, !model.returned.isEmpty, !model.resultWorkbookRestore {
                     Text("Required worksheets are verified against the private bundle after it is unlocked. To compare participants, choose the target and reference sheets below. Unexpected hidden worksheets are rejected.")
                         .appFont(12)
                         .foregroundStyle(.secondary)
@@ -1253,14 +1284,16 @@ struct RestoreView: View {
                 }
                 PathRow(title: "New restored workbook", path: $model.restoredOutput,
                         save: true, fileExtension: "xlsx")
-                if model.relationalRestore {
+                if model.relationalRestore && !model.resultWorkbookRestore {
                     Toggle("Compare participants with a membership sheet", isOn: Binding(
                         get: { model.reconcileParticipants },
                         set: { model.reconcileParticipants = $0; model.invalidate() }
                     ))
                     if model.reconcileParticipants { ParticipantConfigurationView() }
                 }
-                Text("Unlocking the private bundle is required to validate exact record coverage.")
+                Text(model.resultWorkbookRestore
+                     ? "Unlocking the private bundle is required to validate participant links and restore selected source fields."
+                     : "Unlocking the private bundle is required to validate exact record coverage.")
                     .foregroundStyle(.secondary)
                 if DevelopmentPassphrase.forWorkbook(model.original) == nil {
                     SecureField("Restoration passphrase", text: $passphrase).appFont(13)
@@ -1274,7 +1307,7 @@ struct RestoreView: View {
                         passphrase = ""
                         model.prepareRestoration(passphrase: secret)
                     }.appFont(13).buttonStyle(.borderedProminent)
-                        .disabled(model.relationalRestore && model.reconcileParticipants &&
+                        .disabled(model.relationalRestore && !model.resultWorkbookRestore && model.reconcileParticipants &&
                                   (model.participantTarget.isEmpty || model.participantReference.isEmpty))
                     Button("Locate unsafe source cells") {
                         let secret = DevelopmentPassphrase.forWorkbook(model.original) ?? passphrase
@@ -1309,8 +1342,13 @@ struct RestoreView: View {
                 if let review = model.restorationReview {
                     Divider()
                     Text("Restoration review").appFont(18, weight: .bold)
-                    Text("Exact coverage: \(review["rows"] as? Int ?? 0) records")
-                    Text("Original identity and removed fields will be restored from the source.")
+                    if review["result_workbook"] as? Bool == true {
+                        Text("Only the reviewed result sheets will be created. Selected source fields are joined locally by validated IDs.")
+                        ResultWorkbookReviewView(review: review)
+                    } else {
+                        Text("Exact coverage: \(review["rows"] as? Int ?? 0) records")
+                        Text("Original identity and removed fields will be restored from the source.")
+                    }
                     if review["reconciliation"] as? Bool == true {
                         ParticipantReviewView(review: review)
                     }
@@ -1394,6 +1432,123 @@ struct RestoreView: View {
         .confirmationDialog("Create a new locally reidentified workbook?",
                             isPresented: $showAuthorise) {
             Button("Authorise restoration") { model.approveRestoration() }.appFont(13)
+        }
+    }
+}
+
+struct ResultWorkbookReviewView: View {
+    @EnvironmentObject var model: AppModel
+    let review: [String: Any]
+
+    var body: some View {
+        let sheets = review["sheets"] as? [String: [String: Any]] ?? [:]
+        let sourceColumns = review["source_columns"] as? [String: [String]] ?? [:]
+        GroupBox("New result workbook") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Choose the original fields to restore on each participant result sheet. The original sheets are not copied. Inspect the returned workbook before approving its assignments and new categories.")
+                    .foregroundStyle(.secondary)
+                ForEach(sheets.keys.sorted(), id: \.self) { sheet in
+                    let info = sheets[sheet] ?? [:]
+                    let fields = info["result_fields"] as? [String] ?? []
+                    let categories = info["new_categories"] as? [String: Int] ?? [:]
+                    Divider()
+                    Text("\(sheet): \(info["rows"] as? Int ?? 0) result rows")
+                        .appFont(13, weight: .semibold)
+                    if info["linked"] as? Bool == true {
+                        Picker("Original worksheet for \(sheet)", selection: Binding(
+                            get: { model.resultJoinSources[sheet] ?? "" },
+                            set: {
+                                model.resultJoinSources[sheet] = $0
+                                model.resultJoinFields[sheet] = []
+                                model.resultConfigurationChanged()
+                            }
+                        )) {
+                            Text("Choose…").tag("")
+                            ForEach(sourceColumns.keys.sorted(), id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                        if let selected = model.resultJoinSources[sheet],
+                           let columns = sourceColumns[selected] {
+                            Text("Restore only these original fields").appFont(12, weight: .semibold)
+                            ForEach(columns, id: \.self) { field in
+                                Toggle(field, isOn: Binding(
+                                    get: { model.resultJoinFields[sheet]?.contains(field) == true },
+                                    set: {
+                                        if $0 { model.resultJoinFields[sheet, default: []].insert(field) }
+                                        else { model.resultJoinFields[sheet]?.remove(field) }
+                                        model.resultConfigurationChanged()
+                                    }
+                                ))
+                            }
+                        }
+                        if info["has_record_id"] as? Bool == true {
+                            Toggle("Join by exact record_id", isOn: Binding(
+                                get: { model.resultJoinByRecord.contains(sheet) },
+                                set: {
+                                    if $0 { model.resultJoinByRecord.insert(sheet) }
+                                    else { model.resultJoinByRecord.remove(sheet) }
+                                    model.resultConfigurationChanged()
+                                }
+                            ))
+                        }
+                        Toggle("Allow multiple result rows per participant", isOn: Binding(
+                            get: { model.resultAllowRepeatedEntities.contains(sheet) },
+                            set: {
+                                if $0 { model.resultAllowRepeatedEntities.insert(sheet) }
+                                else { model.resultAllowRepeatedEntities.remove(sheet) }
+                                model.resultConfigurationChanged()
+                            }
+                        ))
+                    } else {
+                        Text("Unlinked summary sheet; no source fields will be restored.")
+                            .foregroundStyle(.secondary)
+                    }
+                    if review["ready"] as? Bool == true && !model.resultConfigChanged {
+                        Toggle("Approve result sheet \(sheet)", isOn: Binding(
+                            get: { model.approvedSheets.contains(sheet) },
+                            set: {
+                                if $0 { model.approvedSheets.insert(sheet) }
+                                else { model.approvedSheets.remove(sheet) }
+                            }
+                        ))
+                        if info["linked"] as? Bool == true {
+                            Toggle("Approve selected source-field join for \(sheet)", isOn: Binding(
+                                get: { model.approvedResultJoins.contains(sheet) },
+                                set: {
+                                    if $0 { model.approvedResultJoins.insert(sheet) }
+                                    else { model.approvedResultJoins.remove(sheet) }
+                                }
+                            ))
+                        }
+                        ForEach(fields, id: \.self) { field in
+                            let key = "\(sheet)::\(field)"
+                            Toggle("Result field: \(field)", isOn: Binding(
+                                get: { model.approvedResults.contains(key) },
+                                set: {
+                                    if $0 { model.approvedResults.insert(key) }
+                                    else { model.approvedResults.remove(key) }
+                                }
+                            ))
+                        }
+                        ForEach(categories.keys.sorted(), id: \.self) { field in
+                            let key = "\(sheet)::\(field)"
+                            Toggle("\(categories[field] ?? 0) new values in \(field)", isOn: Binding(
+                                get: { model.approvedResultCategories.contains(key) },
+                                set: {
+                                    if $0 { model.approvedResultCategories.insert(key) }
+                                    else { model.approvedResultCategories.remove(key) }
+                                }
+                            ))
+                        }
+                    }
+                }
+                if model.resultConfigChanged || review["ready"] as? Bool != true {
+                    Text("Select at least one original field for each participant result sheet, then update the review.")
+                        .foregroundStyle(.secondary)
+                }
+                Button("Update result joins and review") { model.updateResultWorkbookReview() }
+            }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
