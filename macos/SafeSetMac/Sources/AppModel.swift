@@ -95,6 +95,11 @@ struct SourceCellLocation: Identifiable {
     @Published var hasRecentProtectedWorkbook = false
     @Published var source = ""
     @Published var sourceSheets: [String] = []
+    @Published var physicalSourceSheets: [String] = []
+    @Published var regionCandidates: [[String: Any]] = []
+    @Published var regionSourceDigest = ""
+    @Published var regionSelections: [String: [String: String]] = [:]
+    @Published var useRegions = false
     @Published var sourceSheet = ""
     @Published var selectedSourceSheets: Set<String> = []
     @Published var fieldsBySheet: [String: [FieldDraft]] = [:]
@@ -156,6 +161,9 @@ struct SourceCellLocation: Identifiable {
     @Published var documentProtectedOutput = ""
     @Published var documentBundleOutput = ""
     @Published var documentInspection: [String: Any]?
+    @Published var documentContentReview: [String: Any]?
+    @Published var reviewedFigureIDs: Set<String> = []
+    @Published var removedParagraphIDs: Set<String> = []
     @Published var documentProtectionReview: [String: Any]?
     @Published var documentReturned = ""
     @Published var documentRestoreBundle = ""
@@ -446,14 +454,43 @@ struct SourceCellLocation: Identifiable {
 
     func chooseSource(_ url: URL) {
         source = url.path; fields = []; fieldsBySheet = [:]; sharedCodeFields = []
+        useRegions = false; regionCandidates = []; regionSelections = [:]
+        regionSourceDigest = ""
         editableFields = [:]
         selectedSourceSheets = []; invalidate()
         send("list_sheets", ["path": source]) { result in
             self.sourceSheets = result["sheets"] as? [String] ?? []
+            self.physicalSourceSheets = self.sourceSheets
             self.sourceSheet = self.sourceSheets.count == 1 ? self.sourceSheets[0] : ""
             self.selectedSourceSheets = Set(self.sourceSheet.isEmpty ? [] : [self.sourceSheet])
             if !self.sourceSheet.isEmpty { self.inspect() }
         }
+        send("discover_regions", ["path": source]) { result in
+            self.regionCandidates = result["regions"] as? [[String: Any]] ?? []
+            self.regionSourceDigest = result["source_digest"] as? String ?? ""
+        }
+    }
+
+    func switchRegionMode(_ enabled: Bool) {
+        useRegions = enabled
+        workbookEditing = true
+        regionSelections = [:]
+        sourceSheets = enabled ? [] : physicalSourceSheets
+        sourceSheet = enabled ? "" : (sourceSheets.count == 1 ? sourceSheets[0] : "")
+        selectedSourceSheets = Set(sourceSheet.isEmpty ? [] : [sourceSheet])
+        fields = []; fieldsBySheet = [:]; editableFields = [:]; sharedCodeFields = []
+        invalidate()
+        if !sourceSheet.isEmpty { inspect() }
+    }
+
+    func addRegion(sheet: String, range: String) {
+        guard physicalSourceSheets.contains(sheet), !range.isEmpty else {
+            alert = "Choose a worksheet and explicit range."; return
+        }
+        let name = "Region \(regionSelections.count + 1)"
+        regionSelections[name] = ["sheet": sheet, "range": range.uppercased()]
+        sourceSheets.append(name)
+        toggleSourceSheet(name, selected: true)
     }
 
     func toggleSourceSheet(_ sheet: String, selected: Bool) {
@@ -495,7 +532,12 @@ struct SourceCellLocation: Identifiable {
     func inspect(sheet inspectedSheet: String) {
         guard !source.isEmpty, !inspectedSheet.isEmpty else { return }
         invalidate()
-        send("inspect", ["source": source, "sheet": inspectedSheet]) { result in
+        let command = useRegions ? "inspect_region" : "inspect"
+        let payload: [String: Any] = useRegions
+            ? ["source": source, "name": inspectedSheet,
+               "region": regionSelections[inspectedSheet] ?? [:]]
+            : ["source": source, "sheet": inspectedSheet]
+        send(command, payload) { result in
             let data = result["columns"] as? [[String: Any]] ?? []
             var inspectedFields = data.map { item in
                 var field = FieldDraft(id: item["column"] as? String ?? "")
@@ -568,7 +610,12 @@ struct SourceCellLocation: Identifiable {
                 return
             }
             let sheet = orderedSheets[index]
-            send("categories", ["source": source, "sheet": sheet, "column": field]) { result in
+            let command = useRegions ? "region_categories" : "categories"
+            let payload: [String: Any] = useRegions
+                ? ["source": source, "name": sheet,
+                   "region": regionSelections[sheet] ?? [:], "column": field]
+                : ["source": source, "sheet": sheet, "column": field]
+            send(command, payload) { result in
                 var collected = valuesBySheet
                 collected[sheet] = result["values"] as? [String] ?? []
                 collect(
@@ -611,7 +658,7 @@ struct SourceCellLocation: Identifiable {
         guard canPrepareProtection else { alert = "Complete every selected worksheet."; return }
         let output = protectedOutput.isEmpty
             ? (source as NSString).deletingPathExtension + "-protected.xlsx" : protectedOutput
-        let relational = workbookEditing || selectedSourceSheets.count > 1
+        let relational = useRegions || workbookEditing || selectedSourceSheets.count > 1
         var payload: [String: Any]
         if relational {
             let drafts = Dictionary(uniqueKeysWithValues: selectedSourceSheets.map { sheet in
@@ -626,6 +673,12 @@ struct SourceCellLocation: Identifiable {
             ]
             if workbookEditing {
                 payload["editable_fields"] = editingPermissions
+            }
+            if useRegions {
+                payload["regions"] = regionSelections.filter {
+                    selectedSourceSheets.contains($0.key)
+                }
+                payload["region_digest"] = regionSourceDigest
             }
         } else {
             payload = [
@@ -896,9 +949,22 @@ struct SourceCellLocation: Identifiable {
     func chooseDocumentSource(_ url: URL) {
         documentSource = url.path
         documentInspection = nil
+        documentContentReview = nil
+        reviewedFigureIDs = []
+        removedParagraphIDs = []
         documentProtectionReview = nil
         send("inspect_document", ["source": documentSource]) {
             self.documentInspection = $0
+        }
+    }
+
+    func reviewDocumentContent() {
+        guard !documentSource.isEmpty else { return }
+        send("review_document_content", ["source": documentSource]) {
+            self.documentContentReview = $0
+            self.reviewedFigureIDs = []
+            self.removedParagraphIDs = []
+            self.documentProtectionReview = nil
         }
     }
 
@@ -914,13 +980,19 @@ struct SourceCellLocation: Identifiable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .map { ["value": $0, "kind": "person"] }
-        send("prepare_document_protection", [
+        var payload: [String: Any] = [
             "source": documentSource,
             "output": output,
             "bundle": documentBundleOutput.isEmpty ? NSNull() : documentBundleOutput,
             "terms": payloadTerms,
-            "remove_comments": removeComments
-        ]) { self.documentProtectionReview = $0 }
+            "remove_comments": removeComments,
+            "reviewed_figures": Array(reviewedFigureIDs).sorted(),
+            "remove_paragraphs": Array(removedParagraphIDs).sorted()
+        ]
+        if let digest = documentContentReview?["source_digest"] as? String {
+            payload["review_digest"] = digest
+        }
+        send("prepare_document_protection", payload) { self.documentProtectionReview = $0 }
     }
 
     func approveDocumentProtection(passphrase: String) {

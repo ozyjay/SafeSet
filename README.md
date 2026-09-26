@@ -100,15 +100,27 @@ SafeSet now has a conservative DOCX protection foundation for scholarly manuscri
 
 The current implementation:
 
-- automatically detects and protects email addresses and ORCID identifiers in Word text and relationship targets;
+- automatically detects and protects email addresses and ORCID identifiers in Word text, attributes and relationship targets;
 - accepts explicit local names/identifiers to protect with stable random SafeSet tokens;
 - strips common creator/editor/company metadata and custom document properties;
 - removes comments when explicitly selected;
-- rejects tracked changes, hidden text, embedded/active objects and identifiers split across formatted Word runs;
+- replaces exact identifiers across formatted Word runs, while still rejecting tracked changes, hidden text and embedded/active objects;
 - requires every original SafeSet token occurrence to survive the returned document before restoration;
 - restores protected identities only into a new local DOCX and never guesses missing mappings.
 
 This reduces some disclosure risks but does not certify that a document is anonymous or suitable for a recipient. The operator remains responsible for reviewing the manuscript for participant information, confidential material, figures/images and other context that deterministic protection may not identify.
+
+For complex research workbooks, `safeset discover-regions` proposes local data
+rectangles. Confirm exact ranges with `safeset protect-regions`; each named region
+has its own policy, and `safeset restore-regions` applies approved edits to a new
+copy of the original workbook. The macOS Protect screen also offers explicit
+region selection. Source titles, notes and other unselected content stay local.
+This path creates a version 5 private bundle; existing bundles retain their meaning.
+
+For manuscripts, `safeset-document review-content` explicitly shows bounded local
+suggestions and figure locations. Supply its review digest and acknowledge every
+figure when protecting a document. Suggested paragraphs can be removed by ID;
+suggestions are incomplete and image pixels are not analysed.
 
 Use the document CLI while native UI work evolves:
 

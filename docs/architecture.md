@@ -476,6 +476,36 @@ The document workflow is source DOCX → protected DOCX plus encrypted private d
 
 The DOCX reader is bounded by compressed size, unpacked size, part count and per-part size. It rejects unsafe archive paths and active macro payloads. Protection operates on Word body, headers, footers, footnotes and endnotes plus relationship attributes. It automatically recognises email and ORCID shapes and accepts explicit operator-provided identities.
 
-Protection deliberately strips common authoring metadata and custom properties. Comments are removable as a protection action. Tracked changes, hidden text, embedded objects and identity strings split across formatted text runs fail closed in this first iteration.
+Protection deliberately strips common authoring metadata and custom properties. Comments are removable as a protection action. Tracked changes, hidden text and embedded objects fail closed.
 
 Each protected value receives a fresh document-scoped random token. The encrypted document bundle stores the original value, token, kind, occurrence count and source/protected digests; it does not store the whole document. Restoration requires every expected token occurrence to remain present and rejects any returned package that already contains an original protected value. It then creates a new DOCX with the approved identities restored. Word comments and stripped authoring metadata are not reintroduced.
+
+## Confirmed workbook regions (bundle version 5)
+
+The version 5 editable path accepts explicitly named, nonoverlapping rectangular
+regions from visible `.xlsx` worksheets. Local discovery proposes ranges and Excel
+Tables without returning cell values. The operator confirms the worksheet and exact
+range for every included logical table; each receives its own strict field policy
+and a distinct protected worksheet. Adjacent data is never silently included.
+Selected ranges must have one valid header row and complete, rectangular data;
+partial Excel Table selections, merged/hidden data and ambiguous headings fail.
+Selected tables retain the version 4 record/entity, editing and disclosure checks.
+The encrypted `SAFESET5` bundle binds the logical-to-physical region map and the
+entire original-file digest. Restoration applies approved edits at authenticated
+source coordinates to a new copy of the original ZIP package. Unselected content,
+formulas, styles and other ZIP members follow the version 4 preservation boundary.
+Versions 3 and 4 are read as before and never upgraded implicitly.
+
+## Reviewed manuscript content (document bundle version 2)
+
+An explicit local review request returns bounded suggestion excerpts and figure
+locations to the desktop UI; routine inspection remains aggregate only. Suggestions
+are deterministic hints for possible names, affiliations and acknowledgements.
+The operator may select suggested paragraphs for removal and must acknowledge
+every inventoried figure. Figure bytes remain unchanged. Unknown, linked or
+unreferenced images fail closed; paragraphs containing figures cannot be removed.
+The content-review source digest must match the file at protection. Identifiers
+spanning formatted text runs are replaced with a single token at the first run;
+restoration preserves surrounding structure but may use that run's style for the
+identity. `SAFESETD2` records reviewed figure IDs and removed paragraph IDs.
+Version 1 document bundles remain readable and are never rewritten automatically.

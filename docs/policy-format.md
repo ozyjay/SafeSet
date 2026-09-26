@@ -1,5 +1,10 @@
 # Policy versions 1, 2 and 3
 
+Version 5 *restoration bundles* add confirmed workbook-region coordinates to the
+version 4 editable workflow. Each logical region uses an ordinary strict version 3
+policy with exact headings. Region selection and editing permissions are workflow
+configuration, not YAML keys. Older bundles remain readable and are not upgraded.
+
 Version 4 *restoration bundles* add editable-workbook permissions without changing
 policy YAML. The desktop protocol accepts `editable_fields` as a mapping containing
 every selected worksheet and a list of its editable source headings (empty for a

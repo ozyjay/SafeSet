@@ -724,10 +724,48 @@ struct ProtectDocumentView: View {
                             Text("Tracked changes: \(inspection["tracked_changes"] as? Int ?? 0)")
                             Text("Hidden text markers: \(inspection["hidden_text"] as? Int ?? 0)")
                             Text("Embedded/active objects: \(inspection["embedded_objects"] as? Int ?? 0)")
+                            Text("Figures requiring review: \(inspection["figures"] as? Int ?? 0)")
                             Text("Authoring metadata fields: \(inspection["metadata_fields"] as? Int ?? 0)")
                             if let blockers = inspection["blockers"] as? [String], !blockers.isEmpty {
                                 Text("Resolve before protection: \(blockers.joined(separator: ", "))")
                                     .foregroundStyle(.red)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                Button("Review manuscript suggestions and figures locally") {
+                    model.reviewDocumentContent()
+                }
+                if let content = model.documentContentReview {
+                    GroupBox("Manuscript review") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array((content["suggestions"] as? [[String: Any]] ?? []).enumerated()), id: \.offset) { _, item in
+                                let identifier = item["id"] as? String ?? ""
+                                Text("\(item["part"] as? String ?? "") paragraph \(item["paragraph"] as? Int ?? 0): \(item["excerpt"] as? String ?? "")")
+                                    .textSelection(.enabled)
+                                Toggle("Remove this paragraph from the protected copy", isOn: Binding(
+                                    get: { model.removedParagraphIDs.contains(identifier) },
+                                    set: { checked in
+                                        if checked { model.removedParagraphIDs.insert(identifier) }
+                                        else { model.removedParagraphIDs.remove(identifier) }
+                                        model.documentProtectionReview = nil
+                                    }))
+                                    .toggleStyle(.checkbox)
+                            }
+                            Text("Select any identifying terms above and enter them in the protection list below.")
+                                .appFont(12).foregroundStyle(.secondary)
+                            ForEach(Array((content["figures"] as? [[String: Any]] ?? []).enumerated()), id: \.offset) { _, item in
+                                let identifier = item["id"] as? String ?? ""
+                                Toggle("Reviewed figure in \(item["part"] as? String ?? "") paragraph \(item["paragraph"] as? Int ?? 0)",
+                                       isOn: Binding(
+                                        get: { model.reviewedFigureIDs.contains(identifier) },
+                                        set: { checked in
+                                            if checked { model.reviewedFigureIDs.insert(identifier) }
+                                            else { model.reviewedFigureIDs.remove(identifier) }
+                                            model.documentProtectionReview = nil
+                                        }))
+                                    .toggleStyle(.checkbox)
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -738,10 +776,12 @@ struct ProtectDocumentView: View {
                     .font(.system(size: 13))
                     .frame(minHeight: 120)
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+                    .onChange(of: identities) { model.documentProtectionReview = nil }
                 Text("One value per line. SafeSet performs exact local matching; this list is never returned through the desktop bridge.")
                     .appFont(12).foregroundStyle(.secondary)
                 Toggle("Remove Word comments from the protected copy", isOn: $removeComments)
                     .toggleStyle(.checkbox)
+                    .onChange(of: removeComments) { model.documentProtectionReview = nil }
 
                 PathRow(title: "Protected document", path: $model.documentProtectedOutput,
                         save: true, fileExtension: "docx")
@@ -869,6 +909,8 @@ struct ProtectView: View {
     @State private var showApproval = false
     @State private var passphraseIssue = ""
     @State private var showOnlyFieldsNeedingAttention = true
+    @State private var regionSheet = ""
+    @State private var regionRange = ""
 
     var body: some View {
         ScrollView {
@@ -876,6 +918,43 @@ struct ProtectView: View {
                 Text("Protect a workbook").appFont(26, weight: .bold)
                 PathRow(title: "Original workbook", path: $model.source, save: false,
                         fileExtension: "xlsx") { model.chooseSource($0) }
+                Toggle("Select data regions within worksheets", isOn: Binding(
+                    get: { model.useRegions },
+                    set: { model.switchRegionMode($0) }
+                ))
+                .toggleStyle(.checkbox)
+                if model.useRegions {
+                    GroupBox("Confirm data regions") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Suggested ranges are local hints. Confirm each included rectangle and its first-row headings. Other content stays local.")
+                                .foregroundStyle(.secondary)
+                            ForEach(Array(model.regionCandidates.enumerated()), id: \.offset) { _, item in
+                                let sheet = item["sheet"] as? String ?? ""
+                                let range = item["range"] as? String ?? ""
+                                HStack {
+                                    Text("\(sheet)!\(range), header row \(item["header_row"] as? Int ?? 0) (\(item["kind"] as? String ?? ""))")
+                                    Spacer()
+                                    Button("Confirm") { model.addRegion(sheet: sheet, range: range) }
+                                }
+                            }
+                            Picker("Worksheet", selection: $regionSheet) {
+                                Text("Select").tag("")
+                                ForEach(model.physicalSourceSheets, id: \.self) { sheet in
+                                    Text(sheet).tag(sheet)
+                                }
+                            }
+                            TextField("Range, for example A3:D50", text: $regionRange)
+                            Button("Add confirmed range") {
+                                model.addRegion(sheet: regionSheet, range: regionRange)
+                                regionRange = ""
+                            }
+                            ForEach(model.sourceSheets, id: \.self) { name in
+                                let selection = model.regionSelections[name] ?? [:]
+                                Text("\(name): \(selection["sheet"] ?? "")!\(selection["range"] ?? "")")
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 if model.sourceSheets.count > 1 {
                     GroupBox("Worksheets in the protected workbook") {
                         VStack(alignment: .leading) {
