@@ -50,6 +50,14 @@ Classification does not make a value safe or anonymous. Both quasi-identifiers a
 
 Analyse the protected workbook locally or in an environment you have separately decided is suitable.
 
+For a newly structured result workbook, choose **ChatGPT will create a new result
+workbook** in the copyable prompt. Work out the rules in ChatGPT. Its returned
+workbook may contain different sheets, fields and rows. Keep exact `entity_id`
+values on participant rows and include `record_id` only when a result refers to
+one particular source row. New team labels may be short result values. Do not
+include original names or student numbers; SafeSet adds selected original fields
+locally during Restore. Summary sheets may have no participant IDs.
+
 In editing mode, change only the fields listed in the generated prompt. Keep all
 record and entity IDs, headings, rows and reference values intact. Use existing
 categories or codes and the approved numeric bounds. Do not add sheets or result
@@ -68,6 +76,33 @@ For the earlier append-results mode:
 Formulas in the original protected worksheets, unsafe text and unsupported spreadsheet content block restoration.
 
 ## Restore locally
+
+### Restore a new result workbook
+
+Select **Related sheets or editable workbook bundle**, then **Restore ChatGPT's
+new result sheets**. Choose the result workbook, exact original source, matching
+private bundle and a new output path. Validate. For each participant result sheet,
+choose an original source worksheet and only the fields you want restored. Choose
+an `entity_id` join when that source sheet has one row per participant, or an
+exact `record_id` join when the result refers to source rows. The default requires
+one result row per participant; explicitly allow repeats where the analysis needs
+them. Select **Update result joins and review**.
+
+SafeSet checks every referenced ID, exact record-to-entity linkage, source joins,
+safe result text and known codebooks. It shows result-sheet and field counts and
+counts of new category values. Inspect the returned workbook's assignments,
+approve each sheet, field, new-category group and source join, then authorise the
+new local workbook. The output contains only the result sheets, with selected
+original fields joined to participant rows. Source and returned files are not
+overwritten. SafeSet does not determine whether ChatGPT followed your allocation
+rules or whether a new team was necessary.
+
+This path supports version 3 or version 4 related-sheet bundles. It accepts static
+short result values, blank cells and new category labels. It rejects formulas,
+hidden sheets, unknown IDs and invented UUID-shaped codes. Existing protected
+worksheets need not be copied into the returned workbook.
+
+### Restore edits or appended results
 
 1. Choose **Restore a workbook**. Select the modified protected copy, the exact original source workbook and the private bundle. Choose a new restored output filename.
 2. Enter the passphrase. SafeSet unlocks the bundle locally and checks the original, record coverage, schemas, reference values and permitted changes. A mismatch blocks restoration; SafeSet never guesses an identity.

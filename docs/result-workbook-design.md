@@ -1,8 +1,9 @@
 # Result workbook restoration design
 
-Status: proposed workflow; the current macOS app and Python engine do not yet
-implement it. The existing editable-workbook and append-results modes retain
-their current contracts until this workflow is implemented and tested.
+Status: implemented as a separate result-workbook restoration path for related
+sheet bundles. Existing editable-workbook and append-results modes retain their
+current contracts. The current result path accepts static short result values;
+formula results, arbitrary free text and novel UUID-shaped codes remain blocked.
 
 ## Intended workflow
 
@@ -37,9 +38,11 @@ attributes. It does not define the result workbook's sheet or row layout.
   participant; adding and removing result rows does not imply changes to the
   original source.
 - Each restored source field is selected explicitly by source worksheet and
-  column. An entity join requires exactly one matching source row for every
-  result row; row-specific joins require a valid `record_id`. Missing or ambiguous
-  matches block publication. Source fields are never copied wholesale by default.
+  column. The operator chooses an entity or exact-record join for each linked
+  result sheet. An entity join requires exactly one matching source row for every
+  result row; row-specific joins require a valid `record_id` from the selected
+  source sheet. Missing or ambiguous matches block publication. Source fields are
+  never copied wholesale by default.
 - `entity_id` and `record_id` are control columns. They are removed from the
   locally restored output once selected source identifiers have been joined.
   An unlinked summary sheet contains only reviewed result fields.
@@ -47,7 +50,8 @@ attributes. It does not define the result workbook's sheet or row layout.
   field/codebook association. A new result category, such as a newly created
   `Team`, is reviewed as a new output value; it is not inserted into an existing
   source codebook or mistaken for an identity. An unknown UUID-shaped code or an
-  ambiguous field/codebook association blocks publication.
+  ambiguous field/codebook association blocks publication. The review counts
+  distinct new category values per result field and requires their approval.
 
 ## Validation and approval
 

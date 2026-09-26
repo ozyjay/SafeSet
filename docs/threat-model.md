@@ -67,6 +67,18 @@ restored workbook. Formula-like source strings remain literal text in that
 
 ## Version 4 editable workbook boundary
 
+The separate result-workbook path treats every returned sheet and value as
+untrusted. It does not require the returned workbook to preserve protected-sheet
+coverage. Instead, participant rows must carry authenticated `entity_id` values;
+any `record_id` must match its entity. The operator explicitly selects source
+fields and an entity or exact-record join. Unknown IDs, ambiguous source matches,
+unsupported values, unknown UUID-shaped codes and ambiguous field/codebook
+associations fail. New short category labels are reviewed as result values, never
+inserted into the encrypted source codebook. A summary sheet has no identity
+join. The output is a new local workbook containing only reviewed result sheets.
+The returned workbook can still contain analytically wrong assignments; SafeSet
+cannot verify a free-form rule discussed with ChatGPT.
+
 The opt-in Restore participant comparison permits only authenticated reference
 entities to become new target participants. It never relaxes original returned
 record coverage. Removals are derived from the operator-selected reference set,

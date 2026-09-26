@@ -61,6 +61,14 @@ validation on the protected workbook is unchanged. Missing, duplicate or unknown
 record IDs, changed entity links and unapproved field changes still block restore.
 No new rows, fields or sheets are accepted by this mode.
 
+The separate result-workbook path can create different sheets, fields and rows.
+It uses the original only for authenticated entity/record joins and source fields
+explicitly selected by the operator. Original protected rows are not required in
+the returned workbook. Known codes are decoded through their bound field domain;
+new short labels are reviewed as result categories. The validation review shows
+counts and headings, never returned cell values, identities or codebooks. Unknown
+identities, ambiguous joins and invented UUID-shaped codes block publication.
+
 Restoration reviews changed-cell counts per field and requires explicit approval
 for every changed field. It applies those values to a copy of the original package,
 preserving local worksheets, original formulas and formatting. The package binding
