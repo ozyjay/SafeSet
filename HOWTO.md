@@ -1,5 +1,24 @@
 # How to use SafeSet
 
+## Workbooks with titles, notes or several data regions
+
+Use **Select data regions within worksheets** on the macOS Protect page, or run
+`safeset discover-regions` locally. Suggestions are coordinates, not approved
+content. Confirm each worksheet and rectangular range, with the first row as
+headings. Name each logical region separately and decide what to do with every
+field. If a suggestion spans unrelated tables, enter separate exact ranges.
+Partial Excel Tables, overlapping ranges, hidden or merged data within a range
+and ambiguous headings block protection. Unselected content is absent from the
+protected workbook but remains in a new copy of the original on restoration.
+Version 5 bundles bind all selected coordinates and the entire source file.
+
+In the CLI, pair each `--region 'Logical=Worksheet!A3:D50'` with a
+`--sheet-policy 'Logical=policy.yaml'`. Repeated `--editable 'Logical=Field'`
+options permit specific source fields to change; omitted fields are reference
+only. `restore-regions` requires explicit `--approve-change 'Logical=Field'`
+for every changed field after reviewing the counts. Keep the bundle separate
+from exports and the repository.
+
 SafeSet protects a working copy for analysis, then restores approved results locally. It runs without a network connection.
 
 Passing validation reduces some disclosure risks. It does not prove anonymity or decide whether a copy is suitable to share. Keep source workbooks, private bundles and restored workbooks outside repositories and synchronised folders.

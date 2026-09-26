@@ -127,15 +127,21 @@ def changed_value(value: str, original: str, rule: ColumnRule, codes: dict) -> s
     return decoded if decoded != expected else None
 
 
-def source_coordinates(path: Path, sheets: tuple[str, ...]) -> tuple[dict, dict]:
+def source_coordinates(
+    path: Path, sheets: tuple[str, ...], regions: dict | None = None
+) -> tuple[dict, dict]:
     coordinates = {sheet: [] for sheet in sheets}
-    tables = read_excel_sheets(
-        path,
-        sheets,
-        allow_cached_formulas=True,
-        allow_source_dates=True,
-        observe_cell=lambda sheet, coordinate, _value: coordinates[sheet].append(coordinate),
-    )
+    def observer(sheet, coordinate, _value):
+        coordinates[sheet].append(coordinate)
+    if regions is None:
+        tables = read_excel_sheets(
+            path, sheets, allow_cached_formulas=True, allow_source_dates=True,
+            observe_cell=observer,
+        )
+    else:
+        from .regions import read_confirmed_regions
+
+        tables = read_confirmed_regions(path, regions, observe_cell=observer)
     rows = {}
     for sheet, table in tables.items():
         width = len(table.columns)
@@ -149,12 +155,13 @@ def source_coordinates(path: Path, sheets: tuple[str, ...]) -> tuple[dict, dict]
     return tables, rows
 
 
-def validate_editable_layout(path: Path, fields: dict) -> None:
-    _, coordinates = source_coordinates(path, tuple(fields))
+def validate_editable_layout(path: Path, fields: dict, regions: dict | None = None) -> None:
+    _, coordinates = source_coordinates(path, tuple(fields), regions)
     workbook = load_workbook(io.BytesIO(read_bounded(path)), data_only=False)
     try:
         if any(
-            workbook[sheet][row[name]].data_type in {"f", "d"}
+            workbook[regions[sheet]["sheet"] if regions else sheet][row[name]].data_type
+            in {"f", "d"}
             for sheet, names in fields.items()
             for row in coordinates[sheet]
             for name in names
@@ -181,19 +188,24 @@ def patched_workbook_bytes(path: Path, bundle: dict, restored: dict) -> bytes:
     if hashlib.sha256(data).hexdigest() != bundle["source_file_digest"]:
         raise SafetyError("Original workbook does not match the relational restoration bundle.")
     _check_archive(data)
-    validate_editable_layout(path, bundle["editable_fields"])
-    sources, coordinates = source_coordinates(path, tuple(bundle["sheets"]))
+    regions = bundle.get("regions")
+    validate_editable_layout(path, bundle["editable_fields"], regions)
+    sources, coordinates = source_coordinates(path, tuple(bundle["sheets"]), regions)
     if file_digest(path) != bundle["source_file_digest"]:
         raise SafetyError("A workbook changed after relational restoration review.")
     edits = {}
     for sheet, names in bundle["editable_fields"].items():
-        edits[sheet] = {}
+        physical = regions[sheet]["sheet"] if regions else sheet
+        edits.setdefault(physical, {})
         for index, source_row in enumerate(sources[sheet].rows):
             for name in names:
                 value = restored[sheet].rows[index][name]
                 if value != source_row[name]:
                     rule = bundle["sheets"][sheet]["policy"]["columns"][name]
-                    edits[sheet][coordinates[sheet][index][name]] = (
+                    coordinate = coordinates[sheet][index][name]
+                    if coordinate in edits[physical]:
+                        raise SafetyError("Editable workbook cell locations are ambiguous.")
+                    edits[physical][coordinate] = (
                         value,
                         rule["action"] == "keep_numeric",
                     )

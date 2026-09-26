@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+from .classification import inspect_table, safe_category
 from .desktop_flow import (
     approve_export,
     approve_protection,
@@ -20,7 +21,7 @@ from .desktop_flow import (
     prepare_relational_reconstruction,
     restore_results,
 )
-from .document import DocumentTerm, inspect_document
+from .document import DocumentTerm, inspect_document, review_document_content
 from .document_flow import (
     approve_document_protection,
     approve_document_restoration,
@@ -47,6 +48,7 @@ from .reconciliation import (
     prepare_participants,
     update_participants,
 )
+from .regions import discover_regions, read_confirmed_regions
 from .relational import read_relational_bundle
 from .result_workbook import (
     APPROVAL_ERROR as RESULT_WORKBOOK_APPROVAL_ERROR,
@@ -65,7 +67,7 @@ from .result_workbook import (
     prepare_result_workbook,
     update_result_workbook,
 )
-from .workbook_editing import editing_instructions
+from .workbook_editing import editing_instructions, file_digest
 
 PROTOCOL_VERSION = 1
 MAX_REQUEST = 1024 * 1024
@@ -212,6 +214,15 @@ PUBLIC_SAFETY_ERRORS = {
     ): "document_tracked_changes",
     "Word document contains hidden text that must be resolved first.": "document_hidden_text",
     "Word document contains unsupported embedded or active content.": "document_active_content",
+    "Word document has an unreviewable image.": "document_image",
+    "Word document has an unreviewable figure.": "document_image",
+    "Word document has an unreviewable linked image.": "document_image",
+    "Word document has ambiguous image relationships.": "document_image",
+    "Every document figure needs explicit local review.": "document_figure_review",
+    "Document paragraph removal selection is invalid.": "document_paragraph_review",
+    "A paragraph containing a figure cannot be removed.": "document_paragraph_review",
+    "Document changed after local content review.": "document_review_stale",
+    "Workbook changed after region confirmation.": "region_review_stale",
     "Word document comments require explicit removal before protection.": "document_comments",
     (
         "A document identifier is split across formatted runs and cannot be protected safely."
@@ -563,11 +574,14 @@ class Bridge:
         if command == "inspect_document":
             data = _payload(raw, {"source"})
             return inspect_document(_path(data["source"])).summary()
+        if command == "review_document_content":
+            data = _payload(raw, {"source"})
+            return review_document_content(_path(data["source"]))
         if command == "prepare_document_protection":
             data = _payload(
                 raw,
                 {"source", "output", "terms", "remove_comments"},
-                {"bundle"},
+                {"bundle", "reviewed_figures", "remove_paragraphs", "review_digest"},
             )
             if type(data["remove_comments"]) is not bool:
                 raise ValueError("remove comments")
@@ -577,6 +591,11 @@ class Bridge:
                 _path(data["output"]),
                 _path(data.get("bundle"), optional=True),
                 remove_comments=data["remove_comments"],
+                reviewed_figure_ids=_columns(data.get("reviewed_figures", [])),
+                remove_paragraph_ids=_columns(data.get("remove_paragraphs", [])),
+                reviewed_content_digest=(
+                    _string(data["review_digest"]) if "review_digest" in data else None
+                ),
             )
             token = new_id()
             self.pending = ("approve_document_protection", token, review)
@@ -608,6 +627,32 @@ class Bridge:
         if command == "list_sheets":
             data = _payload(raw, {"path"})
             return {"sheets": list(list_excel_sheets(_path(data["path"])))}
+        if command == "discover_regions":
+            data = _payload(raw, {"path"})
+            path = _path(data["path"])
+            return {"regions": list(discover_regions(path)), "source_digest": file_digest(path)}
+        if command in {"inspect_region", "region_categories"}:
+            required = {"source", "name", "region"}
+            if command == "region_categories":
+                required.add("column")
+            data = _payload(raw, required)
+            name = _string(data["name"])
+            table = read_confirmed_regions(_path(data["source"]), {name: data["region"]})[name]
+            if command == "inspect_region":
+                return inspect_table(table)
+            column = _string(data["column"])
+            if column not in table.columns:
+                raise SafetyError(
+                    "Source headings changed; load the Excel workbook headings again."
+                )
+            observed = [row[column] for row in table.rows]
+            blank_count = sum(not value.strip() for value in observed)
+            values = {value for value in observed if value.strip()}
+            if len(values) > 1000 or any(not safe_category(value) for value in values):
+                raise SafetyError(
+                    "Column has too many or unsafe distinct values for a category allowlist."
+                )
+            return {"values": sorted(values), "blank_count": blank_count}
         if command == "inspect":
             data = _payload(raw, {"source", "sheet"})
             return inspect_source(_path(data["source"]), _sheet(data["sheet"]))
@@ -670,8 +715,13 @@ class Bridge:
             data = _payload(
                 raw,
                 {"source", "sheets", "output", "drafts", "threshold", "validation_profile"},
-                {"bundle", "shared_code_fields", "editable_fields"},
+                {"bundle", "shared_code_fields", "editable_fields", "regions", "region_digest"},
             )
+            if "regions" in data and (
+                "region_digest" not in data
+                or _string(data["region_digest"]) != file_digest(_path(data["source"]))
+            ):
+                raise SafetyError("Workbook changed after region confirmation.")
             review = prepare_relational_protection(
                 _path(data["source"]),
                 _sheets(data["sheets"]),
@@ -689,6 +739,7 @@ class Bridge:
                     if "editable_fields" in data
                     else None
                 ),
+                data.get("regions"),
             )
             token = new_id()
             self.pending = ("approve_relational_protection", token, review)

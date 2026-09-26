@@ -27,9 +27,19 @@ MAX_DOCUMENT_TERMS = 64
 MAX_DOCUMENT_TERM = 256
 
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+V = "urn:schemas-microsoft-com:vml"
 
 EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w.-])")
 ORCID_RE = re.compile(r"(?<!\d)(?:\d{4}-){3}\d{3}[\dX](?!\d)", re.IGNORECASE)
+REVIEW_HINT_RE = re.compile(
+    r"\b(author|affiliation|acknowledg(?:e)?ments?|university|institute|department)\b",
+    re.IGNORECASE,
+)
+NAME_HINT_RE = re.compile(
+    r"\b(?:Dr|Prof|Professor|By)\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}\b"
+)
 
 TEXT_PART_RE = re.compile(
     r"^word/(?:document|header\d+|footer\d+|footnotes|endnotes)\.xml$"
@@ -69,6 +79,7 @@ class DocumentInspection:
     custom_properties: int
     metadata_fields: int
     external_relationships: int
+    figures: int
     blockers: tuple[str, ...]
 
     def summary(self) -> dict:
@@ -82,6 +93,7 @@ class DocumentInspection:
             "custom_properties": self.custom_properties,
             "metadata_fields": self.metadata_fields,
             "external_relationships": self.external_relationships,
+            "figures": self.figures,
             "blockers": list(self.blockers),
         }
 
@@ -232,6 +244,75 @@ def _relationship_count(parts: dict[str, bytes]) -> int:
     return total
 
 
+def document_figures(parts: dict[str, bytes]) -> tuple[dict[str, str | int], ...]:
+    """Inventory referenced images without returning image bytes or document prose."""
+    figures = []
+    reviewed_targets = set()
+    for name, root in _text_roots(parts):
+        parents = {child: parent for parent in root.iter() for child in parent}
+
+        def belongs_to(
+            node: ET.Element, paragraph: ET.Element, parent_map=parents
+        ) -> bool:
+            current = node
+            while current in parent_map:
+                current = parent_map[current]
+                if current.tag == f"{{{W}}}p":
+                    return current is paragraph
+            return False
+
+        parent = name.rsplit("/", 1)
+        rel_name = f"{parent[0]}/_rels/{parent[1]}.rels"
+        relationships = {}
+        if rel_name in parts:
+            rel_root = _parse_xml(parts[rel_name])
+            relationships = {item.attrib.get("Id"): item for item in rel_root}
+            if len(relationships) != len(rel_root):
+                raise SafetyError("Word document has ambiguous image relationships.")
+        for paragraph_number, paragraph in enumerate(root.iter(f"{{{W}}}p"), 1):
+            for drawing in paragraph.iter():
+                if not belongs_to(drawing, paragraph):
+                    continue
+                if drawing.tag in {f"{{{W}}}drawing", f"{{{W}}}pict"} and not any(
+                    child.tag in {f"{{{A}}}blip", f"{{{V}}}imagedata"}
+                    for child in drawing.iter()
+                ):
+                    raise SafetyError("Word document has an unreviewable figure.")
+            images = [
+                (node.attrib.get(f"{{{R}}}embed") or node.attrib.get(f"{{{R}}}link"))
+                if node.tag == f"{{{A}}}blip"
+                else node.attrib.get(f"{{{R}}}id")
+                for node in paragraph.iter()
+                if belongs_to(node, paragraph)
+                and node.tag in {f"{{{A}}}blip", f"{{{V}}}imagedata"}
+            ]
+            for number, relation_id in enumerate(images, 1):
+                relationship = relationships.get(relation_id)
+                if relationship is None or not relationship.attrib.get("Type", "").endswith(
+                    "/image"
+                ):
+                    raise SafetyError("Word document has an unreviewable image.")
+                if relationship.attrib.get("TargetMode", "").lower() == "external":
+                    raise SafetyError("Word document has an unreviewable linked image.")
+                target = relationship.attrib.get("Target", "")
+                if not target.startswith("media/") or f"word/{target}" not in parts:
+                    raise SafetyError("Word document has an unreviewable image.")
+                reviewed_targets.add(f"word/{target}")
+                identity = f"{name}:{paragraph_number}:{number}:{relation_id}"
+                figures.append({
+                    "id": hashlib.sha256(identity.encode()).hexdigest()[:16],
+                    "part": name,
+                    "paragraph": paragraph_number,
+                    "image": number,
+                })
+    if any(
+        name.startswith("word/media/") and name not in reviewed_targets
+        for name in parts
+    ):
+        raise SafetyError("Word document has an unreviewable image.")
+    return tuple(figures)
+
+
 def _metadata_field_count(parts: dict[str, bytes]) -> int:
     count = 0
     core = parts.get("docProps/core.xml")
@@ -255,7 +336,10 @@ def _metadata_field_count(parts: dict[str, bytes]) -> int:
 def inspect_document_bytes(data: bytes) -> DocumentInspection:
     parts = _read_parts(data)
     roots = _text_roots(parts)
-    text = _visible_text(roots) + "\n" + _relationship_text(parts)
+    attributes = "\n".join(
+        value for _, root in roots for node in root.iter() for value in node.attrib.values()
+    )
+    text = _visible_text(roots) + "\n" + attributes + "\n" + _relationship_text(parts)
     tracked = sum(
         1 for _, root in roots for item in root.iter() if item.tag in TRACKED_TAGS
     )
@@ -265,8 +349,12 @@ def inspect_document_bytes(data: bytes) -> DocumentInspection:
     embedded = sum(
         1
         for name in parts
-        if name.startswith("word/embeddings/") or name.lower().endswith("vbaproject.bin")
+        if name.startswith((
+            "word/embeddings/", "word/activeX/", "word/charts/",
+            "word/diagrams/", "word/afchunk/", "customXml/",
+        )) or name.lower().endswith("vbaproject.bin")
     )
+    figures = document_figures(parts)
     blockers = []
     if tracked:
         blockers.append("tracked_changes")
@@ -284,12 +372,74 @@ def inspect_document_bytes(data: bytes) -> DocumentInspection:
         custom_properties=1 if "docProps/custom.xml" in parts else 0,
         metadata_fields=_metadata_field_count(parts),
         external_relationships=_relationship_count(parts),
+        figures=len(figures),
         blockers=tuple(blockers),
     )
 
 
 def inspect_document(path: Path) -> DocumentInspection:
     return inspect_document_bytes(read_docx(path))
+
+
+def review_document_content(path: Path) -> dict:
+    """Explicit, local review request; excerpts must not enter routine inspection."""
+    source = read_docx(path)
+    parts = _read_parts(source)
+    return {
+        "source_digest": document_digest(source),
+        "figures": list(document_figures(parts)),
+        "suggestions": _review_suggestions(parts),
+    }
+
+
+def _review_suggestions(parts: dict[str, bytes]) -> list[dict]:
+    suggestions = []
+    for name, root in _text_roots(parts):
+        for number, node in enumerate(root.iter(f"{{{W}}}p"), 1):
+            paragraph = "".join(text.text or "" for text in node.iter(f"{{{W}}}t"))
+            if (
+                (REVIEW_HINT_RE.search(paragraph) or NAME_HINT_RE.search(paragraph))
+                and paragraph.strip()
+            ):
+                suggestions.append({
+                    "id": hashlib.sha256(f"{name}:{number}".encode()).hexdigest()[:16],
+                    "part": name,
+                    "paragraph": number,
+                    "excerpt": paragraph.strip()[:160],
+                })
+                if len(suggestions) == 32:
+                    break
+        if len(suggestions) == 32:
+            break
+    return suggestions
+
+
+def _remove_reviewed_paragraphs(parts: dict[str, bytes], selected: tuple[str, ...]) -> None:
+    suggestions = _review_suggestions(parts)
+    allowed = {item["id"] for item in suggestions}
+    if len(set(selected)) != len(selected) or not set(selected).issubset(allowed):
+        raise SafetyError("Document paragraph removal selection is invalid.")
+    if not selected:
+        return
+    selected_set = set(selected)
+    for name, root in _text_roots(parts):
+        parents = {child: parent for parent in root.iter() for child in parent}
+        changed = False
+        for number, paragraph in enumerate(list(root.iter(f"{{{W}}}p")), 1):
+            identifier = hashlib.sha256(f"{name}:{number}".encode()).hexdigest()[:16]
+            if identifier in selected_set:
+                if any(
+                    node.tag in {f"{{{A}}}blip", f"{{{V}}}imagedata"}
+                    for node in paragraph.iter()
+                ):
+                    raise SafetyError("A paragraph containing a figure cannot be removed.")
+                parent = parents.get(paragraph)
+                if parent is None:
+                    raise SafetyError("Document paragraph removal selection is invalid.")
+                parent.remove(paragraph)
+                changed = True
+        if changed:
+            parts[name] = _xml_bytes(root)
 
 
 def _validate_terms(terms: tuple[DocumentTerm, ...]) -> tuple[DocumentTerm, ...]:
@@ -368,8 +518,9 @@ def _discover_terms(
     found: list[DocumentTerm] = list(supplied)
     seen = {term.value for term in supplied}
     for _, root in roots:
-        for node in root.iter(f"{{{W}}}t"):
-            text = node.text or ""
+        texts = [text for text, _ in _paragraph_texts(root)]
+        texts.extend(value for node in root.iter() for value in node.attrib.values())
+        for text in texts:
             for value in EMAIL_RE.findall(text):
                 if value not in seen:
                     found.append(DocumentTerm(value, "email"))
@@ -407,15 +558,40 @@ def _replace_text_and_attributes(
     by_value = [(item["original"], item["token"]) for item in replacements]
 
     for name, root in roots:
+        for paragraph in root.iter(f"{{{W}}}p"):
+            nodes = [node for node in paragraph.iter(f"{{{W}}}t")]
+            combined = "".join(node.text or "" for node in nodes)
+            matches = []
+            for original, token in sorted(by_value, key=lambda pair: -len(pair[0])):
+                start = 0
+                while (at := combined.find(original, start)) >= 0:
+                    end = at + len(original)
+                    if not any(
+                        at < previous_end and previous_start < end
+                        for previous_start, previous_end, _ in matches
+                    ):
+                        matches.append((at, end, token))
+                    start = end
+            for start, end, token in sorted(matches, reverse=True):
+                offsets = []
+                cursor = 0
+                for node in nodes:
+                    next_cursor = cursor + len(node.text or "")
+                    offsets.append((cursor, next_cursor))
+                    cursor = next_cursor
+                first = next(index for index, (_, stop) in enumerate(offsets) if stop > start)
+                last = next(index for index, (_, stop) in enumerate(offsets) if stop >= end)
+                first_start = offsets[first][0]
+                last_start = offsets[last][0]
+                prefix = (nodes[first].text or "")[: start - first_start]
+                suffix = (nodes[last].text or "")[end - last_start :]
+                nodes[first].text = prefix + token + (suffix if first == last else "")
+                for index in range(first + 1, last):
+                    nodes[index].text = ""
+                if last != first:
+                    nodes[last].text = suffix
+                counts[token] += 1
         for node in root.iter():
-            if node.tag == f"{{{W}}}t" and node.text:
-                text = node.text
-                for original, token in by_value:
-                    occurrences = text.count(original)
-                    if occurrences:
-                        text = text.replace(original, token)
-                        counts[token] += occurrences
-                node.text = text
             for key, value in list(node.attrib.items()):
                 changed = value
                 for original, token in by_value:
@@ -539,6 +715,7 @@ def protect_document_bytes(
     terms: tuple[DocumentTerm, ...],
     *,
     remove_comments: bool = True,
+    remove_paragraph_ids: tuple[str, ...] = (),
 ) -> tuple[bytes, tuple[dict, ...], DocumentInspection]:
     parts = _read_parts(source)
     inspection = inspect_document_bytes(source)
@@ -549,16 +726,11 @@ def protect_document_bytes(
     if inspection.embedded_objects:
         raise SafetyError("Word document contains unsupported embedded or active content.")
 
+    _remove_reviewed_paragraphs(parts, remove_paragraph_ids)
     roots = _text_roots(parts)
     supplied = _validate_terms(terms)
     discovered = _discover_terms(roots, supplied)
     discovered = _discover_relationship_terms(parts, discovered)
-    values = tuple(term.value for term in discovered)
-    if _split_occurrence_exists(roots, values):
-        raise SafetyError(
-            "A document identifier is split across formatted runs and cannot be protected safely."
-        )
-
     used: set[str] = set()
     replacements = [
         {"token": _token(term.kind, used), "original": term.value, "kind": term.kind}
@@ -573,7 +745,7 @@ def protect_document_bytes(
 
     protected = _write_parts(parts)
     protected_parts = _read_parts(protected)
-    protected_text = _visible_text(_text_roots(protected_parts))
+    protected_text = _all_xml_text_and_attributes(protected_parts)
     for item in applied:
         if item["original"] in protected_text:
             raise SafetyError("A document identifier remained after protection.")

@@ -61,6 +61,9 @@ def guarded(function: Callable) -> Callable:
         "reconstruct_command": "cli.restore",
         "protect_relational_command": "cli.sanitise",
         "reconstruct_relational_command": "cli.restore",
+        "discover_regions_command": "cli.inspect",
+        "protect_regions_command": "cli.sanitise",
+        "restore_regions_command": "cli.restore",
     }[function.__name__]
 
     @wraps(function)
@@ -359,6 +362,116 @@ def _sheet_policies(values: list[str]) -> tuple[tuple[str, ...], dict[str, objec
     if not result:
         raise SafetyError("At least one --sheet-policy is required.")
     return tuple(result), result
+
+
+@app.command("discover-regions")
+@guarded
+def discover_regions_command(input_path: Path) -> None:
+    """Show local candidate ranges for explicit confirmation."""
+    from .regions import discover_regions
+
+    report({"candidates": discover_regions(input_path)})
+
+
+def _region_selections(values: list[str], names: tuple[str, ...]) -> dict:
+    selections = {}
+    for value in values:
+        if "=" not in value or "!" not in value:
+            raise SafetyError("Use --region Logical=Worksheet!A1:B3.")
+        logical, location = value.split("=", 1)
+        sheet, reference = location.rsplit("!", 1)
+        if logical in selections:
+            raise SafetyError("Workbook region selection is invalid.")
+        selections[logical] = {"sheet": sheet, "range": reference}
+    from .regions import validate_region_selections
+
+    return validate_region_selections(selections, names)
+
+
+@app.command("protect-regions")
+@guarded
+def protect_regions_command(
+    input_path: Path,
+    sheet_policy: Annotated[list[str], typer.Option("--sheet-policy")],
+    region: Annotated[list[str], typer.Option("--region")],
+    output: Annotated[Path, typer.Option()],
+    bundle_path: Annotated[Path | None, typer.Option("--bundle")] = None,
+    editable: Annotated[list[str] | None, typer.Option("--editable")] = None,
+    validation_profile: Annotated[str, typer.Option("--validation-profile")] = "strict",
+    approve_export: Annotated[bool, typer.Option("--approve-export")] = False,
+) -> None:
+    """Protect confirmed logical regions and bind a new editable source copy."""
+    from .regions import read_confirmed_regions
+    from .workbook_editing import file_digest, validate_editable_fields, validate_editable_layout
+
+    names, policies = _sheet_policies(sheet_policy)
+    selections = _region_selections(region, names)
+    fields = {name: [] for name in names}
+    for value in editable or []:
+        if "=" not in value:
+            raise SafetyError("Use --editable Logical=Field.")
+        logical, heading = value.split("=", 1)
+        if logical not in fields or heading in fields[logical]:
+            raise SafetyError("Editable fields must be explicitly selected reversible fields.")
+        fields[logical].append(heading)
+    validate_editable_fields(fields, policies)
+    sources = read_confirmed_regions(input_path, selections)
+    validate_editable_layout(input_path, fields, selections)
+    candidate = sanitise_relational(sources, policies)
+    validation = validate_relational(candidate, policies, validation_profile)
+    report(validation.summary())
+    validation.require_pass()
+    destination = output_destination(output, input_path)
+    from .storage import map_destination
+
+    private_bundle = map_destination(bundle_path or default_map_path(), destination, input_path)
+    report({
+        "confirmed_regions": selections,
+        "editable_fields": fields,
+        "protected_destination": str(destination),
+        "private_bundle": str(private_bundle),
+    })
+    if not approve_export and not typer.confirm(
+        "Approve these regions and protected workbook for intended use?", default=False
+    ):
+        raise SafetyError("Protection declined; no artefacts created.")
+    publish_relational_candidate(
+        input_path, names, sources, policies, candidate, validation,
+        destination, private_bundle, secret(confirm=True, bundle=True),
+        approved=True, editable_fields=fields,
+        source_file_digest=file_digest(input_path), regions=selections,
+    )
+    typer.echo("Protected region workbook and private bundle created.")
+
+
+@app.command("restore-regions")
+@guarded
+def restore_regions_command(
+    input_path: Path,
+    original_source: Annotated[Path, typer.Option("--original-source")],
+    bundle_path: Annotated[Path, typer.Option("--bundle")],
+    output: Annotated[Path, typer.Option()],
+    approve_change: Annotated[list[str] | None, typer.Option("--approve-change")] = None,
+    authorise: Annotated[bool, typer.Option("--authorise")] = False,
+) -> None:
+    """Apply approved region edits to a new copy of the original workbook."""
+    from .desktop_flow import approve_relational_reconstruction, prepare_relational_reconstruction
+
+    review = prepare_relational_reconstruction(
+        input_path, original_source, bundle_path, output, secret(bundle=True)
+    )
+    if review.bundle["version"] != 5:
+        raise SafetyError("Restore-regions requires a confirmed-region bundle.")
+    report({"changes": review.changes, "output": str(review.output)})
+    approved = _relational_result_columns(approve_change or [], tuple(review.bundle["sheets"]))
+    if not authorise and not typer.confirm(
+        "Authorise the reviewed changes in a new local workbook?", default=False
+    ):
+        raise SafetyError("Restoration declined; no artefact created.")
+    approve_relational_reconstruction(
+        review, review.new_columns, authorised=True, approved_changes=approved
+    )
+    typer.echo("Region workbook restored to a new local file.")
 
 
 @app.command("protect-relational")

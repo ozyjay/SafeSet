@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from safeset.document import DocumentTerm, inspect_document
+from safeset.document import DocumentTerm, inspect_document, review_document_content
+from safeset.document_bundle import decrypt_document_bundle, encrypt_document_bundle
 from safeset.document_flow import (
     approve_document_protection,
     approve_document_restoration,
@@ -53,23 +54,40 @@ def docx_bytes(
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
  <Default Extension="xml" ContentType="application/xml"/>
- <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
- <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
- <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
- <Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>
- <Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>
+ <Override PartName="/word/document.xml"
+  ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+ <Override PartName="/docProps/core.xml"
+  ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+ <Override PartName="/docProps/app.xml"
+  ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+ <Override PartName="/docProps/custom.xml"
+  ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>
+ <Override PartName="/word/comments.xml"
+  ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>
 </Types>'''
     root_rels = b'''<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
- <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
- <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
- <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
- <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/>
+ <Relationship Id="rId1"
+  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+  Target="word/document.xml"/>
+ <Relationship Id="rId2"
+  Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
+  Target="docProps/core.xml"/>
+ <Relationship Id="rId3"
+  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties"
+  Target="docProps/app.xml"/>
+ <Relationship Id="rId4"
+  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties"
+  Target="docProps/custom.xml"/>
 </Relationships>'''
     document_rels = b'''<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
- <Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="mailto:student@example.test" TargetMode="External"/>
- <Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>
+ <Relationship Id="rId9"
+  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+  Target="mailto:student@example.test" TargetMode="External"/>
+ <Relationship Id="rId10"
+  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
+  Target="comments.xml"/>
 </Relationships>'''
     core = b'''<?xml version="1.0" encoding="UTF-8"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
@@ -90,7 +108,9 @@ def docx_bytes(
 </Properties>'''
     comment_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
 <w:comments xmlns:w="{W}">
- <w:comment w:id="0" w:author="Synthetic Student"><w:p><w:r><w:t>Private comment</w:t></w:r></w:p></w:comment>
+ <w:comment w:id="0" w:author="Synthetic Student">
+  <w:p><w:r><w:t>Private comment</w:t></w:r></w:p>
+ </w:comment>
 </w:comments>'''.encode()
 
     stream = io.BytesIO()
@@ -199,7 +219,7 @@ def test_document_protection_blocks_unsupported_authoring_state(tmp_path, kwargs
         prepare_document_protection(source, (), protected, bundle)
 
 
-def test_document_protection_blocks_split_identity_across_runs(tmp_path):
+def test_document_protection_round_trips_split_identity_across_runs(tmp_path):
     source = tmp_path / "draft.docx"
     source.write_bytes(
         docx_bytes(
@@ -207,14 +227,47 @@ def test_document_protection_blocks_split_identity_across_runs(tmp_path):
             '<w:r><w:t>Student</w:t></w:r></w:p>'
         )
     )
+    protected, bundle, restored = destinations(tmp_path)
+    review = prepare_document_protection(
+        source,
+        (DocumentTerm("Synthetic Student", "person"),),
+        protected,
+        bundle,
+    )
+    assert review.replacement_occurrences == 2  # body plus synthetic relationship email
+    approve_document_protection(review, PASSPHRASE, approved=True)
+    assert "Synthetic Student" not in text_parts(protected.read_bytes())
+    returned = tmp_path / "returned.docx"
+    returned.write_bytes(protected.read_bytes())
+    restore_review = prepare_document_restoration(returned, bundle, restored, PASSPHRASE)
+    approve_document_restoration(restore_review, authorised=True)
+    assert "Synthetic Student" in text_parts(restored.read_bytes())
+
+
+def test_split_run_email_is_detected_without_explicit_term(tmp_path):
+    source = tmp_path / "draft.docx"
+    source.write_bytes(docx_bytes(
+        '<w:p><w:r><w:t>student@</w:t></w:r>'
+        '<w:r><w:t>example.test</w:t></w:r></w:p>'
+    ))
     protected, bundle, _ = destinations(tmp_path)
-    with pytest.raises(SafetyError, match="split across formatted runs"):
-        prepare_document_protection(
-            source,
-            (DocumentTerm("Synthetic Student", "person"),),
-            protected,
-            bundle,
-        )
+    review = prepare_document_protection(source, (), protected, bundle)
+    assert review.replacement_count == 1
+    approve_document_protection(review, PASSPHRASE, approved=True)
+    assert "student@example.test" not in text_parts(protected.read_bytes())
+
+
+def test_email_in_word_attribute_is_protected(tmp_path):
+    source = tmp_path / "draft.docx"
+    source.write_bytes(docx_bytes(
+        '<w:p synthetic-description="author@example.test">'
+        '<w:r><w:t>Synthetic results</w:t></w:r></w:p>'
+    ))
+    assert inspect_document(source).email_count == 2  # attribute and relationship
+    protected, bundle, _ = destinations(tmp_path)
+    review = prepare_document_protection(source, (), protected, bundle)
+    approve_document_protection(review, PASSPHRASE, approved=True)
+    assert "author@example.test" not in text_parts(protected.read_bytes())
 
 
 def test_document_restoration_rejects_missing_or_duplicated_token(tmp_path):
@@ -257,3 +310,98 @@ def test_document_protects_email_present_only_in_relationship(tmp_path):
     assert review.replacement_count == 1
     approve_document_protection(review, PASSPHRASE, approved=True)
     assert "student@example.test" not in text_parts(protected.read_bytes())
+
+
+def test_document_figure_requires_explicit_local_review(tmp_path):
+    source = tmp_path / "draft.docx"
+    base = docx_bytes(
+        '<w:p><w:r><w:t>Synthetic figure</w:t></w:r>'
+        '<w:drawing xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
+        ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        '<a:blip r:embed="rId11"/></w:drawing></w:p>'
+    )
+    with zipfile.ZipFile(io.BytesIO(base)) as archive:
+        parts = {name: archive.read(name) for name in archive.namelist()}
+    parts["word/_rels/document.xml.rels"] = parts["word/_rels/document.xml.rels"].replace(
+        b"</Relationships>",
+        b'<Relationship Id="rId11" Type="http://schemas.openxmlformats.org/'
+        b'officeDocument/2006/relationships/image" Target="media/image1.png"/>'
+        b"</Relationships>",
+    )
+    parts["word/media/image1.png"] = b"synthetic-image-placeholder"
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, raw in parts.items():
+            archive.writestr(name, raw)
+    source.write_bytes(output.getvalue())
+
+    content = review_document_content(source)
+    assert len(content["figures"]) == 1
+    figure_id = content["figures"][0]["id"]
+    protected, bundle, _ = destinations(tmp_path)
+    with pytest.raises(SafetyError, match="Every document figure"):
+        prepare_document_protection(source, (), protected, bundle)
+    review = prepare_document_protection(
+        source, (), protected, bundle, reviewed_figure_ids=(figure_id,),
+        reviewed_content_digest=content["source_digest"],
+    )
+    approve_document_protection(review, PASSPHRASE, approved=True)
+    with zipfile.ZipFile(protected) as archive:
+        assert archive.read("word/media/image1.png") == parts["word/media/image1.png"]
+    assert inspect_document(protected).figures == 1
+
+
+def test_suggested_author_paragraph_can_be_removed_explicitly(tmp_path):
+    source = tmp_path / "draft.docx"
+    source.write_bytes(docx_bytes(
+        '<w:p><w:r><w:t>Author: Synthetic Student</w:t></w:r></w:p>'
+        '<w:p><w:r><w:t>Results from synthetic study.</w:t></w:r></w:p>'
+    ))
+    content = review_document_content(source)
+    suggestions = content["suggestions"]
+    assert len(suggestions) == 1
+    protected, bundle, _ = destinations(tmp_path)
+    with pytest.raises(SafetyError, match="paragraph removal selection"):
+        prepare_document_protection(
+            source, (), protected, bundle, remove_paragraph_ids=("bad",),
+            reviewed_content_digest=content["source_digest"],
+        )
+    with pytest.raises(SafetyError, match="changed after local content review"):
+        prepare_document_protection(
+            source, (), protected, bundle,
+            remove_paragraph_ids=(suggestions[0]["id"],),
+            reviewed_content_digest="0" * 64,
+        )
+    review = prepare_document_protection(
+        source, (), protected, bundle,
+        remove_paragraph_ids=(suggestions[0]["id"],),
+        reviewed_content_digest=content["source_digest"],
+    )
+    approve_document_protection(review, PASSPHRASE, approved=True)
+    protected_text = text_parts(protected.read_bytes())
+    assert "Author: Synthetic Student" not in protected_text
+    assert "Results from synthetic study." in protected_text
+
+
+def test_legacy_document_bundle_stays_readable():
+    bundle = {
+        "version": 1,
+        "document_id": "00000000-0000-4000-8000-000000000001",
+        "source_digest": "0" * 64,
+        "protected_digest": "1" * 64,
+        "replacements": [],
+        "comments_removed": False,
+    }
+    encrypted = encrypt_document_bundle(bundle, PASSPHRASE)
+    assert encrypted.startswith(b"SAFESETD1\n")
+    assert decrypt_document_bundle(encrypted, PASSPHRASE) == bundle
+
+
+def test_unreviewable_drawing_blocks_document_protection(tmp_path):
+    source = tmp_path / "draft.docx"
+    source.write_bytes(docx_bytes(
+        '<w:p><w:r><w:drawing><chart>synthetic chart</chart></w:drawing></w:r></w:p>'
+    ))
+    protected, bundle, _ = destinations(tmp_path)
+    with pytest.raises(SafetyError, match="unreviewable figure"):
+        prepare_document_protection(source, (), protected, bundle)

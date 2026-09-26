@@ -61,6 +61,13 @@ validation on the protected workbook is unchanged. Missing, duplicate or unknown
 record IDs, changed entity links and unapproved field changes still block restore.
 No new rows, fields or sheets are accepted by this mode.
 
+Version 5 binds explicitly confirmed source regions to separate logical protected
+worksheets. Each region is independently classified and validated. Overlapping
+regions, partial Excel Tables, hidden or merged data inside a selected region,
+unreviewed fields and stale source files block publication. Unselected source
+content stays local and is preserved in a new restored copy. Region suggestions
+are advisory and contain coordinates only; they never grant export permission.
+
 The separate result-workbook path can create different sheets, fields and rows.
 It uses the original only for authenticated entity/record joins and source fields
 explicitly selected by the operator. Original protected rows are not required in

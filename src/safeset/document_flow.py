@@ -8,7 +8,9 @@ from pathlib import Path
 from .document import (
     DocumentInspection,
     DocumentTerm,
+    _read_parts,
     document_digest,
+    document_figures,
     protect_document_bytes,
     read_docx,
     require_docx_path,
@@ -66,22 +68,42 @@ def prepare_document_protection(
     bundle_path: Path | None = None,
     *,
     remove_comments: bool = True,
+    reviewed_figure_ids: tuple[str, ...] = (),
+    remove_paragraph_ids: tuple[str, ...] = (),
+    reviewed_content_digest: str | None = None,
 ) -> DocumentProtectionReview:
     source_path = Path(source_path)
     source = read_docx(source_path)
+    if (
+        (reviewed_figure_ids or remove_paragraph_ids) and reviewed_content_digest is None
+    ) or (
+        reviewed_content_digest is not None
+        and reviewed_content_digest != document_digest(source)
+    ):
+        raise SafetyError("Document changed after local content review.")
+    figures = document_figures(_read_parts(source))
+    expected_figures = {figure["id"] for figure in figures}
+    if (
+        len(set(reviewed_figure_ids)) != len(reviewed_figure_ids)
+        or set(reviewed_figure_ids) != expected_figures
+    ):
+        raise SafetyError("Every document figure needs explicit local review.")
     require_docx_path(output)
     output = output_destination(Path(output), source_path)
     bundle_path = _bundle_destination(bundle_path, output, source_path)
     protected, replacements, inspection = protect_document_bytes(
-        source, terms, remove_comments=remove_comments
+        source, terms, remove_comments=remove_comments,
+        remove_paragraph_ids=remove_paragraph_ids,
     )
     bundle = {
-        "version": 1,
+        "version": 2,
         "document_id": new_id(),
         "source_digest": document_digest(source),
         "protected_digest": document_digest(protected),
         "replacements": [dict(item) for item in replacements],
         "comments_removed": bool(remove_comments and inspection.comments),
+        "reviewed_figures": list(reviewed_figure_ids),
+        "removed_paragraphs": list(remove_paragraph_ids),
     }
     return DocumentProtectionReview(
         source_path=source_path.resolve(),

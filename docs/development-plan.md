@@ -65,7 +65,11 @@ The supplied synthetic policy is illustrative, not an institutional policy.
 
 DOCX protection/restoration is being added as a second first-class artefact workflow rather than extending the spreadsheet policy model. The first vertical slice provides bounded DOCX package parsing, aggregate inspection, explicit identity terms, automatic email/ORCID protection, metadata stripping, optional comment removal, random reversible tokens, encrypted document bundles and exact-token restoration.
 
-Tracked changes, hidden text, embedded/active content and split-run identities fail closed. Deferred document work includes richer review of affiliations/acknowledgements, image/figure inspection, safe tracked-change flattening, better Word run reconstruction and additional Office formats.
+Tracked changes, hidden text and embedded/active content fail closed. The next
+iteration added explicit local suggestions for affiliations and acknowledgements,
+split-run exact-term protection and a figure inventory with operator review.
+Figure pixels remain unexamined. Deferred document work includes safe tracked-change
+flattening, richer Word run reconstruction and additional Office formats.
 
 ## Native Windows desktop
 

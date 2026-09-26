@@ -69,6 +69,8 @@ def _unchanged(review):
 
 
 def _sources(source, bundle):
+    if bundle["version"] == 5:
+        raise SafetyError("Result-workbook joins do not support confirmed-region bundles.")
     tables = read_excel_sheets(
         source, tuple(bundle["sheets"]), allow_cached_formulas=True, allow_source_dates=True
     )

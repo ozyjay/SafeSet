@@ -1,5 +1,34 @@
 # Verification
 
+## Confirmed regions and manuscript review — 26 September 2026
+
+The shared engine now has a version 5 confirmed-region editable workbook path and
+a version 2 document bundle with explicit figure and paragraph review. Synthetic
+tests exercise two different logical tables on one worksheet, preservation of
+titles and notes, overlapping and partial-table rejection, stale source binding,
+split-run identity restoration, figure acknowledgement, suggested paragraph
+removal and legacy document-bundle readability. The region round trip blocks
+socket creation. The macOS UI and CLI expose the new review controls.
+
+- Python suite: **331 passed, 24 Windows-only tests skipped** at the latest
+  full run.
+- Ruff: whole repository passed after formatting synthetic fixture XML.
+- Swift package: **24 tests passed** and the macOS app sources compiled.
+- Release-configuration macOS app build and strict local code-signature check
+  passed. Its relocated helper completed the existing synthetic legacy and
+  editable workbook smoke paths. The packaged helper also answered the new
+  region-discovery and manuscript-review commands using synthetic inputs.
+  Full new-path protect/restore was verified in the Python suite, not in the
+  packaged smoke script.
+- Source distribution and wheel built with Hatchling 1.32.4. The wheel contains
+  the new region module and package metadata only; an isolated local install
+  exposed the new workbook and document CLI commands. This smoke did not run
+  the new workflows from the installed wheel.
+- No native Windows build, encrypted Windows round trip, packaged-app smoke,
+  second-user ACL check, signing or notarisation was completed here. Windows
+  publication remains disabled in its preview shell. This is not a two-platform
+  release verification.
+
 ## New result rows without original record IDs — 26 September 2026
 
 Result workbook review now accepts blank `record_id` cells when a new result row

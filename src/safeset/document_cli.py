@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import getpass
 from pathlib import Path
+from typing import Annotated
 
 import typer
 
-from .document import DocumentTerm, inspect_document
+from .document import DocumentTerm, inspect_document, review_document_content
 from .document_flow import (
     approve_document_protection,
     approve_document_restoration,
@@ -52,23 +53,46 @@ def inspect(source: Path) -> None:
     typer.echo(f"Authoring metadata fields: {review.metadata_fields}")
     typer.echo(f"Custom-properties part: {review.custom_properties}")
     typer.echo(f"External relationships: {review.external_relationships}")
+    typer.echo(f"Figures requiring review: {review.figures}")
     if review.blockers:
         typer.echo("Protection blockers: " + ", ".join(review.blockers))
+
+
+@app.command("review-content")
+def review_content(source: Path) -> None:
+    """Explicitly show bounded local manuscript suggestions and figure locations."""
+    try:
+        review = review_document_content(source)
+    except SafetyError as error:
+        typer.echo(str(error), err=True)
+        raise typer.Exit(2) from None
+    for suggestion in review["suggestions"]:
+        location = f"{suggestion['part']} paragraph {suggestion['paragraph']}"
+        typer.echo(f"Paragraph {suggestion['id']} at {location}: {suggestion['excerpt']}")
+    for figure in review["figures"]:
+        location = f"{figure['part']} paragraph {figure['paragraph']} image {figure['image']}"
+        typer.echo(f"Figure {figure['id']}: {location}")
+    typer.echo(f"Review digest: {review['source_digest']}")
 
 
 @app.command()
 def protect(
     source: Path,
-    output: Path = typer.Option(..., "--output"),
-    bundle: Path | None = typer.Option(None, "--bundle"),
-    person: list[str] | None = typer.Option(None, "--person"),
-    identifier: list[str] | None = typer.Option(None, "--identifier"),
-    keep_comments: bool = typer.Option(
-        False,
-        "--keep-comments",
-        help="Keep comments only when none exist; comments otherwise block protection.",
-    ),
-    authorise: bool = typer.Option(False, "--authorise"),
+    output: Annotated[Path, typer.Option("--output")],
+    bundle: Annotated[Path | None, typer.Option("--bundle")] = None,
+    person: Annotated[list[str] | None, typer.Option("--person")] = None,
+    identifier: Annotated[list[str] | None, typer.Option("--identifier")] = None,
+    reviewed_figure: Annotated[list[str] | None, typer.Option("--reviewed-figure")] = None,
+    remove_paragraph: Annotated[list[str] | None, typer.Option("--remove-paragraph")] = None,
+    review_digest: Annotated[str | None, typer.Option("--review-digest")] = None,
+    keep_comments: Annotated[
+        bool,
+        typer.Option(
+            "--keep-comments",
+            help="Keep comments only when none exist; comments otherwise block protection.",
+        ),
+    ] = False,
+    authorise: Annotated[bool, typer.Option("--authorise")] = False,
 ) -> None:
     """Review and, with --authorise, create a protected DOCX and private bundle."""
     try:
@@ -78,6 +102,9 @@ def protect(
             output,
             bundle,
             remove_comments=not keep_comments,
+            reviewed_figure_ids=tuple(reviewed_figure or []),
+            remove_paragraph_ids=tuple(remove_paragraph or []),
+            reviewed_content_digest=review_digest,
         )
         typer.echo(f"Identifiers protected: {review.replacement_count}")
         typer.echo(f"Protected occurrences: {review.replacement_occurrences}")
@@ -100,9 +127,9 @@ def protect(
 @app.command()
 def restore(
     returned: Path,
-    bundle: Path = typer.Option(..., "--bundle"),
-    output: Path = typer.Option(..., "--output"),
-    authorise: bool = typer.Option(False, "--authorise"),
+    bundle: Annotated[Path, typer.Option("--bundle")],
+    output: Annotated[Path, typer.Option("--output")],
+    authorise: Annotated[bool, typer.Option("--authorise")] = False,
 ) -> None:
     """Review and, with --authorise, restore protected identifiers locally."""
     try:

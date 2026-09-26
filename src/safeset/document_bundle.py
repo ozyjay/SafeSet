@@ -14,7 +14,8 @@ from .ingestion import read_bounded
 from .mapping import MAP_LIMIT, _fernet, _unique_object
 from .storage import check_map_read
 
-MAGIC = b"SAFESETD1\n"
+MAGIC = b"SAFESETD2\n"
+LEGACY_MAGIC = b"SAFESETD1\n"
 MAX_REPLACEMENTS = 128
 
 
@@ -27,11 +28,13 @@ def validate_document_bundle(value: object) -> dict:
         "replacements",
         "comments_removed",
     }
+    if isinstance(value, dict) and value.get("version") == 2:
+        keys |= {"reviewed_figures", "removed_paragraphs"}
     if (
         not isinstance(value, dict)
         or set(value) != keys
         or type(value["version"]) is not int
-        or value["version"] != 1
+        or value["version"] not in {1, 2}
         or not isinstance(value["document_id"], str)
         or len(value["document_id"]) != 36
         or not isinstance(value["source_digest"], str)
@@ -43,7 +46,32 @@ def validate_document_bundle(value: object) -> dict:
         or len(value["replacements"]) > MAX_REPLACEMENTS
     ):
         raise SafetyError("Document restoration bundle version or structure is unsupported.")
-    if any(ch not in "0123456789abcdef" for ch in value["source_digest"] + value["protected_digest"]):
+    digests = value["source_digest"] + value["protected_digest"]
+    if any(ch not in "0123456789abcdef" for ch in digests):
+        raise SafetyError("Document restoration bundle is malformed.")
+    if value["version"] == 2 and (
+        not isinstance(value["reviewed_figures"], list)
+        or len(value["reviewed_figures"]) > 512
+        or any(
+            not isinstance(item, str)
+            or len(item) != 16
+            or any(ch not in "0123456789abcdef" for ch in item)
+            for item in value["reviewed_figures"]
+        )
+        or len(value["reviewed_figures"]) != len(set(value["reviewed_figures"]))
+    ):
+        raise SafetyError("Document restoration bundle is malformed.")
+    if value["version"] == 2 and (
+        not isinstance(value["removed_paragraphs"], list)
+        or len(value["removed_paragraphs"]) > 32
+        or any(
+            not isinstance(item, str)
+            or len(item) != 16
+            or any(ch not in "0123456789abcdef" for ch in item)
+            for item in value["removed_paragraphs"]
+        )
+        or len(value["removed_paragraphs"]) != len(set(value["removed_paragraphs"]))
+    ):
         raise SafetyError("Document restoration bundle is malformed.")
 
     tokens = set()
@@ -74,21 +102,26 @@ def encrypt_document_bundle(bundle: dict, passphrase: str) -> bytes:
     validate_document_bundle(bundle)
     salt = os.urandom(16)
     payload = json.dumps(bundle, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
-    encrypted = MAGIC + salt + _fernet(passphrase, salt).encrypt(payload)
+    magic = MAGIC if bundle["version"] == 2 else LEGACY_MAGIC
+    encrypted = magic + salt + _fernet(passphrase, salt).encrypt(payload)
     if len(encrypted) > MAP_LIMIT:
         raise SafetyError("Document restoration bundle exceeds the supported size limit.")
     return encrypted
 
 
 def decrypt_document_bundle(data: bytes, passphrase: str) -> dict:
-    if len(data) > MAP_LIMIT or not data.startswith(MAGIC) or len(data) < len(MAGIC) + 17:
+    magic = MAGIC if data.startswith(MAGIC) else LEGACY_MAGIC
+    if len(data) > MAP_LIMIT or not data.startswith(magic) or len(data) < len(magic) + 17:
         raise SafetyError("Document restoration bundle version or envelope is unsupported.")
-    salt = data[len(MAGIC) : len(MAGIC) + 16]
+    salt = data[len(magic) : len(magic) + 16]
     try:
         payload = _fernet(passphrase, salt).decrypt(data[len(MAGIC) + 16 :])
-        return validate_document_bundle(
+        bundle = validate_document_bundle(
             json.loads(payload, object_pairs_hook=_unique_object)
         )
+        if (bundle["version"] == 2) != (magic == MAGIC):
+            raise SafetyError("Document restoration bundle version or envelope is unsupported.")
+        return bundle
     except (InvalidToken, UnicodeError, ValueError, RecursionError, TypeError):
         raise SafetyError(
             "Document restoration bundle could not be authenticated or decoded."
