@@ -431,7 +431,11 @@ struct SourceCellLocation: Identifiable {
                 let message: String
                 if case BridgeFailure.rejected(let text) = error { message = text }
                 else { message = "The bundled SafeSet engine is unavailable." }
-                DispatchQueue.main.async { self.busy = false; self.alert = message }
+                DispatchQueue.main.async {
+                    self.busy = false
+                    self.invalidate()
+                    self.alert = message
+                }
             }
         }
     }

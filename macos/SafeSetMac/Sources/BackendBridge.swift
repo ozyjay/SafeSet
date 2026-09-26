@@ -65,6 +65,7 @@ final class BackendBridge: @unchecked Sendable {
         let code = response["error"] as? String ?? "invalid_request"
         let message: String
         switch code {
+        case "review_expired": message = "This review is no longer active. Select Validate and review again, then update your field selections before approving restoration."
         case "safety_rejected": message = "SafeSet rejected this operation. Review the files and decisions."
         case "result_workbook_invalid": message = "The result workbook contains an unknown or mismatched pseudonymous ID, an unsafe value, or an unsupported structure. Keep result cells to short safe values and use only IDs from the protected workbook."
         case "result_workbook_join": message = "Choose source fields and a matching source worksheet for each participant result sheet. Every result ID must have one unambiguous source match. Correct the selection, then validate again."

@@ -73,6 +73,7 @@ MAX_RESPONSE = 1024 * 1024
 
 # Only fixed, value-free codes cross the desktop boundary. Unknown errors stay generic.
 PUBLIC_SAFETY_ERRORS = {
+    "Review is stale; prepare and review again.": "review_expired",
     RESULT_WORKBOOK_ERROR: "result_workbook_invalid",
     RESULT_WORKBOOK_JOIN_ERROR: "result_workbook_join",
     RESULT_WORKBOOK_APPROVAL_ERROR: "result_workbook_approval",
@@ -519,6 +520,17 @@ class Bridge:
                 authorised=True,
             )
             return {"created": True, "rows": rows}
+        if command == "locate_unsafe_source_cells":
+            data = _payload(raw, {"source", "bundle", "passphrase", "relational", "sheet"})
+            if type(data["relational"]) is not bool:
+                raise ValueError("relational")
+            return locate_unsafe_source_cells(
+                _path(data["source"]),
+                _path(data["bundle"]),
+                _string(data["passphrase"]),
+                relational=data["relational"],
+                sheet=_sheet_selection(data["sheet"]),
+            )
         self.pending = None
         if command == "prepare_result_workbook":
             data = _payload(raw, {"returned", "source", "bundle", "output", "passphrase"})
@@ -599,17 +611,6 @@ class Bridge:
         if command == "inspect":
             data = _payload(raw, {"source", "sheet"})
             return inspect_source(_path(data["source"]), _sheet(data["sheet"]))
-        if command == "locate_unsafe_source_cells":
-            data = _payload(raw, {"source", "bundle", "passphrase", "relational", "sheet"})
-            if type(data["relational"]) is not bool:
-                raise ValueError("relational")
-            return locate_unsafe_source_cells(
-                _path(data["source"]),
-                _path(data["bundle"]),
-                _string(data["passphrase"]),
-                relational=data["relational"],
-                sheet=_sheet_selection(data["sheet"]),
-            )
         if command == "categories":
             data = _payload(raw, {"source", "sheet", "column"})
             review = local_category_review(
