@@ -154,6 +154,32 @@ def test_mismatched_record_id_blocks_result(editing):
     assert not editing.restored.exists()
 
 
+def test_blank_record_id_for_new_result_row_uses_entity_join(editing):
+    result_input(
+        editing,
+        lambda rows, _: rows[2].update(record_id=""),
+        include_record_id=True,
+    )
+    review = prepare(editing)
+    assert review.summary["sheets"]["New Allocations"]["blank_record_ids"] == 1
+    ready = update_result_workbook(review, join())
+    assert ready.summary["ready"]
+    exact = join()
+    exact["New Allocations"]["join_by"] = "record_id"
+    with pytest.raises(SafetyError, match="source-field selections"):
+        update_result_workbook(review, exact)
+
+
+def test_invented_nonblank_record_id_still_fails(editing):
+    result_input(
+        editing,
+        lambda rows, _: rows[2].update(record_id="00000000-0000-4000-8000-000000000001"),
+        include_record_id=True,
+    )
+    with pytest.raises(SafetyError, match="structure, identities"):
+        prepare(editing)
+
+
 def test_duplicate_result_entity_requires_explicit_multiple_row_choice(editing):
     result_input(editing, lambda rows, _: rows[0].update(entity_id=rows[1]["entity_id"]))
     review = prepare(editing)

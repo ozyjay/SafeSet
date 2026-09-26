@@ -173,7 +173,7 @@ struct SourceCellLocation: Identifiable {
         guard !instructions.isEmpty else { return base }
         if resultWorkbookPrompt {
             return base + "\n\nOptional analysis task:\n" + instructions
-                + "\n\nKeep every entity_id and record_id link exact. New result labels may be "
+                + "\n\nKeep every entity_id and supplied record_id link exact; leave record_id blank for new rows without an original record. New result labels may be "
                 + "created; do not invent pseudonymous IDs or source codes."
         }
         return base + "\n\nUser's analysis task (apply only within the permissions and "
@@ -786,6 +786,12 @@ struct SourceCellLocation: Identifiable {
 
     func acceptRestorationReview(_ result: [String: Any]) {
         restorationReview = result
+        if result["result_workbook"] as? Bool == true,
+           let sheets = result["sheets"] as? [String: [String: Any]] {
+            for (sheet, info) in sheets where (info["blank_record_ids"] as? Int ?? 0) > 0 {
+                resultJoinByRecord.remove(sheet)
+            }
+        }
         latestAnalysisPrompt = result["analysis_prompt"] as? String ?? restorationCopyText
         approvedResults = []
         approvedSheets = []

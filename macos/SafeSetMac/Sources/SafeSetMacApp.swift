@@ -35,7 +35,7 @@ func plainLanguageSuggestion(_ classification: String) -> String {
 let restorationAnalysisGuidance = "Please analyse the protected Excel workbook and return a modified .xlsx file that SafeSet can restore. Use the protected workbook as the base. Preserve every original worksheet, row, heading, record_id, entity_id and protected value exactly, including heading spelling and case. Keep each original record_id exactly once on its original worksheet. You may reorder columns and add new result columns anywhere, or add separate analysis worksheets. Give new result columns unique headings and do not change protected values. Do not request the original source, private bundle or passphrase."
 let restorationResultExample = "For each new result column on a protected worksheet, give every row a short value such as Campus mismatch or No change; blank result cells are not supported. Do not put formulas in protected worksheets. Put each added analysis table on its own worksheet, with unique column headings in row 1 and data immediately below. Do not merge cells or add title rows, spacer rows or narrative paragraphs inside the workbook. Added analysis cells may be blank; non-blank results must be short categories of at most four words and 64 characters, without names, email addresses, dates, times or other identifiers. Put longer explanations in your ChatGPT reply, outside the workbook. Use static values where possible. If added analysis cells contain formulas, the workbook must include saved scalar results. Before returning the file, compare each protected worksheet's row count and exact record_id values with the input workbook; every original ID must appear once on the same worksheet, with no new IDs in protected worksheets. SafeSet copies approved results into static tables, so formulas, formatting and drawings are not preserved. If you cannot keep the original workbook intact, explain the limitation instead of returning a changed file."
 let restorationCopyText = "\(restorationAnalysisGuidance)\n\n\(restorationResultExample)"
-let resultWorkbookCopyText = "Create a new result .xlsx workbook from the attached SafeSet-protected workbook. You may create, rename or omit result worksheets, fields and rows; you do not need to copy the original protected sheets. For every participant-level result row, include its exact entity_id from the protected workbook. Include record_id only when the result refers to a particular original row, and keep its matching entity_id. Never invent or alter either ID or infer an identity. Aggregate sheets may omit IDs. Use short, safe result values; new team labels are allowed, but do not invent UUID-shaped source codes. Keep the original field heading when reusing an obfuscated category code so SafeSet can decode it. Do not include names, student numbers, formulas, merged cells, hidden sheets, title rows or narrative cells. Put explanations in your reply. Return a new .xlsx file. SafeSet will locally validate the IDs and join only source fields explicitly selected by the operator. Do not request the original source, private bundle or passphrase."
+let resultWorkbookCopyText = "Create a new result .xlsx workbook from the attached SafeSet-protected workbook. You may create, rename or omit result worksheets, fields and rows; you do not need to copy the original protected sheets. For every participant-level result row, include its exact entity_id from the protected workbook. Include record_id only when the result refers to a particular original row, and keep its matching entity_id. If you include a record_id column, leave it blank for a new result row that has no original record; never invent an ID. Never alter an existing ID or infer an identity. Aggregate sheets may omit IDs. Use short, safe result values; new team labels are allowed, but do not invent UUID-shaped source codes. Keep the original field heading when reusing an obfuscated category code so SafeSet can decode it. Do not include names, student numbers, formulas, merged cells, hidden sheets, title rows or narrative cells. Put explanations in your reply. Return a new .xlsx file. SafeSet will locally validate the IDs and join only source fields explicitly selected by the operator. Do not request the original source, private bundle or passphrase."
 
 func copyRestorationPrompt(_ text: String = restorationCopyText) {
     NSPasteboard.general.clearContents()
@@ -1454,6 +1454,10 @@ struct ResultWorkbookReviewView: View {
                     Divider()
                     Text("\(sheet): \(info["rows"] as? Int ?? 0) result rows")
                         .appFont(13, weight: .semibold)
+                    if let blank = info["blank_record_ids"] as? Int, blank > 0 {
+                        Text("\(blank) result rows have no original record_id; join these by entity_id.")
+                            .foregroundStyle(.secondary)
+                    }
                     if info["linked"] as? Bool == true {
                         Picker("Original worksheet for \(sheet)", selection: Binding(
                             get: { model.resultJoinSources[sheet] ?? "" },
@@ -1482,7 +1486,8 @@ struct ResultWorkbookReviewView: View {
                                 ))
                             }
                         }
-                        if info["has_record_id"] as? Bool == true {
+                        if info["has_record_id"] as? Bool == true,
+                           info["blank_record_ids"] as? Int == 0 {
                             Toggle("Join by exact record_id", isOn: Binding(
                                 get: { model.resultJoinByRecord.contains(sheet) },
                                 set: {
