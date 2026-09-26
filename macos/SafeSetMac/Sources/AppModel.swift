@@ -145,8 +145,6 @@ struct SourceCellLocation: Identifiable {
     @Published var resultJoinByRecord: Set<String> = []
     @Published var resultAllowRepeatedEntities: Set<String> = []
     @Published var resultConfigChanged = false
-    @Published var approvedResultCategories: Set<String> = []
-    @Published var approvedResultJoins: Set<String> = []
     @Published var legacyPolicy = ""
     @Published var legacyMap = ""
     @Published var legacyOutput = ""
@@ -349,17 +347,7 @@ struct SourceCellLocation: Identifiable {
     var canApproveRestoration: Bool {
         guard let review = restorationReview, review["review_id"] is String else { return false }
         if review["result_workbook"] as? Bool == true {
-            guard review["ready"] as? Bool == true, !resultConfigChanged,
-                  let sheets = review["sheets"] as? [String: [String: Any]] else { return false }
-            let fields = Set(sheets.flatMap { sheet, info in
-                (info["result_fields"] as? [String] ?? []).map { "\(sheet)::\($0)" }
-            })
-            let categories = Set(sheets.flatMap { sheet, info in
-                (info["new_categories"] as? [String: Int] ?? [:]).keys.map { "\(sheet)::\($0)" }
-            })
-            let linked = Set(sheets.filter { $0.value["linked"] as? Bool == true }.map(\.key))
-            return approvedSheets == Set(sheets.keys) && approvedResults == fields
-                && approvedResultCategories == categories && approvedResultJoins == linked
+            return review["ready"] as? Bool == true && !resultConfigChanged
         }
         if review["reconciliation"] as? Bool == true {
             guard !participantConfigChanged, review["ready"] as? Bool == true,
@@ -784,8 +772,6 @@ struct SourceCellLocation: Identifiable {
         resultConfigChanged = true
         approvedSheets = []
         approvedResults = []
-        approvedResultCategories = []
-        approvedResultJoins = []
     }
 
     func acceptRestorationReview(_ result: [String: Any]) {
@@ -803,8 +789,6 @@ struct SourceCellLocation: Identifiable {
         approvedParticipantAdditions = false
         approvedParticipantRemovals = false
         participantConfigChanged = false
-        approvedResultCategories = []
-        approvedResultJoins = []
         resultConfigChanged = false
     }
 
@@ -862,7 +846,9 @@ struct SourceCellLocation: Identifiable {
                 "approved_categories": sheets.mapValues {
                     Array(($0["new_categories"] as? [String: Int] ?? [:]).keys).sorted()
                 },
-                "approved_joins": Array(approvedResultJoins).sorted()
+                "approved_joins": sheets.keys.filter {
+                    sheets[$0]?["linked"] as? Bool == true
+                }.sorted()
             ]) { _ in
                 self.restorationReview = nil
                 self.alert = "A new locally reidentified result workbook was created. Keep it private."

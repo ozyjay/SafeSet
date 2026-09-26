@@ -61,7 +61,12 @@ unique headings, supported cell types, no hidden sheets or formula results, safe
 result text and explicit result-sheet approval. It validates IDs and joins before
 showing a review containing sheet and row counts, output headings, selected source
 fields, duplicate/missing-link counts and new category counts. New result
-categories and source-field joins require explicit approval. After approval,
+categories and source-field joins are included in one explicit approval through
+**Create restored workbook** after the summary is shown. The desktop sends the
+complete reviewed field/category/join selections with that action; the engine
+still checks them against the active review. Changing a selection disables
+creation until the review is updated. No individual approval checkboxes or
+second confirmation dialogue are required in this mode. After approval,
 SafeSet rereads both workbooks, rechecks the bundle binding and the reviewed
 proposal, and publishes to a new local path without overwriting either input.
 

@@ -20,14 +20,14 @@ final class SafeSetMacTests: XCTestCase {
                                  "new_categories": [String: Int]()]
             ]
         ])
-        XCTAssertFalse(model.canApproveRestoration)
-        model.approvedSheets = ["New Allocations", "Team Summary"]
-        model.approvedResults = ["New Allocations::Team", "New Allocations::Role",
-                                 "Team Summary::Team", "Team Summary::Count"]
-        model.approvedResultCategories = ["New Allocations::Team"]
-        model.approvedResultJoins = ["New Allocations"]
         XCTAssertTrue(model.canApproveRestoration)
+        model.restorationReview?["ready"] = false
+        XCTAssertFalse(model.canApproveRestoration)
+        model.restorationReview?["ready"] = true
         model.resultConfigurationChanged()
+        XCTAssertFalse(model.canApproveRestoration)
+        model.resultConfigChanged = false
+        model.restorationReview?.removeValue(forKey: "review_id")
         XCTAssertFalse(model.canApproveRestoration)
     }
 

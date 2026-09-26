@@ -1421,7 +1421,14 @@ struct RestoreView: View {
                             .foregroundStyle(.secondary)
                     }
                     Text("New sensitive workbook: \(review["output"] as? String ?? "")")
-                    Button("Authorise local restoration") { showAuthorise = true }
+                    Button(review["result_workbook"] as? Bool == true
+                           ? "Create restored workbook" : "Authorise local restoration") {
+                        if review["result_workbook"] as? Bool == true {
+                            model.approveRestoration()
+                        } else {
+                            showAuthorise = true
+                        }
+                    }
                         .appFont(13)
                         .buttonStyle(.borderedProminent)
                         .disabled(!model.canApproveRestoration)
@@ -1445,7 +1452,7 @@ struct ResultWorkbookReviewView: View {
         let sourceColumns = review["source_columns"] as? [String: [String]] ?? [:]
         GroupBox("New result workbook") {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Choose the original fields to restore on each participant result sheet. The original sheets are not copied. Inspect the returned workbook before approving its assignments and new categories.")
+                Text("Choose the original fields to include, then review the summary. Create restored workbook confirms these selections and the result fields below.")
                     .foregroundStyle(.secondary)
                 ForEach(sheets.keys.sorted(), id: \.self) { sheet in
                     let info = sheets[sheet] ?? [:]
@@ -1455,7 +1462,7 @@ struct ResultWorkbookReviewView: View {
                     Text("\(sheet): \(info["rows"] as? Int ?? 0) result rows")
                         .appFont(13, weight: .semibold)
                     if let blank = info["blank_record_ids"] as? Int, blank > 0 {
-                        Text("\(blank) result rows have no original record_id; join these by entity_id.")
+                        Text("\(blank) rows without an original record will be matched to participants automatically.")
                             .foregroundStyle(.secondary)
                     }
                     if info["linked"] as? Bool == true {
@@ -1474,17 +1481,20 @@ struct ResultWorkbookReviewView: View {
                         }
                         if let selected = model.resultJoinSources[sheet],
                            let columns = sourceColumns[selected] {
-                            Text("Restore only these original fields").appFont(12, weight: .semibold)
-                            ForEach(columns, id: \.self) { field in
-                                Toggle(field, isOn: Binding(
-                                    get: { model.resultJoinFields[sheet]?.contains(field) == true },
-                                    set: {
-                                        if $0 { model.resultJoinFields[sheet, default: []].insert(field) }
-                                        else { model.resultJoinFields[sheet]?.remove(field) }
-                                        model.resultConfigurationChanged()
-                                    }
-                                ))
+                            DisclosureGroup("Choose original fields to restore") {
+                                ForEach(columns, id: \.self) { field in
+                                    Toggle(field, isOn: Binding(
+                                        get: { model.resultJoinFields[sheet]?.contains(field) == true },
+                                        set: {
+                                            if $0 { model.resultJoinFields[sheet, default: []].insert(field) }
+                                            else { model.resultJoinFields[sheet]?.remove(field) }
+                                            model.resultConfigurationChanged()
+                                        }
+                                    ))
+                                }
                             }
+                            Text("Original fields: \((model.resultJoinFields[sheet] ?? []).isEmpty ? "None selected" : Array(model.resultJoinFields[sheet] ?? []).sorted().joined(separator: ", "))")
+                                .foregroundStyle(.secondary)
                         }
                         if info["has_record_id"] as? Bool == true,
                            info["blank_record_ids"] as? Int == 0 {
@@ -1510,49 +1520,20 @@ struct ResultWorkbookReviewView: View {
                             .foregroundStyle(.secondary)
                     }
                     if review["ready"] as? Bool == true && !model.resultConfigChanged {
-                        Toggle("Approve result sheet \(sheet)", isOn: Binding(
-                            get: { model.approvedSheets.contains(sheet) },
-                            set: {
-                                if $0 { model.approvedSheets.insert(sheet) }
-                                else { model.approvedSheets.remove(sheet) }
-                            }
-                        ))
-                        if info["linked"] as? Bool == true {
-                            Toggle("Approve selected source-field join for \(sheet)", isOn: Binding(
-                                get: { model.approvedResultJoins.contains(sheet) },
-                                set: {
-                                    if $0 { model.approvedResultJoins.insert(sheet) }
-                                    else { model.approvedResultJoins.remove(sheet) }
-                                }
-                            ))
-                        }
-                        ForEach(fields, id: \.self) { field in
-                            let key = "\(sheet)::\(field)"
-                            Toggle("Result field: \(field)", isOn: Binding(
-                                get: { model.approvedResults.contains(key) },
-                                set: {
-                                    if $0 { model.approvedResults.insert(key) }
-                                    else { model.approvedResults.remove(key) }
-                                }
-                            ))
-                        }
+                        Text("Result fields: \(fields.joined(separator: ", "))")
                         ForEach(categories.keys.sorted(), id: \.self) { field in
-                            let key = "\(sheet)::\(field)"
-                            Toggle("\(categories[field] ?? 0) new values in \(field)", isOn: Binding(
-                                get: { model.approvedResultCategories.contains(key) },
-                                set: {
-                                    if $0 { model.approvedResultCategories.insert(key) }
-                                    else { model.approvedResultCategories.remove(key) }
-                                }
-                            ))
+                            Text("\(categories[field] ?? 0) new values in \(field)")
+                                .appFont(13, weight: .semibold)
                         }
+                        Text("Participant matches and result values validated. Review the assignments in your result workbook before creating the restored copy.")
+                            .foregroundStyle(.secondary)
                     }
                 }
                 if model.resultConfigChanged || review["ready"] as? Bool != true {
                     Text("Select at least one original field for each participant result sheet, then update the review.")
                         .foregroundStyle(.secondary)
+                    Button("Update selections and review") { model.updateResultWorkbookReview() }
                 }
-                Button("Update result joins and review") { model.updateResultWorkbookReview() }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }

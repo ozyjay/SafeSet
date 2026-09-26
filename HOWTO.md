@@ -89,13 +89,14 @@ an `entity_id` join when that source sheet has one row per participant, or an
 exact `record_id` join when the result refers to source rows. The default requires
 one result row per participant; explicitly allow repeats where the analysis needs
 them. Rows with a blank `record_id` require the `entity_id` join. Select **Update
-result joins and review**.
+selections and review**.
 
 SafeSet checks every referenced ID, exact record-to-entity linkage, source joins,
 safe result text and known codebooks. It shows result-sheet and field counts and
 counts of new category values. Inspect the returned workbook's assignments,
-approve each sheet, field, new-category group and source join, then authorise the
-new local workbook. The output contains only the result sheets, with selected
+then select **Create restored workbook** once to approve the displayed sheets,
+fields, new categories and selected source matches. Changing a selection requires
+an updated review before creation. The output contains only the result sheets, with selected
 original fields joined to participant rows. Source and returned files are not
 overwritten. SafeSet does not determine whether ChatGPT followed your allocation
 rules or whether a new team was necessary.
