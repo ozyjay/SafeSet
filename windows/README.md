@@ -32,6 +32,12 @@ files directly in `windows/SafeSetWindowsUX`, preserving the source-controlled
 `MainWindow.xaml` and `MainWindow.xaml.cs`. The project name and C# namespace remain
 `SafeSetWindows`. Temporary scaffolding is retained under the ignored `build` directory.
 
+The VS Code workspace excludes `build` directories from file discovery, search and
+watching so temporary scaffolding and script-check project stubs are not loaded as
+application projects. If C# Dev Kit has already reported unsupported old projects
+under `build`, run **Developer: Reload Window** after applying the workspace settings.
+The application project in `windows/SafeSetWindowsUX` remains available.
+
 If the WinUI project already exists in `windows/SafeSetWindowsUX`, launch it directly:
 
 ```pwsh
