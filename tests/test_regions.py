@@ -17,6 +17,7 @@ from safeset.errors import SafetyError
 from safeset.ingestion import Table, excel_workbook_bytes, read_excel_sheets
 from safeset.policy_authoring import RuleDraft
 from safeset.regions import discover_regions, read_confirmed_regions
+from safeset.storage import private_directory
 
 from .conftest import PASSPHRASE
 from .test_desktop_bridge import call
@@ -106,7 +107,7 @@ def test_region_bundle_round_trip_preserves_original_layout(tmp_path, monkeypatc
     path = tmp_path / "synthetic.xlsx"
     _workbook(path)
     for name in ("maps", "exports", "private"):
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     regions = {
         "Groups": {"sheet": "Research", "range": "A3:B5"},
         "Scores": {"sheet": "Research", "range": "D3:E5"},

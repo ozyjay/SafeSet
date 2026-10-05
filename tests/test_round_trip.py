@@ -1,6 +1,5 @@
 import json
 import socket
-import stat
 
 import pytest
 from typer.testing import CliRunner
@@ -14,7 +13,7 @@ from safeset.transform import sanitise
 from safeset.validation import validate
 from safeset.workflow import export_candidate
 
-from .conftest import PASSPHRASE, ROOT
+from .conftest import PASSPHRASE, ROOT, assert_private_file
 
 
 def test_round_trip_without_network(source, policy, destinations, monkeypatch):
@@ -55,8 +54,8 @@ def test_round_trip_without_network(source, policy, destinations, monkeypatch):
             assert row[field] not in exported
             assert row[field].encode() not in map_path.read_bytes()
     assert "student_number" not in exported
-    assert stat.S_IMODE(map_path.stat().st_mode) == 0o600
-    assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    assert_private_file(map_path)
+    assert_private_file(output)
     mapping = read_mapping(map_path, PASSPHRASE)
     assert set(mapping) == {"version", "source_column", "records"}
     assert set(mapping["records"].values()) == {r["student_number"] for r in source.rows}

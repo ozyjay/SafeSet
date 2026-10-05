@@ -25,6 +25,7 @@ from safeset.relational import (
     validate_relational,
     validate_relational_bundle,
 )
+from safeset.storage import private_directory
 
 from .conftest import PASSPHRASE
 
@@ -260,7 +261,7 @@ def test_relational_source_text_locator_reports_only_bound_cell_coordinates(tmp_
     source = tmp_path / "synthetic-related.xlsx"
     source.write_bytes(excel_workbook_bytes(tables))
     for name in ("exports", "maps"):
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     protected = tmp_path / "exports/protected.xlsx"
     bundle_path = tmp_path / "maps/related.enc"
     review = prepare_relational_protection(
@@ -275,7 +276,7 @@ def test_relational_source_text_locator_reports_only_bound_cell_coordinates(tmp_
     assert located == {"count": 1, "cells": [{"sheet": "Enrolments", "cell": "B2"}]}
     assert "SYNTHETIC" not in str(located)
     private = tmp_path / "private"
-    private.mkdir(mode=0o700)
+    private_directory(private, create=True)
     with pytest.raises(SafetyError, match="Original source contains unsafe spreadsheet text"):
         prepare_relational_reconstruction(
             protected, source, bundle_path, private / "restored.xlsx", PASSPHRASE
@@ -289,7 +290,7 @@ def test_relational_round_trip_and_minimal_bundle(tmp_path):
     maps = tmp_path / "maps"
     private = tmp_path / "private"
     for directory in (exports, maps, private):
-        directory.mkdir(mode=0o700)
+        private_directory(directory, create=True)
     protected = exports / "protected.xlsx"
     bundle_path = maps / "related.enc"
     review = prepare_relational_protection(
@@ -364,7 +365,7 @@ def test_relational_reconstruction_rejects_changed_entity_link(tmp_path):
     source = tmp_path / "synthetic-related.xlsx"
     _write_source(source)
     for name in ("exports", "maps", "private"):
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     protected = tmp_path / "exports/protected.xlsx"
     bundle_path = tmp_path / "maps/related.enc"
     review = prepare_relational_protection(
@@ -434,7 +435,7 @@ def test_relational_reconstruction_rejects_unsafe_added_worksheet(tmp_path):
     source = tmp_path / "synthetic-related.xlsx"
     _write_source(source)
     for name in ("exports", "maps", "private"):
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     protected = tmp_path / "exports/protected.xlsx"
     bundle_path = tmp_path / "maps/related.enc"
     review = prepare_relational_protection(
@@ -474,7 +475,7 @@ def test_relational_reconstruction_uses_bundle_sheets_and_rejects_missing_or_hid
     source = tmp_path / "synthetic-related.xlsx"
     _write_source(source)
     for name in ("exports", "maps", "private"):
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     protected = tmp_path / "exports/protected.xlsx"
     bundle_path = tmp_path / "maps/related.enc"
     review = prepare_relational_protection(
@@ -528,7 +529,7 @@ def test_relational_desktop_bridge_review_and_publication(tmp_path):
     source = tmp_path / "synthetic-related.xlsx"
     _write_source(source)
     for name in ("exports", "maps"):
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     output = tmp_path / "exports/protected.xlsx"
     bundle = tmp_path / "maps/related.enc"
     bridge = Bridge()

@@ -16,6 +16,7 @@ from safeset.document_flow import (
     prepare_document_restoration,
 )
 from safeset.errors import SafetyError
+from safeset.storage import private_directory
 
 from .conftest import PASSPHRASE
 
@@ -138,7 +139,7 @@ def text_parts(data: bytes) -> str:
 
 def destinations(tmp_path: Path):
     for name in ("maps", "exports", "private"):
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     return (
         tmp_path / "exports/protected.docx",
         tmp_path / "maps/document.enc",

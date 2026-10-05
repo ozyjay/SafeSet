@@ -1,13 +1,25 @@
+import os
+import stat
 from pathlib import Path
 
 import pytest
 
 from safeset.ingestion import read_excel
 from safeset.policy import load_policy
+from safeset.storage import private_directory
 from safeset.transform import sanitise
 
 ROOT = Path(__file__).resolve().parents[1]
 PASSPHRASE = "synthetic-test-only-passphrase"
+
+
+def assert_private_file(path: Path) -> None:
+    if os.name == "nt":
+        from safeset.windows_storage import validate_private
+
+        validate_private(path, directory=False)
+    else:
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 @pytest.fixture(autouse=True)
@@ -35,5 +47,5 @@ def candidate(source, policy):
 @pytest.fixture
 def destinations(tmp_path):
     for name in ["maps", "exports", "private"]:
-        (tmp_path / name).mkdir(mode=0o700)
+        private_directory(tmp_path / name, create=True)
     return tmp_path / "exports/safe.xlsx", tmp_path / "maps/identity.enc"

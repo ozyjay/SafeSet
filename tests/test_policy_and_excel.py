@@ -495,6 +495,8 @@ def test_source_schema_and_keys(source, policy, mode):
 def test_fifo_rejected_without_blocking(tmp_path):
     import os
 
+    if os.name != "posix":
+        pytest.skip("Requires an actual POSIX FIFO")
     path = tmp_path / "pipe"
     os.mkfifo(path)
     with pytest.raises(SafetyError, match="regular"):

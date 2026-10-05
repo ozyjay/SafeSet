@@ -2,16 +2,22 @@
 
 import errno
 import os
-import pty
 import select
 import signal
 import sys
 import time
 from pathlib import Path
 
+import pytest
+
 from safeset.ingestion import read_excel
 
 from .conftest import PASSPHRASE, ROOT
+
+if os.name != "posix":
+    pytest.skip("Requires an actual POSIX pseudo-terminal", allow_module_level=True)
+
+import pty  # noqa: E402
 
 
 def run_terminal(arguments: list[str], prompts: list[bytes]) -> bytes:

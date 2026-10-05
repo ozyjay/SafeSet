@@ -1,4 +1,3 @@
-import stat
 
 import pytest
 from openpyxl import load_workbook
@@ -19,7 +18,7 @@ from safeset.policy_authoring import (
 from safeset.transform import sanitise
 from safeset.validation import validate
 
-from .conftest import ROOT
+from .conftest import ROOT, assert_private_file
 
 
 def example_drafts():
@@ -43,7 +42,7 @@ def test_policy_builder_saves_private_strict_policy(tmp_path):
     assert policy.version == 3
     assert policy.columns["campus"].action == "code"
     assert policy.columns["gpa"].action == "keep_numeric"
-    assert stat.S_IMODE(saved.stat().st_mode) == 0o600
+    assert_private_file(saved)
     assert "SYNTH-001" not in saved.read_text()
     assert validate(
         sanitise(read_excel(ROOT / "examples/synthetic_students.xlsx"), policy).table, policy

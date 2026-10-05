@@ -1,4 +1,4 @@
-"""Frozen helper entry point for the macOS app."""
+"""Frozen helper entry point for the native desktop apps."""
 
 from safeset.desktop_bridge import main
 

@@ -1,4 +1,5 @@
 import getpass
+import os
 from pathlib import Path
 
 import pytest
@@ -77,6 +78,9 @@ def test_mapping_not_next_to_or_under_export(destinations):
             map_destination(path, output)
 
 
+@pytest.mark.skipif(
+    os.name != "posix", reason="POSIX modes; Windows ACL rejection tests live in tests/windows"
+)
 def test_private_directory_and_map_permissions(candidate, policy, destinations):
     output, path = destinations
     path.parent.chmod(0o755)

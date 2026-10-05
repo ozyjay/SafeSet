@@ -1,6 +1,8 @@
 import ast
+import os
 import stat
 
+import pytest
 from typer.testing import CliRunner
 
 from safeset import diagnostics
@@ -11,6 +13,9 @@ from safeset.errors import SafetyError
 from .conftest import ROOT
 
 
+@pytest.mark.skipif(
+    os.name != "posix", reason="Diagnostic logging is intentionally disabled on Windows"
+)
 def test_private_log_contains_only_fixed_events():
     path = diagnostics.log_path()
     assert record("cli.inspect", "start")
@@ -26,6 +31,9 @@ def test_private_log_contains_only_fixed_events():
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+@pytest.mark.skipif(
+    os.name != "posix", reason="Diagnostic logging is intentionally disabled on Windows"
+)
 def test_only_allowlisted_reason_code_is_written():
     path = diagnostics.log_path()
     diagnostics.record_reason(
@@ -57,6 +65,7 @@ def test_ingestion_errors_have_safe_diagnostic_codes():
     assert messages <= diagnostics.REASON_CODES.keys()
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Requires POSIX permissions")
 def test_insecure_or_linked_log_is_never_written(tmp_path):
     path = diagnostics.log_path()
     path.parent.mkdir(mode=0o700)
@@ -76,6 +85,9 @@ def test_insecure_or_linked_log_is_never_written(tmp_path):
     assert not path.exists()
 
 
+@pytest.mark.skipif(
+    os.name != "posix", reason="Diagnostic logging is intentionally disabled on Windows"
+)
 def test_cli_log_omits_source_values_and_paths(tmp_path):
     path = diagnostics.log_path()
     source = ROOT / "examples/synthetic_students.xlsx"
@@ -89,3 +101,11 @@ def test_cli_log_omits_source_values_and_paths(tmp_path):
     assert "cli.inspect rejected" in content
     for value in ("SYNTH-001", "student_number", "synthetic_students", "secret-synthetic"):
         assert value not in content
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows no-log contract")
+def test_windows_diagnostics_write_nothing():
+    path = diagnostics.log_path()
+    assert not record("cli.inspect", "start")
+    diagnostics.record_reason("cli.inspect", SafetyError("secret-synthetic-cell"))
+    assert not path.exists()
