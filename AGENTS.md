@@ -47,3 +47,7 @@ as appropriate. Do not infer permission to publish, upload or contact services.
 ## Desktop targets
 
 The Python safety engine and bounded JSON-line desktop protocol are shared. macOS uses native SwiftUI; Windows uses native WinUI 3/Windows App SDK. Presentation code may differ, but safety decisions, review tokens, validation and publication rules must remain in the shared engine. Windows protection/restoration stays fail-closed until private bundle storage has tested Windows ACL enforcement equivalent to the POSIX ownership/mode boundary.
+
+## Platform branch pull-request policy
+
+`windows` and `mac` are long-lived platform branches, not feature branches awaiting merger into `main`. Do not open pull requests from either branch unless the user explicitly requests a pull request for that branch. Creating, committing to or pushing a platform branch does not authorise a pull request. Keep shared safety-engine fixes consistent across both branches through deliberate cherry-picks or merges; do not merge either entire platform branch into `main` without explicit instruction.
