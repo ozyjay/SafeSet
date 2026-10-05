@@ -1,4 +1,6 @@
-# SafeSet
+# SafeSet — Windows branch
+
+This branch contains the Windows frontend and the shared Python engine. The native macOS frontend is maintained on `mac`; `main` preserves the combined history. See [platform branch history](docs/platform-branches.md).
 
 SafeSet is an offline desktop and CLI tool for creating a protected Excel working copy and later reconstructing a new identifiable workbook locally. It reduces some disclosure risks; it does **not** establish anonymity, legal compliance or suitability for a particular recipient.
 
@@ -25,17 +27,17 @@ The private bundle contains the selected source key map, observed category codeb
 
 ## Set up
 
-Use the active pyenv Python 3.12+ from `pwsh`:
+Use PowerShell 7 on Windows. The native project requires .NET 10 and Windows Developer Mode; see [Windows setup](windows/README.md). In an existing checkout with a Windows virtual environment:
 
 ```pwsh
-python3 -m venv .venv
-./.venv/bin/Activate.ps1
-python3 -m pip install -e '.[dev,mac-app]'
-& ./scripts/build-macos-app.ps1
-& ./scripts/smoke-macos-app.ps1
+& ./.venv/Scripts/python.exe -m pip install -e '.[dev]'
+& ./.venv/Scripts/python.exe -m pytest
+& ./.venv/Scripts/python.exe -m ruff check .
+& ./scripts/smoke-windows-ux.ps1 -NoRestore
+& ./scripts/run-windows-app.ps1
 ```
 
-Core runtime operations need no network. Installation and building may access package repositories. The macOS desktop uses SwiftUI with a bundled Python engine and needs no separate Python installation when run from `dist/SafeSet.app`. The local ZIP is ad-hoc signed for development; [macOS app build and release instructions](docs/macos-app.md) explain Developer ID signing and notarisation. POSIX private bundle storage is supported. The shared engine now implements restricted Windows NTFS ACL storage; encrypted Windows round-trip verification and native UI wiring remain release gates. See [actual verification results](docs/verification.md).
+For a new environment, create `.venv` using an explicitly selected Python 3.12+ interpreter. The `python3` command must resolve to a working interpreter, not an inactive Windows Store alias. Installation may access package repositories; normal data processing needs no network. The native Windows shell remains a preview until its backend, approval flow and packaged helper have been verified.
 
 ## CLI and synthetic example
 
