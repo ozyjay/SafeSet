@@ -101,7 +101,10 @@ def review_analysis_sheets(
     """Validate untrusted added worksheets without exposing their cell values."""
     if (
         len(sheets) > MAX_TABLES - len(reserved_names)
-        or set(sheets).intersection(reserved_names)
+        or {name.casefold() for name in sheets}.intersection(
+            name.casefold() for name in reserved_names
+        )
+        or len({name.casefold() for name in sheets}) != len(sheets)
         or any(not valid_heading(name) for name in sheets)
         or existing_rows + sum(len(table.rows) for table in sheets.values()) > MAX_ROWS
     ):

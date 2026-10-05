@@ -97,7 +97,8 @@ def test_formal_excel_table_must_be_selected_whole(tmp_path):
         })
 
 
-def test_region_bundle_round_trip_preserves_original_layout(tmp_path, monkeypatch):
+@pytest.mark.parametrize("add_analysis", [False, True])
+def test_region_bundle_round_trip_preserves_original_layout(tmp_path, monkeypatch, add_analysis):
     def denied(*_args, **_kwargs):
         raise AssertionError("Network access attempted")
 
@@ -137,6 +138,8 @@ def test_region_bundle_round_trip_preserves_original_layout(tmp_path, monkeypatc
     score_rows = [dict(row) for row in tables["Scores"].rows]
     score_rows[0]["Score"] = "7"
     tables["Scores"] = Table(tables["Scores"].columns, tuple(score_rows))
+    if add_analysis:
+        tables["Findings"] = Table(("Note",), ({"Note": "Synthetic finding"},))
     returned.write_bytes(excel_workbook_bytes(tables))
     restored = tmp_path / "private/restored.xlsx"
     restored_review = prepare_relational_reconstruction(
@@ -145,6 +148,7 @@ def test_region_bundle_round_trip_preserves_original_layout(tmp_path, monkeypatc
     assert restored_review.bundle["version"] == 5
     approve_relational_reconstruction(
         restored_review, restored_review.new_columns, authorised=True,
+        approved_sheets=("Findings",) if add_analysis else (),
         approved_changes={"Groups": ("Group",), "Scores": ("Score",)},
     )
     book = load_workbook(restored)
@@ -152,6 +156,9 @@ def test_region_bundle_round_trip_preserves_original_layout(tmp_path, monkeypatc
     assert book["Research"]["E4"].value == "7"
     assert book["Research"]["A1"].value == "Synthetic study title"
     assert book["Research"]["A8"].value == "Notes outside selected data"
+    if add_analysis:
+        assert book["Findings"]["A2"].value == "Synthetic finding"
+        assert restored.read_bytes() == restored_review.workbook_bytes
     original = load_workbook(path)
     original["Research"]["A1"] = "Changed synthetic title"
     original.save(path)

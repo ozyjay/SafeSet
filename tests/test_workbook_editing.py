@@ -33,6 +33,7 @@ from safeset.relational import (
 
 from .conftest import PASSPHRASE
 from .test_desktop_bridge import call
+from .test_reconstruction import _set_formula_cache
 
 
 @pytest.fixture
@@ -225,15 +226,114 @@ def test_unapproved_changes_fail_closed(editing, mutation):
         sheet.cell(1, 7, "Finding")
         sheet.cell(2, 7, "Synthetic")
     elif mutation == "extra_sheet":
-        workbook.create_sheet("Findings").append(("Note",))
+        findings = workbook.create_sheet("Findings")
+        findings.append(("Note",))
+        findings.append(("Synthetic finding",))
     elif mutation == "formula":
         sheet.cell(2, columns["score"], "=2+2")
     else:
         workbook["Participants"].sheet_state = "hidden"
     workbook.save(editing.returned)
     with pytest.raises(SafetyError):
-        review(editing)
+        if mutation == "extra_sheet":
+            prepared = review(editing)
+            approve_relational_reconstruction(
+                prepared, prepared.new_columns, authorised=True,
+                approved_changes={"Allocations": (), "Participants": ()},
+            )
+        else:
+            review(editing)
     assert not editing.restored.exists()
+
+
+def test_added_analysis_sheet_requires_approval_and_preserves_original_parts(editing):
+    change_allocation(editing)
+    workbook = load_workbook(editing.returned)
+    findings = workbook.create_sheet("Findings")
+    findings.append(("entity_id", "Note"))
+    entity = workbook["Allocations"]["B2"].value
+    findings.append((entity, "Synthetic finding"))
+    findings["B2"].fill = PatternFill("solid", fgColor="FF0000")
+    workbook.save(editing.returned)
+    prepared = review(editing)
+    changes = {"Allocations": ("team", "state", "score"), "Participants": ()}
+    for approved in [(), ("Findings", "Findings"), ("Unknown",)]:
+        with pytest.raises(SafetyError, match="worksheet requires explicit approval"):
+            approve_relational_reconstruction(
+                prepared, prepared.new_columns, approved,
+                authorised=True, approved_changes=changes,
+            )
+        assert not editing.restored.exists()
+    approve_relational_reconstruction(
+        prepared, prepared.new_columns, ("Findings",),
+        authorised=True, approved_changes=changes,
+    )
+    result = load_workbook(editing.restored)
+    assert result.sheetnames == ["Allocations", "Participants", "Summary", "Findings"]
+    assert result["Allocations"]["C4"].value == "Synthetic Beta"
+    assert result["Findings"]["A2"].value == entity
+    assert result["Findings"]["B2"].value == "Synthetic finding"
+    assert result["Findings"]["B2"].fill.patternType is None
+    assert result["Summary"]["A2"].value == "=SUM(Allocations!E4:E5)"
+    assert len(result["Summary"]._charts) == 1
+    with zipfile.ZipFile(editing.source) as original, zipfile.ZipFile(editing.restored) as restored:
+        for member in original.namelist():
+            if member not in {
+                "xl/worksheets/sheet1.xml", "xl/workbook.xml",
+                "xl/_rels/workbook.xml.rels", "[Content_Types].xml",
+            }:
+                assert restored.read(member) == original.read(member)
+    assert editing.restored.read_bytes() == prepared.workbook_bytes
+
+
+@pytest.mark.parametrize("mutation", ["collision", "formula", "hidden", "unsafe", "stale"])
+def test_added_analysis_sheets_fail_closed(editing, mutation):
+    workbook = load_workbook(editing.returned)
+    sheet = workbook.create_sheet("summary" if mutation == "collision" else "Findings")
+    sheet.append(("Note",))
+    sheet.append(("Synthetic finding",))
+    if mutation == "formula":
+        sheet["A2"] = "=1+1"
+    elif mutation == "hidden":
+        sheet.sheet_state = "hidden"
+    elif mutation == "unsafe":
+        sheet["A2"] = "@Synthetic unsafe"
+    workbook.save(editing.returned)
+    with pytest.raises(SafetyError):
+        if mutation == "stale":
+            prepared = review(editing)
+            sheet["A2"] = "Synthetic changed finding"
+            workbook.save(editing.returned)
+            approve_relational_reconstruction(
+                prepared, prepared.new_columns, ("Findings",), authorised=True,
+                approved_changes={"Allocations": (), "Participants": ()},
+            )
+        else:
+            review(editing)
+    assert not editing.restored.exists()
+
+
+def test_added_sheet_saved_formula_result_is_static_and_original_is_untouched(editing):
+    workbook = load_workbook(editing.returned)
+    sheet = workbook.create_sheet("Findings")
+    sheet.append(("Count",))
+    sheet.append(("=1+1",))
+    workbook.save(editing.returned)
+    _set_formula_cache(editing.returned, "xl/worksheets/sheet3.xml", "A2", "2")
+    prepared = review(editing)
+    approve_relational_reconstruction(
+        prepared, prepared.new_columns, ("Findings",), authorised=True,
+        approved_changes={"Allocations": (), "Participants": ()},
+    )
+    restored = load_workbook(editing.restored)
+    assert restored["Findings"]["A2"].value == "2"
+    assert restored["Findings"]["A2"].data_type == "s"
+    with zipfile.ZipFile(editing.source) as original, zipfile.ZipFile(editing.restored) as result:
+        for member in original.namelist():
+            if member not in {
+                "xl/workbook.xml", "xl/_rels/workbook.xml.rels", "[Content_Types].xml",
+            }:
+                assert result.read(member) == original.read(member)
 
 
 def test_unchanged_editing_workbook_is_an_exact_copy(editing):
@@ -318,6 +418,11 @@ def test_bundle_version_migration_does_not_grant_edits_to_old_bundles(editing):
 
 def test_bridge_reports_counts_and_requires_exact_change_approval(editing):
     change_allocation(editing)
+    workbook = load_workbook(editing.returned)
+    findings = workbook.create_sheet("Findings")
+    findings.append(("Note",))
+    findings.append(("Synthetic finding",))
+    workbook.save(editing.returned)
     bridge = Bridge()
     payload = {
         "returned": str(editing.returned),
@@ -332,6 +437,8 @@ def test_bridge_reports_counts_and_requires_exact_change_approval(editing):
     assert "SYNTH-001" not in encoded and "Synthetic Beta" not in encoded
     assert PASSPHRASE not in encoded
     prepared = response["result"]
+    assert prepared["new_sheets"] == ["Findings"]
+    assert "Synthetic finding" not in encoded
     assert prepared["changes"]["Allocations"]["team"] == 1
     rejected = call(
         bridge,
@@ -352,6 +459,7 @@ def test_bridge_reports_counts_and_requires_exact_change_approval(editing):
             "review_id": prepared["review_id"],
             "approved_results": prepared["new_columns"],
             "approved_changes": {"Allocations": ["team", "state", "score"], "Participants": []},
+            "approved_sheets": ["Findings"],
         },
     )
     assert response["ok"] and editing.restored.exists()

@@ -59,7 +59,12 @@ reversible fields can change: observed categorical values, known category codes
 (including explicitly shared codebooks) and bounded numeric values. Disclosure
 validation on the protected workbook is unchanged. Missing, duplicate or unknown
 record IDs, changed entity links and unapproved field changes still block restore.
-No new rows, fields or sheets are accepted by this mode.
+No new rows or fields on protected sheets are accepted by this mode. Added visible
+analysis worksheets use the same separate review, approval and static-table checks
+as version 2/3 restoration. Their names must not collide with original local sheets
+or protected logical regions, ignoring case. Their pseudonymous IDs are not restored.
+The original workbook package is preserved while approved analysis tables are appended;
+the complete proposed output is rebuilt and compared before publication.
 
 Version 5 binds explicitly confirmed source regions to separate logical protected
 worksheets. Each region is independently classified and validated. Overlapping

@@ -117,12 +117,17 @@ charts are retained, and Excel is asked to recalculate. Cached results and stati
 summaries may be stale until recalculated or separately updated. Macro/external-link
 archive restrictions remain; signed packages requiring modification and ambiguous
 XML fail closed. XML parsing rejects DTDs/entities, including non-UTF-8 encodings.
-New result text, formulas and arbitrary package content from the returned workbook
-are not copied in this mode. Numeric precision checks prevent silent rounding of
+Added visible analysis worksheets require individual approval and bounded safe-text
+validation, including checks against all original worksheet names ignoring case.
+They are appended as newly generated static tables, with pseudonymous IDs unchanged.
+Only validated text and saved scalar formula results are copied; returned formulas,
+styles, drawings and arbitrary package content are excluded. Hidden returned sheets
+and signed original packages requiring modification fail closed.
+Numeric precision checks prevent silent rounding of
 edited native numeric cells.
 
 The full proposed output is built before review. Review metadata contains field
-names and change counts only; the copyable prompt adds approved numeric bounds
+names, added worksheet names and change counts only; the copyable prompt adds approved numeric bounds
 and domain instructions, never codebooks, identities or cell values. Every changed
 field needs explicit approval and source/returned data are rechecked at publication.
 Counts permit scope review but cannot establish that a particular assignment is

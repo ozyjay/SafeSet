@@ -116,8 +116,13 @@ worksheets and original formulas are never sent to the analysis recipient.
 
 Returned workbooks must retain exact row IDs, entity links, protected headings
 and reference values. Row and column reordering is allowed. Standard editing accepts
-no extra sheets or columns; the explicit participant comparison below accepts one
-bounded proposal sheet. Edited categories must be observed values;
+no extra columns on protected sheets. Added visible analysis worksheets require
+separate explicit approval and the existing bounded-table and safe-text checks.
+Names must not collide, ignoring case, with any original local worksheet or protected
+logical region. Approved sheets are appended as static text tables; their pseudonymous
+IDs are retained, and returned formatting, drawings and formulas are not copied.
+Only saved scalar formula results can be included. The explicit participant comparison
+below accepts one bounded proposal sheet. Edited categories must be observed values;
 edited codes must resolve in their authenticated codebook, or the union of an
 explicitly shared same-field codebook. Numeric edits obey policy bounds and blank
 semantics. The engine reports changed-cell counts per field without exposing row
@@ -132,7 +137,10 @@ its remaining cells and layout. Original formulas are retained and workbook
 calculation flags request recalculation in Excel; SafeSet does not calculate them.
 Existing numeric cells stay numeric; values exceeding Excel's 15 significant-digit
 precision are rejected before review. Numeric fields stored as text stay text.
-Digitally signed packages requiring edits and ambiguous XML layouts fail closed.
+Digitally signed packages requiring edits or additions and ambiguous XML layouts fail closed.
+Appending analysis tables changes only workbook sheet metadata, relationships and
+content-type declarations, and adds new worksheet XML. Original package parts remain
+byte-for-byte intact apart from these declarations and approved source-cell edits.
 
 The complete proposed workbook is built in memory before review, then rebuilt
 and compared at approval after rechecking the full original file and returned

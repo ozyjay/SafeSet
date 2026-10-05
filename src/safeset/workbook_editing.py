@@ -15,7 +15,13 @@ from openpyxl.utils.cell import coordinate_to_tuple
 
 from .classification import canonical_numeric
 from .errors import SafetyError
-from .ingestion import MAX_BYTES, _check_archive, read_bounded, read_excel_sheets
+from .ingestion import (
+    MAX_BYTES,
+    _check_archive,
+    excel_workbook_bytes,
+    read_bounded,
+    read_excel_sheets,
+)
 from .policy import ColumnRule, Policy
 
 EDIT_ACTIONS = {"keep", "code", "keep_numeric"}
@@ -75,8 +81,11 @@ def editing_instructions(fields: dict, policies: dict[str, Policy], shared: tupl
         "Keep every record_id and entity_id attached to its original record. Use entity_id to "
         "relate the same participant across sheets. Fields not listed are reference only; "
         "a worksheet with no listed fields is entirely reference only. "
-        "Never invent codes or infer identities. Do not add result columns, worksheets, "
-        "merged cells, title rows, formulas or narrative text. Explain findings in your reply, "
+        "Never invent codes or infer identities. Do not add result columns, "
+        "merged cells, title rows, formulas or narrative text to protected sheets. "
+        "Explain findings in your reply, "
+        "or in separate analysis worksheets with one heading row and short safe text or blanks. "
+        "New worksheets require separate local review and approval; their IDs remain pseudonymous. "
         "outside the workbook, and return a modified .xlsx file. "
         "Before returning it, verify every original record_id occurs exactly once on its "
         "original sheet, every entity_id and reference value is unchanged, and every edited "
@@ -183,6 +192,106 @@ def _xml(data: bytes):
 
 
 def patched_workbook_bytes(path: Path, bundle: dict, restored: dict) -> bytes:
+    """Patch approved edits and append validated, static analysis worksheets."""
+    data = _patched_workbook_bytes(path, bundle, restored)
+    added = {name: table for name, table in restored.items() if name not in bundle["sheets"]}
+    if not added:
+        return data
+    return _append_analysis_sheets(data, added)
+
+
+def _append_analysis_sheets(data: bytes, added: dict) -> bytes:
+    from .reconstruction import review_analysis_sheets
+
+    content_ns = "http://schemas.openxmlformats.org/package/2006/content-types"
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            if any(name.startswith("_xmlsignatures/") for name in archive.namelist()):
+                raise SafetyError("Editable workbook XML is unsupported.")
+            workbook = _xml(archive.read("xl/workbook.xml"))
+            relationships = _xml(archive.read("xl/_rels/workbook.xml.rels"))
+            content = _xml(archive.read("[Content_Types].xml"))
+            sheets = workbook.getElementsByTagNameNS(MAIN, "sheets")
+            if len(sheets) != 1:
+                raise SafetyError("Editable workbook XML is unsupported.")
+            existing = list(sheets[0].getElementsByTagNameNS(MAIN, "sheet"))
+            review_analysis_sheets(added, tuple(s.getAttribute("name") for s in existing))
+            sheet_id = max(int(s.getAttribute("sheetId")) for s in existing)
+            relation_ids = {
+                r.getAttribute("Id")
+                for r in relationships.getElementsByTagNameNS(PACKAGE_REL, "Relationship")
+            }
+            members = set(archive.namelist())
+            additions = {}
+            with zipfile.ZipFile(io.BytesIO(excel_workbook_bytes(added))) as generated:
+                for index, name in enumerate(added, 1):
+                    sheet_id += 1
+                    number = sheet_id
+                    while f"xl/worksheets/sheet{number}.xml" in members:
+                        number += 1
+                    member = f"xl/worksheets/sheet{number}.xml"
+                    members.add(member)
+                    relation_id = f"rIdSafeSet{number}"
+                    while relation_id in relation_ids:
+                        relation_id += "_"
+                    relation_ids.add(relation_id)
+                    prefix = sheets[0].prefix + ":" if sheets[0].prefix else ""
+                    sheet = workbook.createElementNS(MAIN, prefix + "sheet")
+                    sheet.setAttribute("name", name)
+                    sheet.setAttribute("sheetId", str(sheet_id))
+                    sheet.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:r", REL)
+                    sheet.setAttributeNS(REL, "r:id", relation_id)
+                    sheets[0].appendChild(sheet)
+                    prefix = (
+                        relationships.documentElement.prefix + ":"
+                        if relationships.documentElement.prefix else ""
+                    )
+                    relation = relationships.createElementNS(PACKAGE_REL, prefix + "Relationship")
+                    relation.setAttribute("Id", relation_id)
+                    relation.setAttribute("Type", REL + "/worksheet")
+                    relation.setAttribute("Target", "/" + member)
+                    relationships.documentElement.appendChild(relation)
+                    prefix = (
+                        content.documentElement.prefix + ":"
+                        if content.documentElement.prefix else ""
+                    )
+                    override = content.createElementNS(content_ns, prefix + "Override")
+                    override.setAttribute("PartName", "/" + member)
+                    override.setAttribute(
+                        "ContentType",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml",
+                    )
+                    content.documentElement.appendChild(override)
+                    document = _xml(generated.read(f"xl/worksheets/sheet{index}.xml"))
+                    # Generated style indices belong to a different workbook. Inline strings
+                    # need no style; never import untrusted returned styles or package parts.
+                    for cell in document.getElementsByTagNameNS(MAIN, "c"):
+                        if cell.hasAttribute("s"):
+                            cell.removeAttribute("s")
+                    additions[member] = document.toxml(encoding="utf-8")
+            replacements = {
+                "xl/workbook.xml": workbook.toxml(encoding="utf-8"),
+                "xl/_rels/workbook.xml.rels": relationships.toxml(encoding="utf-8"),
+                "[Content_Types].xml": content.toxml(encoding="utf-8"),
+            }
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, "w") as result:
+                for entry in archive.infolist():
+                    result.writestr(entry, replacements.get(entry.filename, archive.read(entry)))
+                for member, value in additions.items():
+                    result.writestr(zipfile.ZipInfo(member), value)
+            encoded = output.getvalue()
+            if len(encoded) > MAX_BYTES:
+                raise SafetyError("Restored workbook exceeds the supported size limit.")
+            _check_archive(encoded)
+            return encoded
+    except SafetyError:
+        raise
+    except Exception:
+        raise SafetyError("Editable workbook XML is unsupported.") from None
+
+
+def _patched_workbook_bytes(path: Path, bundle: dict, restored: dict) -> bytes:
     """Keep untouched ZIP members byte-for-byte; patch authorised cells in source order."""
     data = read_bounded(path)
     if hashlib.sha256(data).hexdigest() != bundle["source_file_digest"]:

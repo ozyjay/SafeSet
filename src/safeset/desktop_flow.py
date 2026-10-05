@@ -405,8 +405,6 @@ def prepare_relational_reconstruction(
         )
     returned = read_excel_sheets(returned_path, sheets, allow_reordered_headings=True)
     new_sheet_names = tuple(name for name in returned_names if name not in sheets)
-    if bundle["version"] in {4, 5} and new_sheet_names:
-        raise SafetyError("Editing workbooks must preserve the original protected fields only.")
     analysis_sheets = (
         read_excel_sheets(
             returned_path,
@@ -420,6 +418,11 @@ def prepare_relational_reconstruction(
     review_analysis_sheets(
         analysis_sheets, sheets, sum(len(table.rows) for table in sources.values())
     )
+    if bundle["version"] in {4, 5}:
+        review_analysis_sheets(
+            analysis_sheets, list_excel_sheets(source_path),
+            sum(len(table.rows) for table in sources.values()),
+        )
     new_columns = review_relational_reconstruction(sources, returned, bundle)
     changes = relational_changes(sources, returned, bundle) if bundle["version"] in {4, 5} else None
     workbook_bytes = None
@@ -429,6 +432,8 @@ def prepare_relational_reconstruction(
             returned,
             bundle,
             new_columns,
+            analysis_sheets,
+            tuple(analysis_sheets),
             approved_changes={sheet: tuple(columns) for sheet, columns in changes.items()},
         )
         workbook_bytes = patched_workbook_bytes(source_path, bundle, proposal)

@@ -757,8 +757,6 @@ def reconstruct_relational(
 ) -> dict[str, Table]:
     available = review_relational_reconstruction(sources, returned, bundle)
     if bundle["version"] in {4, 5}:
-        if analysis_sheets or approved_sheets:
-            raise SafetyError("Editing workbooks must preserve the original protected fields only.")
         changes = relational_changes(sources, returned, bundle)
         expected_changes = {sheet: set(columns) for sheet, columns in changes.items()}
         if (
