@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>../../build/windows-backend-tests/obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

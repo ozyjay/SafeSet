@@ -509,3 +509,11 @@ spanning formatted text runs are replaced with a single token at the first run;
 restoration preserves surrounding structure but may use that run's style for the
 identity. `SAFESETD2` records reviewed figure IDs and removed paragraph IDs.
 Version 1 document bundles remain readable and are never rewritten automatically.
+
+## Windows development verification — 5 October 2026
+
+The `windows` branch now contains a native C# controller over the shared JSON-line protocol and a frozen Python helper. Transport uses fixed app/checkout paths, local redirected pipes, serial requests, 1 MiB frame limits, version/request-ID and duplicate-key validation, a two-minute timeout and helper termination on uncertainty. Secrets never enter arguments, environment variables or logs. Domain validation, review tokens, encryption and publication remain in Python.
+
+Debug screens expose document review/protection/restoration, YAML-policy worksheet protection and explicit workbook-restoration approvals. Destination selection chooses an existing folder plus a new filename without creating a save-picker placeholder. The helper is copied beside the app without indexing Python extension filenames as UI resources. An unpackaged self-contained Windows App SDK launch is a development fallback; packaged desktop remains the release target.
+
+Encrypted Windows and relocated-helper tests now pass. Native interaction verification is unavailable, so Debug is for synthetic testing and Release workflows remain disabled. This supersedes earlier controller/dependency-gap statements; see `docs/verification.md` and `windows/README.md` on the Windows branch.

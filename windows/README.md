@@ -1,137 +1,73 @@
 # SafeSet Windows desktop
 
-SafeSet targets a native Windows experience using **WinUI 3 with the Windows App SDK**.
-The Windows shell must consume the same bounded JSON-line desktop protocol and Python
-safety engine as the macOS SwiftUI app. It must not duplicate or weaken safety logic.
+This branch contains the native WinUI 3 frontend and Windows build scripts. The Python safety engine, bounded JSON-line protocol and CLI remain shared with the `mac` branch. See [the audited branch split](../docs/platform-branches.md).
 
-## Supported target
+## Current status — 5 October 2026
 
-Initial target:
+The local Python engine and CLI are installed and tested on Windows 11 x64. The native frontend connects to that engine, and a standalone Python helper is built into the development output. Debug builds are for **synthetic testing only** until native interactions have been verified. Release builds refuse workflow execution; there is no operational desktop release claim.
 
-- Windows 11 x64
-- .NET 10+
-- WinUI 3 / Windows App SDK
-- packaged desktop application
-- PowerShell 7+ (`pwsh`), with Windows Developer Mode enabled for launch
+Implemented native paths:
 
-Use the current Microsoft WinUI project template rather than pinning a stale template
-or Windows App SDK package version in this repository before the Windows build is
-actively maintained.
+- DOCX protection with explicit identity terms, local paragraph/figure review, comment removal, validation summary, masked passphrase confirmation and approval;
+- DOCX restoration with authenticated bundles, exact-token integrity checks and explicit approval;
+- one-worksheet workbook protection with an explicit YAML policy and strict validation;
+- workbook restoration with individual result-field, analysis-sheet and changed-field approvals; related/editable/region bundles use the corresponding restoration option.
 
-From PowerShell 7 on the Windows development machine, at the repository root:
+Related-sheet and editable workbook **creation**, region selection, participant reconciliation and result-only workbook restoration remain CLI/shared-engine features without full Windows UI parity. The Windows UI does not edit policies. Source fields remain immutable in its one-worksheet protection path.
+
+## Local setup
+
+Use PowerShell 7, .NET 10+ and an explicitly selected Python 3.12+ interpreter. A working `python3` may create the environment:
+
+```pwsh
+python3 -m venv .venv
+& ./.venv/Scripts/python.exe -m pip install -e '.[dev,windows-app]'
+```
+
+On this PC the existing `.venv/Scripts/python.exe` is Python 3.14.3; `python3` is an inaccessible Store alias and no active pyenv executable was found. Use the explicit virtual-environment path. No global Python or Windows setting was changed by this setup.
+
+For a new native project, install the current WinUI template and bootstrap once:
 
 ```pwsh
 dotnet new install Microsoft.WindowsAppSDK.WinUI.CSharp.Templates
 & ./scripts/bootstrap-windows-app.ps1
+```
+
+The project is already bootstrapped on this PC. Build and verify from the repository root:
+
+```pwsh
+& ./scripts/build-windows-helper.ps1
 & ./scripts/smoke-windows-ux.ps1
-& ./scripts/run-windows-app.ps1
+# The C# harness links the production transport; it adds no NuGet test dependency.
+dotnet build ./windows/BackendTests/BackendTests.csproj --ignore-failed-sources
+& ./.venv/Scripts/python.exe -m pytest
+& ./.venv/Scripts/python.exe -m ruff check .
 ```
 
-The bootstrap script creates `SafeSetWindows.csproj` and its supporting template
-files directly in `windows/SafeSetWindowsUX`, preserving the source-controlled
-`MainWindow.xaml` and `MainWindow.xaml.cs`. The project name and C# namespace remain
-`SafeSetWindows`. Temporary scaffolding is retained under the ignored `build` directory.
+Bootstrap preserves the reviewed `MainWindow` and `BackendBridge` files. Other template files, helper binaries and build caches are ignored. `update-windows-ux.ps1` checks the source files and adds the helper-copy items to the generated project. Template installation and explicit Python/NuGet dependency restoration may use package repositories. Runtime data processing needs no network.
 
-The VS Code workspace excludes `build` directories from file discovery, search and
-watching so temporary scaffolding and script-check project stubs are not loaded as
-application projects. If C# Dev Kit has already reported unsupported old projects
-under `build`, run **Developer: Reload Window** after applying the workspace settings.
-The application project in `windows/SafeSetWindowsUX` remains available.
+NuGet restoration uses the ignored `build/nuget-packages` cache, so builds do not depend on a different account's package directory. After a successful restore, use `smoke-windows-ux.ps1 -NoRestore`. A failed previous restore or missing cache still blocks compilation.
 
-If the WinUI project already exists in `windows/SafeSetWindowsUX`, launch it directly:
+## Start the development app
+
+The default launch uses the packaged template. It requires Windows Developer Mode and a working package registration. On this PC registration conflicts with an existing installation; that installation was left untouched. Use the unpackaged development option:
 
 ```pwsh
-& ./scripts/run-windows-app.ps1
+& ./scripts/run-windows-app.ps1 -Unpackaged
 ```
 
-The frontend lives in `windows/SafeSetWindowsUX`; all scripts use that directory.
-Generated template files are ignored by Git; the two reviewed `MainWindow` source
-files remain tracked. The old `windows/SafeSetWindows` directory is no longer used.
-If you previously bootstrapped there, run bootstrap again to create the project in
-the correct directory; the old directory is left untouched.
+Normal launch does not restore packages. Add `-Restore` only when preparing or updating dependencies. The unpackaged option uses Microsoft's supported [self-contained Windows App SDK deployment](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/self-contained-deploy/deploy-self-contained-apps) and disables packaged `winapp` launch redirection. It is a development fallback, not a replacement for the packaged-release gate. The Python helper remains a console executable with redirected local pipes; no console window or network listener is created for data processing.
 
-Both smoke and launch scripts validate the frontend project, select
-the x64 platform and accept `-Configuration Release` (the default is `Debug`).
-The smoke script builds only; the launch script uses the template's packaged
-`dotnet run` support. Both restore the caller's working directory after completion
-or failure. `& ./scripts/update-windows-ux.ps1` remains a compatibility command
-that checks the project and source files; copying an overlay is no longer needed.
-Edit the tracked `MainWindow` files directly in `windows/SafeSetWindowsUX`.
+All scripts select x64 and accept `-Configuration Release` where relevant. Release workflow execution stays disabled pending native verification. The CLI entry points are `./.venv/Scripts/safeset.exe` and `./.venv/Scripts/safeset-document.exe`; `safeset desktop` remains the macOS compatibility launcher.
 
-For an offline build after a successful restore, run
-`& ./scripts/smoke-windows-ux.ps1 -NoRestore`. This does not fetch missing packages;
-an absent or failed previous restore still blocks the build.
+## Destinations and private storage
 
-Template installation and the initial NuGet restore need network access. The
-scripts do not install SDKs or templates or enable Developer Mode automatically.
-See Microsoft's [WinUI command-line setup](https://learn.microsoft.com/en-us/windows/apps/get-started/start-here)
-for prerequisites and packaged launch troubleshooting.
+The Windows UI chooses a folder and new filename without creating a placeholder. A save-file picker could create a file before SafeSet's approval, which would conflict with no-clobber publication. Private bundle selection proposes a new subdirectory; only the shared engine creates it during explicitly approved publication.
 
-## Architecture
+Use fixed local NTFS storage outside repositories and cloud-synchronised folders. Maps and exports need separate directories. Existing broad or inheriting private directories are rejected, not repaired. Native ACL creation, file validation, encryption, stale-review rejection and no-clobber publication remain engine responsibilities. C# does not implement its own privacy decisions.
 
-```text
-WinUI 3 shell
-    |
-    | bounded JSON-line protocol over stdin/stdout
-    v
-bundled SafeSet Python helper
-    |
-    +-- workbook protection/restoration
-    +-- document protection/restoration
-    +-- validation
-    +-- encrypted private bundles
-    +-- no-clobber publication
-```
+## Verification and remaining release gates
 
-The shell owns Windows navigation, file pickers, accessibility, Fluent presentation,
-window behaviour and packaging. The Python engine owns every data-handling decision.
+Actual results are in [verification](../docs/verification.md). The complete Windows Python run passed 361 tests with 8 documented skips. The C# transport and relocated helper completed synthetic DOCX and workbook round trips; cancellation, stale reviews, wrong passphrases, missing approvals and malformed response frames were rejected. Both Debug and unpackaged Release frontend builds compiled. The unpackaged app process started.
 
-## Mandatory Windows release gate
-
-The shared engine implements protected NTFS ACL creation and validation with no
-new dependencies. Native tests cover private creation, inheritance, excessive
-permissions, links, destination separation and no-clobber publication. This does
-**not** yet make desktop protection/restoration operational: encrypted round-trip
-verification is blocked by missing offline Python dependencies, and the WinUI
-backend controller remains to be implemented.
-
-Before a Windows build may handle operational data:
-
-1. retain the engine's restricted directory/file ACL creation and validation;
-2. complete encrypted bundle creation/read/restoration tests with synthetic DOCX fixtures;
-3. run the full safety suite, including existing POSIX-specific fixture review;
-4. connect the bounded shared backend with native review, approval and masked secrets;
-5. verify packaged-helper execution and native interactions on Windows 11;
-6. review the threat model and verification record against that actual evidence.
-
-Do not bypass ACL validation or enable publication without the remaining evidence.
-Existing broad/inheriting directories are not silently repaired. Only fixed local
-NTFS storage is supported; ordinary cloud synchronisation cannot be detected.
-
-
-## Current UX milestone
-
-The current Windows shell is deliberately usable for UX evaluation before the
-sensitive storage boundary is enabled. It includes:
-
-- Windows 11 Mica backdrop and left-hand `NavigationView`;
-- Home cards for protect/restore workbook and document workflows;
-- native file open/save pickers;
-- a document-protection form with explicit identity terms and comment-removal choice;
-- a document-restoration form with returned DOCX, bundle and output selection;
-- workbook workflow shells matching the established SafeSet terminology;
-- Advanced and Help pages explaining the shared-engine boundary;
-- a persistent InfoBar making it clear that publication is still disabled on Windows.
-
-The interactive review buttons intentionally stop at preview mode. The current
-ACL implementation does not remove the encrypted round-trip and native-controller
-release gates. Standalone storage checks can run without external packages:
-
-```pwsh
-$env:PYTHONPATH = Join-Path (Get-Location) 'src'
-& ./.venv/Scripts/python.exe -m unittest discover -s tests/windows -v
-```
-
-Tests create only synthetic artefacts in an external temporary directory. The
-encrypted DOCX test explicitly skips when its dependencies are absent; that skip
-is a release gap, not a successful encrypted-workflow result.
+Native UI automation could not connect to the Computer Use pipe after retry/reset, so no successful dialog, picker, keyboard or masked-secret interaction test is claimed. Packaged registration, privileged wrong-owner and independent second-user ACL checks, full native workbook parity and Windows release packaging/signing remain gaps. The global format check reports existing formatting differences; lint passes. Do not treat those synthetic results as a security audit or a claim of anonymity.

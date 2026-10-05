@@ -1,5 +1,21 @@
 # Verification
 
+## Windows branch and local development pass — 5 October 2026
+
+The native platform branches were audited and separated locally. Windows/shared changes were replayed as 38 cherry-picks from the pre-Windows baseline `d1f9539`; macOS-only files were excluded from mixed commits. Final shared/Windows file equality against `main` at `03b7fb8` was checked before layout removal. The portable test-fixture fixes were also cherry-picked onto `mac`. `main` and remote branches were not changed. See [the commit audit](platform-branches.md).
+
+Environment: Windows x64 build 26200, PowerShell 7.6.6, .NET 10.0.303, CPython 3.14.3 in the existing Windows `.venv`. The `python3` Store alias remains unusable and no active pyenv command was found. Installed declared dependencies include cryptography 50.0.2, openpyxl 3.1.5, PyYAML 6.0.3, Typer 0.27.2, pytest 9.1.1, Ruff 0.16.10, PyInstaller 6.22.3 and Hatchling 1.32.4. Package installation and NuGet restoration used network access; no operational files were used or transmitted.
+
+- Full Python suite: **361 passed, 8 skipped**. Positive fixtures now create private directories through real platform storage enforcement. File privacy assertions use actual Windows ACL validation or POSIX modes. There is no mocked ACL acceptance or blanket Windows regression skip.
+- Skips: one POSIX pseudo-terminal module, one FIFO test, one POSIX directory/map mode test, four tests of deliberately POSIX-only diagnostic logging, and one ownership-change test requiring additional privilege. A Windows regression verifies that diagnostic logging creates no file. The native encrypted DOCX test now passes instead of skipping for missing dependencies.
+- The new C# production-transport harness and relocated frozen helper: **13 synthetic tests passed**, covering document and workbook round trips, cancellation, single-use tokens, stale source rejection, incorrect passphrases, required result-field approval, malformed/duplicate/version/ID/oversized/invalid-UTF-8/truncated response rejection. The helper was copied outside the checkout and run with `PYTHONHOME`/`PYTHONPATH` removed. No source identities or passphrases appeared in its review responses.
+- Ruff lint and `pip check`: passed. Global formatter check: **21 files would be reformatted, 51 already formatted**; broad formatting was not mixed into the Windows implementation. Windows Python 3.14 also emits the existing `PurePath.is_reserved` deprecation warning; it does not bypass path validation.
+- Frozen helper build: passed. Python source distribution and wheel: built offline with the declared backend; wheel contents contained only package modules/metadata, with no private artefacts. An isolated local wheel installation passed CLI help smoke.
+- Native Debug build and unpackaged self-contained Release build: passed. The unpackaged Release build reported **zero warnings and errors**. Release workflow execution remains blocked in the compiled UI. Packaged launch failed because an existing app registration conflicts; no installed application was removed. The unpackaged development app process started, but native interactions were not verified.
+- Computer Use native UI discovery failed to connect to its pipe; one retry and session reset did not restore it. No successful picker, dialog, keyboard, password masking or graphical end-to-end run is claimed. The C# harness is backend evidence, not GUI evidence.
+
+The Debug frontend is for synthetic testing only. Real-data desktop readiness, privileged wrong-owner/second-user ACL evidence, complete native workbook parity, packaged app registration/signing and independent security review remain outstanding. No source dataset, real identity map, operational export or restored research output was read, created, committed or uploaded. Synthetic temporary files are cleaned by their tests. Historical Mac results below were not rerun on this PC.
+
 ## Confirmed regions and manuscript review — 26 September 2026
 
 The shared engine now has a version 5 confirmed-region editable workbook path and

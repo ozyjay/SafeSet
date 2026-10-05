@@ -80,8 +80,8 @@
                     IsOpen="True"
                     IsClosable="False"
                     Severity="Informational"
-                    Title="Windows UX preview"
-                    Message="The native Windows shell is ready for UX testing. Protection and restoration publication remain disabled until Windows private-bundle ACL enforcement is implemented and verified." />
+                    Title="Development preview — synthetic testing only"
+                    Message="Use synthetic files while native Windows interactions are being verified. Every publication requires validation, review and explicit approval. Release workflows remain disabled." />
 
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <Grid MaxWidth="1080" HorizontalAlignment="Left">
@@ -185,37 +185,20 @@
                         <!-- PROTECT WORKBOOK -->
                         <StackPanel x:Name="ProtectWorkbookPage" Visibility="Collapsed" Spacing="16">
                             <TextBlock Text="Protect a workbook" Style="{ThemeResource TitleTextBlockStyle}" />
-                            <TextBlock
-                                Text="Windows UX preview of the established SafeSet workbook workflow."
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                TextWrapping="Wrap" />
-
+                            <TextBlock Text="Protect one worksheet using an explicit YAML policy. Every field needs a classification and protection decision. Source fields remain immutable in this workflow." TextWrapping="Wrap" />
                             <Border Style="{StaticResource CardBorderStyle}">
                                 <StackPanel Spacing="12">
-                                    <TextBlock Text="1. Choose the workbook" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                    <Grid ColumnSpacing="10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="WorkbookSourcePath" PlaceholderText="Original .xlsx workbook" IsReadOnly="True" />
-                                        <Button Grid.Column="1" Content="Browse…" Click="BrowseWorkbookSource_Click" />
-                                    </Grid>
-                                    <TextBlock
-                                        Text="The Windows app will eventually use the same field-by-field decisions, validation profiles and explicit approval flow as the macOS app."
-                                        TextWrapping="Wrap"
-                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource CardBorderStyle}">
-                                <StackPanel Spacing="12">
-                                    <TextBlock Text="2. Review field decisions" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                    <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
-                                             Message="Field inspection and policy editing will be connected to the shared SafeSet bridge after the Windows private-storage boundary is complete." />
-                                    <CheckBox Content="Show only fields needing attention" IsChecked="True" />
-                                    <Button Content="Review protection" HorizontalAlignment="Left"
-                                            Click="PreviewOnly_Click" />
+                                    <TextBox x:Name="WorkbookSourcePath" Header="Original .xlsx workbook" />
+                                    <Button Content="Browse workbook…" Click="BrowseWorkbookSource_Click" />
+                                    <Button Content="Load worksheets" Click="LoadWorkbookSheets_Click" />
+                                    <ComboBox x:Name="WorkbookSheet" Header="Worksheet to protect" HorizontalAlignment="Stretch" />
+                                    <TextBox x:Name="WorkbookPolicyPath" Header="Protection policy (.yaml)" />
+                                    <Button Content="Browse policy…" Click="BrowseWorkbookPolicy_Click" />
+                                    <TextBox x:Name="WorkbookProtectedPath" Header="New protected .xlsx destination" />
+                                    <Button Content="Choose protected destination…" Click="ChooseProtectedWorkbook_Click" />
+                                    <TextBox x:Name="WorkbookBundlePath" Header="New private .enc bundle in a separate directory" />
+                                    <Button Content="Choose private bundle destination…" Click="ChooseWorkbookBundle_Click" />
+                                    <Button Content="Review workbook protection" Style="{StaticResource AccentButtonStyle}" Click="ProtectWorkbook_Click" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -236,7 +219,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="DocumentSourcePath" PlaceholderText="Original .docx document" IsReadOnly="True" />
+                                        <TextBox x:Name="DocumentSourcePath" PlaceholderText="Original .docx document" IsReadOnly="False" />
                                         <Button Grid.Column="1" Content="Browse…" Click="BrowseDocumentSource_Click" />
                                     </Grid>
                                 </StackPanel>
@@ -270,7 +253,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBox x:Name="DocumentProtectedPath"
                                                  PlaceholderText="Protected .docx output"
-                                                 IsReadOnly="True" />
+                                                 IsReadOnly="False" />
                                         <Button Grid.Column="1" Content="Choose…" Click="ChooseProtectedDocument_Click" />
                                     </Grid>
                                     <Grid ColumnSpacing="10">
@@ -280,7 +263,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBox x:Name="DocumentBundlePath"
                                                  PlaceholderText="Private .enc restoration bundle"
-                                                 IsReadOnly="True" />
+                                                 IsReadOnly="False" />
                                         <Button Grid.Column="1" Content="Choose…" Click="ChooseDocumentBundle_Click" />
                                     </Grid>
                                 </StackPanel>
@@ -316,7 +299,7 @@
                                     <Button Content="Review document protection"
                                             HorizontalAlignment="Left"
                                             Style="{StaticResource AccentButtonStyle}"
-                                            Click="PreviewOnly_Click" />
+                                            Click="ProtectDocument_Click" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -324,26 +307,20 @@
                         <!-- RESTORE WORKBOOK -->
                         <StackPanel x:Name="RestoreWorkbookPage" Visibility="Collapsed" Spacing="16">
                             <TextBlock Text="Restore a workbook" Style="{ThemeResource TitleTextBlockStyle}" />
-                            <TextBlock
-                                Text="Review the returned protected workbook and create a new locally reidentified workbook."
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                TextWrapping="Wrap" />
-
+                            <TextBlock Text="Use the exact original workbook and matching private bundle. Review and explicitly approve every result field, analysis worksheet and changed field." TextWrapping="Wrap" />
                             <Border Style="{StaticResource CardBorderStyle}">
                                 <StackPanel Spacing="12">
-                                    <TextBlock Text="Returned protected workbook" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                    <Grid ColumnSpacing="10">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="WorkbookReturnedPath" PlaceholderText="Modified protected .xlsx" IsReadOnly="True" />
-                                        <Button Grid.Column="1" Content="Browse…" Click="BrowseWorkbookReturned_Click" />
-                                    </Grid>
-                                    <InfoBar IsOpen="True" IsClosable="False" Severity="Informational"
-                                             Message="The authenticated bundle—not the UI—will remain authoritative for restoration scope." />
-                                    <Button Content="Review restoration" HorizontalAlignment="Left"
-                                            Click="PreviewOnly_Click" />
+                                    <TextBox x:Name="WorkbookReturnedPath" Header="Returned protected .xlsx workbook" />
+                                    <Button Content="Browse returned workbook…" Click="BrowseWorkbookReturned_Click" />
+                                    <TextBox x:Name="WorkbookOriginalPath" Header="Exact original .xlsx workbook" />
+                                    <Button Content="Browse original workbook…" Click="BrowseWorkbookOriginal_Click" />
+                                    <TextBox x:Name="WorkbookOriginalSheet" Header="Original worksheet name (single worksheet workflow; optional for a one-sheet original)" />
+                                    <TextBox x:Name="WorkbookRestoreBundlePath" Header="Matching private .enc bundle" />
+                                    <Button Content="Browse private bundle…" Click="BrowseWorkbookRestoreBundle_Click" />
+                                    <TextBox x:Name="WorkbookRestoredPath" Header="New identifiable .xlsx destination" />
+                                    <Button Content="Choose restored destination…" Click="ChooseRestoredWorkbook_Click" />
+                                    <CheckBox x:Name="WorkbookRelationalRestore" Content="Related sheets, editable workbook or confirmed-region bundle (versions 3–5)" />
+                                    <Button Content="Review workbook restoration" Style="{StaticResource AccentButtonStyle}" Click="RestoreWorkbook_Click" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -364,7 +341,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="DocumentReturnedPath" PlaceholderText="Modified protected .docx" IsReadOnly="True" />
+                                        <TextBox x:Name="DocumentReturnedPath" PlaceholderText="Modified protected .docx" IsReadOnly="False" />
                                         <Button Grid.Column="1" Content="Browse…" Click="BrowseDocumentReturned_Click" />
                                     </Grid>
 
@@ -374,7 +351,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="DocumentRestoreBundlePath" PlaceholderText="Private .enc bundle" IsReadOnly="True" />
+                                        <TextBox x:Name="DocumentRestoreBundlePath" PlaceholderText="Private .enc bundle" IsReadOnly="False" />
                                         <Button Grid.Column="1" Content="Browse…" Click="BrowseDocumentRestoreBundle_Click" />
                                     </Grid>
 
@@ -384,7 +361,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox x:Name="DocumentRestoredPath" PlaceholderText="New local .docx output" IsReadOnly="True" />
+                                        <TextBox x:Name="DocumentRestoredPath" PlaceholderText="New local .docx output" IsReadOnly="False" />
                                         <Button Grid.Column="1" Content="Choose…" Click="ChooseRestoredDocument_Click" />
                                     </Grid>
 
@@ -393,7 +370,7 @@
                                     <Button Content="Review restoration"
                                             HorizontalAlignment="Left"
                                             Style="{StaticResource AccentButtonStyle}"
-                                            Click="PreviewOnly_Click" />
+                                            Click="RestoreDocument_Click" />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -416,8 +393,8 @@
                                 <StackPanel Spacing="10">
                                     <TextBlock Text="Windows release gate" Style="{ThemeResource SubtitleTextBlockStyle}" />
                                     <InfoBar IsOpen="True" IsClosable="False" Severity="Warning"
-                                             Title="Private storage not yet enabled"
-                                             Message="SafeSet must implement and verify Windows ACL-equivalent private bundle storage before operational protection/restoration is enabled." />
+                                             Title="Private NTFS storage"
+                                             Message="The shared engine enforces restricted NTFS ACLs. Existing permissive private directories are rejected; use a new private bundle subdirectory separate from exports." />
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -427,10 +404,10 @@
                             <TextBlock Text="Help" Style="{ThemeResource TitleTextBlockStyle}" />
                             <Border Style="{StaticResource CardBorderStyle}">
                                 <StackPanel Spacing="10">
-                                    <TextBlock Text="Testing this Windows UX" Style="{ThemeResource SubtitleTextBlockStyle}" />
-                                    <TextBlock Text="Use synthetic or non-sensitive files only while the Windows storage boundary is unfinished."
+                                    <TextBlock Text="Using this Windows build" Style="{ThemeResource SubtitleTextBlockStyle}" />
+                                    <TextBlock Text="Choose local fixed NTFS storage. Keep originals, bundles and restored documents private, outside repositories and cloud synchronisation."
                                                TextWrapping="Wrap" />
-                                    <TextBlock Text="Try the navigation, browse/save pickers, window resizing, keyboard navigation, light/dark mode and overall workflow language. Protection buttons currently report preview mode rather than publishing files."
+                                    <TextBlock Text="Document protection includes local paragraph and figure review. Workbook protection currently uses one worksheet and an explicit YAML policy. Use the CLI for related-sheet protection, editable workbook creation and advanced workflows. Review the protected copy before sharing it."
                                                TextWrapping="Wrap"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>

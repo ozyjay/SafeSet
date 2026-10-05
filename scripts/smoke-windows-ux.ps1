@@ -28,7 +28,11 @@ if (-not (Get-Command dotnet -CommandType Application -ErrorAction SilentlyConti
 Push-Location $target
 try {
     $buildArguments = @('./SafeSetWindows.csproj', '--configuration', $Configuration, '-p:Platform=x64')
-    if ($NoRestore) { $buildArguments += '--no-restore' }
+    if (-not $NoRestore) {
+        dotnet restore ./SafeSetWindows.csproj --packages (Join-Path $repo 'build/nuget-packages') '-p:Platform=x64'
+        if ($LASTEXITCODE -ne 0) { throw 'Windows dependency restore failed.' }
+    }
+    $buildArguments += '--no-restore'
     dotnet build @buildArguments
     if ($LASTEXITCODE -ne 0) {
         throw 'SafeSet Windows UX build failed.'

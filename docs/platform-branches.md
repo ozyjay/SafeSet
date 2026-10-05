@@ -4,7 +4,7 @@ The local `windows` branch contains the native WinUI frontend and Windows build 
 
 Do not fork validation, approval, private-storage or restoration rules into either native frontend. Merge shared engine fixes across both platform branches. Platform-specific native files are maintained on their corresponding branch. Publishing either branch requires an explicit instruction.
 
-## Windows history reconstruction — 5 October 2026
+## Windows history reconstruction â€” 5 October 2026
 
 Baseline: `d1f9539`, immediately before the Windows foundation commits. The following commits were cherry-picked in topological order. For mixed commits, macOS frontend/build files, the macOS packaging guide and macOS VS Code task/launch files were excluded. Each replayed commit records its original full commit ID in its message. The inherited macOS frontend/build files were then removed in a separate layout commit.
 
@@ -53,4 +53,4 @@ Before layout removal, comparisons against `main` at `03b7fb8` confirmed exact e
 
 Excluded macOS-only commits: `7eb0285`, `f13adda`, `48de1d6`, `a8a35cb`, `8dcf5ef`, `6e336dc`, `186ca62`.
 
-The current uncommitted Windows setup/backend work was preserved in the named Git stash `SafeSet Windows setup and backend work before platform branch reconstruction` before replay. It is reapplied only after the branch split is verified. No branch was pushed as part of this operation.
+The current uncommitted Windows setup/backend work was preserved in the named Git stash `SafeSet Windows setup and backend work before platform branch reconstruction` before replay. It was reapplied after the branch split was verified; the stash is retained as a local recovery checkpoint. No branch was pushed as part of this operation.

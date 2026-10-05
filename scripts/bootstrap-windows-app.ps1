@@ -12,7 +12,7 @@ $target = Join-Path $repo 'windows/SafeSetWindowsUX'
 if (Test-Path -LiteralPath (Join-Path $target 'SafeSetWindows.csproj')) {
     throw 'windows/SafeSetWindowsUX is already bootstrapped. Run scripts/run-windows-app.ps1 instead.'
 }
-foreach ($name in @('MainWindow.xaml', 'MainWindow.xaml.cs')) {
+foreach ($name in @('MainWindow.xaml', 'MainWindow.xaml.cs', 'BackendBridge.cs')) {
     if (-not (Test-Path -LiteralPath (Join-Path $target $name) -PathType Leaf)) {
         throw 'Windows UX source files are missing. Restore the frontend sources before bootstrapping.'
     }
@@ -40,7 +40,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $generated = @(Get-ChildItem -LiteralPath $staging -Force |
-    Where-Object { $_.Name -notin @('MainWindow.xaml', 'MainWindow.xaml.cs') })
+    Where-Object { $_.Name -notin @('MainWindow.xaml', 'MainWindow.xaml.cs', 'BackendBridge.cs') })
 foreach ($item in $generated) {
     if (Test-Path -LiteralPath (Join-Path $target $item.Name)) {
         throw 'A generated project file already exists in SafeSetWindowsUX; refusing to overwrite it.'

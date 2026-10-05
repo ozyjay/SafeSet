@@ -196,3 +196,9 @@ Common authoring metadata and custom document properties are removed rather than
 Restoration verifies the returned DOCX before writing anything. Every token must occur exactly as many times as recorded in the bundle, and none of the original protected values may already be present. Restoration replaces only the authenticated tokens and publishes a new local document without overwriting the returned copy.
 
 These checks do not detect indirect identification, participant information expressed without a known identifier shape, confidential research content, identifying figures/images, acknowledgements or contextual clues. Human purpose/suitability review remains mandatory.
+
+## Windows development verification — 5 October 2026
+
+Windows Debug screens now request reviews and explicit approvals from the shared engine. Document protection requires figure acknowledgements and permits explicitly selected paragraph removal. Single-worksheet protection uses a strict YAML policy and leaves source fields immutable. Restoration requires approval of each result field, added analysis worksheet and changed field reported by the engine; UI selections cannot expand authenticated bundle permissions.
+
+Destination selection does not create placeholder files. Private directories are created only during approved engine publication and existing broad ACLs remain rejected. The full Windows suite and relocated C#-transport/helper round trips now pass. Native UI interaction verification is still missing, so Debug is restricted to synthetic testing and Release workflows remain disabled. These checks do not establish anonymity, substantive result correctness or recipient suitability. See `docs/verification.md` for actual evidence and superseded historical dependency gaps.

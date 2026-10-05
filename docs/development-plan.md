@@ -83,3 +83,9 @@ remains in preview mode. Next, supply the declared dependencies locally, run the
 encrypted and full regression checks, then implement the bounded Windows backend
 controller and DOCX review/approval flow. Packaging and workbook parity follow
 that verified vertical slice; neither is established by the ACL tests alone.
+
+## Windows development verification — 5 October 2026
+
+Completed locally: audited platform branch separation, declared Python dependencies, portable native-storage test fixtures, encrypted Windows round trips, C# bounded transport, document review/approval screens, YAML-policy worksheet protection, explicit workbook-restoration approvals and relocated-helper tests. The unpackaged development app process starts; Release workflow execution stays blocked.
+
+Next gates: verify native dialogs, file/folder pickers, cancellation, keyboard use and masked secrets with synthetic fixtures; resolve packaged registration and test the packaged helper; complete privileged ownership/second-user ACL evidence; implement full Windows workbook UI parity and release packaging/signing. Computer Use could not connect to its native pipe in this pass. Related/editable/region protection and participant/result-only workflows remain available through the shared CLI, without full native UI parity. See `docs/verification.md`; older missing-dependency/controller statements above are historical.

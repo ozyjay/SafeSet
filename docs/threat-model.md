@@ -250,3 +250,9 @@ concurrent modification. No secure deletion is claimed.
 | Returned-token corruption | Restoration requires the exact occurrence count of every protected token | External editing can still change surrounding scholarly content incorrectly |
 | Original identity reintroduced externally | Returned package is rejected if an original protected value is present | A semantically equivalent or differently formatted identity may evade exact matching |
 | Private document bundle disclosure | Same encrypted bundle/passphrase separation and no-clobber rules as workbook workflows; Windows uses protected NTFS ACLs | Encrypted Windows round-trip verification and native backend connection remain incomplete; desktop publication stays disabled |
+
+## Windows development verification — 5 October 2026
+
+The C# controller rejects malformed, oversized, duplicate-key, wrong-version and mismatched-ID responses, discards stderr and terminates the helper on uncertainty. Passphrases travel only through the local pipe and are cleared from UI controls after entry; Python and C# cannot guarantee memory erasure. Source values and exception payloads are never logged or exposed through errors. Explicit document-content review may display bounded local excerpts; it does not analyse image pixels.
+
+Native storage and encrypted Windows round trips now pass, including relocated-helper tests. Native picker/dialog/keyboard/secret-mask interactions could not be verified because Computer Use was unavailable. Release workflows stay disabled and Debug is for synthetic testing only. Packaged registration, privileged wrong-owner and second-user ACL evidence remain gaps. The existing local NTFS, repository exclusion, map separation, no-clobber and stale-review boundaries are unchanged. This dated evidence supersedes earlier missing-dependency/controller statements; see `docs/verification.md`.

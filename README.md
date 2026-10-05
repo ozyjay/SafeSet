@@ -1,4 +1,4 @@
-# SafeSet — Windows branch
+# SafeSet â€” Windows branch
 
 This branch contains the Windows frontend and the shared Python engine. The native macOS frontend is maintained on `mac`; `main` preserves the combined history. See [platform branch history](docs/platform-branches.md).
 
@@ -30,14 +30,15 @@ The private bundle contains the selected source key map, observed category codeb
 Use PowerShell 7 on Windows. The native project requires .NET 10 and Windows Developer Mode; see [Windows setup](windows/README.md). In an existing checkout with a Windows virtual environment:
 
 ```pwsh
-& ./.venv/Scripts/python.exe -m pip install -e '.[dev]'
+& ./.venv/Scripts/python.exe -m pip install -e '.[dev,windows-app]'
+& ./scripts/build-windows-helper.ps1
 & ./.venv/Scripts/python.exe -m pytest
 & ./.venv/Scripts/python.exe -m ruff check .
 & ./scripts/smoke-windows-ux.ps1 -NoRestore
-& ./scripts/run-windows-app.ps1
+& ./scripts/run-windows-app.ps1 -Unpackaged
 ```
 
-For a new environment, create `.venv` using an explicitly selected Python 3.12+ interpreter. The `python3` command must resolve to a working interpreter, not an inactive Windows Store alias. Installation may access package repositories; normal data processing needs no network. The native Windows shell remains a preview until its backend, approval flow and packaged helper have been verified.
+For a new environment, create `.venv` using an explicitly selected Python 3.12+ interpreter. The `python3` command must resolve to a working interpreter, not an inactive Windows Store alias. Installation may access package repositories; normal data processing needs no network. The Debug frontend is for synthetic testing: the backend and relocated helper are verified, but native interactions and packaged launch remain release gaps. Release workflows remain disabled. See [actual Windows verification](docs/verification.md).
 
 ## CLI and synthetic example
 
@@ -132,4 +133,4 @@ safeset-document protect ./Draft.docx --person 'Synthetic Author' --output ./Dra
 safeset-document restore ./Returned-protected.docx --bundle ./private/document.enc --output ./Returned-restored.docx
 ```
 
-The merged macOS SwiftUI shell includes dedicated Protect document and Restore document pages. Windows is a first-class target using a native WinUI 3 shell over the same shared engine; see `windows/README.md`. Windows desktop protection/restoration remains in preview mode pending encrypted round-trip verification and connection to the shared backend. The Windows ACL storage implementation has native integration tests; that evidence alone does not establish an operational document workflow.
+The merged macOS SwiftUI shell includes dedicated Protect document and Restore document pages. Windows is a first-class target using a native WinUI 3 shell over the same shared engine; see `windows/README.md`. The Windows Debug desktop is connected to the shared engine for synthetic testing. Native interaction verification and packaged release remain incomplete; Release workflows are disabled. The Windows ACL storage implementation and encrypted round trips have native tests; these do not establish an operational desktop release.

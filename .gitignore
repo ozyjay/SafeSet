@@ -35,3 +35,6 @@ windows/SafeSetWindows/
 windows/SafeSetWindowsUX/*
 !windows/SafeSetWindowsUX/MainWindow.xaml
 !windows/SafeSetWindowsUX/MainWindow.xaml.cs
+!windows/SafeSetWindowsUX/BackendBridge.cs
+windows/BackendTests/obj/
+windows/BackendTests/bin/
