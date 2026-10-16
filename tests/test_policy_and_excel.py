@@ -16,12 +16,14 @@ from safeset.ingestion import (
     MAX_FIELD,
     Table,
     excel_bytes,
+    excel_workbook_bytes,
     list_excel_sheets,
     read_bounded,
     read_excel,
 )
 from safeset.policy import load_policy, parse_policy
 from safeset.reconstruction import reconstruct
+from safeset.restoration import restore
 from safeset.transform import sanitise
 from safeset.validation import validate
 
@@ -32,7 +34,8 @@ from .conftest import ROOT
     "change",
     [
         lambda w: setattr(w.active["A1"], "value", "b"),
-        lambda w: setattr(w.active["A1"], "value", " a"),
+        lambda w: setattr(w.active["A1"], "value", " \t\n"),
+        lambda w: setattr(w.active["A1"], "value", "x" * (MAX_FIELD + 1)),
         lambda w: setattr(w.active["A2"], "value", "=" + "1+2"),
         lambda w: setattr(w.active["A2"], "value", "x" * (MAX_FIELD + 1)),
         lambda w: setattr(w.active.row_dimensions[2], "hidden", True),
@@ -379,8 +382,74 @@ def test_policy_accepts_literal_excel_headings_and_detects_sensitive_names(versi
         parse_policy(raw)
 
 
-@pytest.mark.parametrize("heading", ["", " Team", "Team ", "Team\nName", "x" * 65, "record_id"])
+@pytest.mark.parametrize(
+    "heading", ["", " \t\r\n", "Team\x7f", "Team\x0b", "x" * (MAX_FIELD + 1), "record_id"]
+)
 def test_policy_rejects_unsafe_or_reserved_headings(heading):
+    raw = yaml.safe_load((ROOT / "examples/example-policy.yaml").read_text())
+    raw["columns"][heading] = raw["columns"].pop("campus")
+    with pytest.raises(SafetyError):
+        parse_policy(raw)
+
+
+@pytest.mark.parametrize("version", [1, 2, 3])
+@pytest.mark.parametrize("heading", [" Category ", "Synthetic\tcategory\r\nlabel", "x" * MAX_FIELD])
+def test_extended_literal_headings_round_trip(version, heading, tmp_path):
+    columns = ("Synthetic key ", heading)
+    source = Table(
+        columns,
+        tuple({columns[0]: f"SYNTH-{i:03}", heading: "Moon"} for i in range(2)),
+    )
+    path = tmp_path / "synthetic-headings.xlsx"
+    path.write_bytes(excel_bytes(source))
+    assert read_excel(path) == source
+    policy = parse_policy(
+        {
+            "version": version,
+            "min_group_size": 2,
+            "columns": {
+                columns[0]: {"action": "pseudonymise", "classification": "direct_identifier"},
+                heading: {
+                    "action": "keep",
+                    "classification": "analytical_attribute",
+                    "allowed_values": ["Moon"],
+                },
+            },
+        }
+    )
+    candidate = sanitise(source, policy)
+    assert validate(candidate.table, policy).passed
+    if version == 1:
+        restored = restore(candidate.table, candidate.mapping, (heading,))
+    else:
+        bundle = create_bundle(source, policy, candidate)
+        restored = reconstruct(source, candidate.table, bundle, ())
+    assert restored == source
+    path.write_bytes(excel_bytes(restored))
+    assert read_excel(path) == source
+    path.write_bytes(excel_workbook_bytes({"Synthetic": restored}))
+    assert read_excel(path) == source
+    # Whitespace is preserved, so a differently spelt policy must still fail closed.
+    changed = Table((columns[0], heading + " "), source.rows)
+    with pytest.raises(SafetyError):
+        sanitise(changed, policy)
+
+
+def test_whitespace_headings_remain_distinct_and_exact_duplicates_fail(tmp_path):
+    workbook = Workbook()
+    workbook.active.append(("Category", " Category "))
+    workbook.active.append(("Moon", "Mars"))
+    path = tmp_path / "synthetic-distinct-headings.xlsx"
+    workbook.save(path)
+    assert read_excel(path).columns == ("Category", " Category ")
+    workbook.active["B1"] = "Category"
+    workbook.save(path)
+    with pytest.raises(SafetyError, match="headings are duplicated"):
+        read_excel(path)
+
+
+@pytest.mark.parametrize("heading", [" \tStudent\nName ", " Student Number "])
+def test_whitespace_does_not_bypass_sensitive_heading_checks(heading):
     raw = yaml.safe_load((ROOT / "examples/example-policy.yaml").read_text())
     raw["columns"][heading] = raw["columns"].pop("campus")
     with pytest.raises(SafetyError):

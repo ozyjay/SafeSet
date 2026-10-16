@@ -1,5 +1,25 @@
 # Verification
 
+## Extended literal workbook headings — 16 October 2026
+
+Headings now accept surrounding whitespace, tabs/CR/LF and up to 4,096 characters,
+preserving exact spelling through policy, mapping, bundle and restoration checks.
+Excel writers escape literal CRs so XML newline normalisation cannot change a
+heading. Desktop field approval lists accept the same length boundary.
+Synthetic tests cover all three policy versions, both workbook writers,
+whitespace-only/oversized/control-character rejection, exact duplicate rejection,
+distinct whitespace spellings, schema drift, sensitive-heading detection and a
+network-denied encrypted desktop round trip with a long multiline result heading.
+
+- Python suite: **359 passed, 24 Windows-only tests skipped**.
+- Ruff and `git diff --check`: passed.
+- Release macOS build, strict signature verification and relocated helper smoke:
+  passed.
+- The operator-selected local workbook passed inspection with the rebuilt packaged
+  helper. No source content was printed, copied into fixtures or exported.
+- The installed/running app was not replaced; launch the rebuilt `dist/SafeSet.app`
+  to use the updated helper. Cell-value disclosure checks are unchanged.
+
 ## Desktop diagnostic logging — 16 October 2026
 
 The shared desktop bridge now records allowlisted operation names, fixed outcomes

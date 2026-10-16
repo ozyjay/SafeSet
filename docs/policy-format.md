@@ -47,8 +47,11 @@ unknown keys and types fail. Top-level keys are exactly `version`, `columns` and
 decimal-place limit from `keep_numeric` while retaining its bounds. The example uses
 version 3.
 Column names use the source workbook's literal headings. They must be non-empty,
-unique, at most 64 characters, have no leading or trailing whitespace, and contain
-no control characters. Spaces, punctuation, mixed case and Unicode are supported.
+unique and at most 4,096 characters, with at least one non-whitespace character.
+Surrounding whitespace, tabs, carriage returns and line breaks are accepted and
+preserved exactly; other ASCII control characters and DEL are rejected.
+Spaces, punctuation, mixed case and Unicode are supported. Headings are never
+trimmed, shortened or normalised, so whitespace differences remain distinct fields.
 `record_id` is reserved as an exact heading and cannot be a source column.
 Source headings must match the policy exactly (order may differ). For structured
 Excel Tables, the visible header cells must also match the table's header metadata

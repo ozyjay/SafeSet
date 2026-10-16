@@ -26,10 +26,9 @@ def valid_heading(name: object) -> bool:
     """Accept a bounded, unambiguous Excel heading without changing its spelling."""
     return (
         isinstance(name, str)
-        and bool(name)
-        and name == name.strip()
-        and len(name) <= 64
-        and not any(ord(ch) < 32 or ord(ch) == 127 for ch in name)
+        and bool(name.strip())
+        and len(name) <= MAX_FIELD
+        and not any((ord(ch) < 32 and ch not in "\t\r\n") or ord(ch) == 127 for ch in name)
     )
 
 
@@ -439,6 +438,27 @@ def require_excel_path(path: Path) -> None:
         raise SafetyError("Excel output must have an .xlsx filename.")
 
 
+def _workbook_bytes(workbook: Workbook) -> bytes:
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    if not any(
+        isinstance(cell.value, str) and "\r" in cell.value
+        for sheet in workbook
+        for cell in sheet[1]
+    ):
+        return buffer.getvalue()
+    # XML parsers normalise literal CR/CRLF. Character references preserve the
+    # exact heading, including when openpyxl's XML writer emits literal CRs.
+    output = io.BytesIO()
+    with zipfile.ZipFile(buffer) as source, zipfile.ZipFile(output, "w") as destination:
+        for entry in source.infolist():
+            data = source.read(entry.filename)
+            if entry.filename.startswith("xl/worksheets/") and entry.filename.endswith(".xml"):
+                data = data.replace(b"\r", b"&#13;")
+            destination.writestr(entry, data)
+    return output.getvalue()
+
+
 def excel_bytes(table: Table) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
@@ -450,9 +470,7 @@ def excel_bytes(table: Table) -> bytes:
         for cell in cells:
             cell.data_type = "s"
             cell.number_format = "@"
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    return _workbook_bytes(workbook)
 
 
 def excel_workbook_bytes(tables: dict[str, Table]) -> bytes:
@@ -476,6 +494,4 @@ def excel_workbook_bytes(tables: dict[str, Table]) -> bytes:
             for cell in cells:
                 cell.data_type = "s"
                 cell.number_format = "@"
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    return _workbook_bytes(workbook)

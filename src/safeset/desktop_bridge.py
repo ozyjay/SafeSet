@@ -30,7 +30,7 @@ from .document_flow import (
     prepare_document_restoration,
 )
 from .errors import SafetyError
-from .ingestion import list_excel_sheets
+from .ingestion import MAX_FIELD, list_excel_sheets
 from .participant_workbook import LAYOUT_ERROR
 from .policy import parse_policy
 from .policy_authoring import RuleDraft, load_drafts, local_category_review, save_policy
@@ -346,7 +346,7 @@ def _columns(value: object) -> tuple[str, ...]:
     if (
         not isinstance(value, list)
         or len(value) > 128
-        or any(not isinstance(item, str) or len(item) > 64 for item in value)
+        or any(not isinstance(item, str) or len(item) > MAX_FIELD for item in value)
     ):
         raise ValueError("columns")
     return tuple(value)

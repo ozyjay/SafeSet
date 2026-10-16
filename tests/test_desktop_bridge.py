@@ -105,7 +105,8 @@ def test_bridge_category_review_reports_blank_count_without_blank_values(tmp_pat
     assert result["result"] == {"values": ["Alpha"], "blank_count": 1}
 
 
-def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
+@pytest.mark.parametrize("result_heading", ["Team", "  Synthetic\tresult\n" + "label" * 20 + "  "])
+def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch, result_heading):
     def denied(*_args, **_kwargs):
         raise AssertionError("Network access attempted")
 
@@ -169,8 +170,8 @@ def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
     returned.write_bytes(
         excel_bytes(
             Table(
-                (*table.columns, "Team"),
-                tuple({**row, "Team": "Robot Team"} for row in table.rows),
+                (*table.columns, result_heading),
+                tuple({**row, result_heading: "Robot Team"} for row in table.rows),
             )
         )
     )
@@ -202,7 +203,7 @@ def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
         bridge, "prepare_reconstruction", {**reconstruction, "passphrase": "incorrect-test-secret"}
     )["ok"]
     review = call(bridge, "prepare_reconstruction", reconstruction)
-    assert review["ok"] and review["result"]["new_columns"] == ["Team"]
+    assert review["ok"] and review["result"]["new_columns"] == [result_heading]
     assert PASSPHRASE not in json.dumps(review)
     token = review["result"]["review_id"]
     assert not call(
@@ -220,10 +221,10 @@ def test_bridge_round_trip_and_review_invalidation(destinations, monkeypatch):
         "approve_reconstruction",
         {
             "review_id": review["result"]["review_id"],
-            "approved_results": ["Team"],
+            "approved_results": [result_heading],
         },
     )
-    assert result["ok"] and read_excel(destination).rows[0]["Team"] == "Robot Team"
+    assert result["ok"] and read_excel(destination).rows[0][result_heading] == "Robot Team"
     again = call(
         bridge,
         "prepare_reconstruction",

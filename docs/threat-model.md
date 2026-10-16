@@ -29,6 +29,13 @@ sequences reveal local usage, but events cannot identify a particular workbook.
 Logging remains best effort and retains the existing POSIX-only storage boundary;
 Windows desktop diagnostic-file logging remains unavailable.
 
+Workbook headings may contain up to 4,096 characters, including surrounding
+whitespace and tabs/CR/LF. Exact spelling is preserved across policy, bundle,
+approval and restoration checks; no normalisation merges fields. Whitespace-only
+headings, exact duplicates and other ASCII controls/DEL remain rejected. This
+heading allowance does not relax cell-value disclosure checks or permit heading
+text in logs. Long and multiline headings may be harder for an operator to review.
+
 The SwiftUI process may display headings, explicitly requested category labels
 and source-cell coordinates from a separate local diagnostic action. It does not
 receive source rows, decrypted bundles or identity maps. The

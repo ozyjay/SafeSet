@@ -421,8 +421,11 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
 - Strict version 1, 2 and 3 policies; unknown options, duplicate YAML keys, aliases,
   unknown classifications, malformed bounds/bins and source-schema drift are errors.
 - Policy, mapping and result headings preserve literal Excel text within the
-  ingestion bounds (non-empty, unique, at most 64 characters, no surrounding
-  whitespace or controls). Exact matching and explicit allowlists remain required.
+  ingestion bounds (at least one non-whitespace character, unique, at most 4,096
+  characters). Surrounding whitespace and tabs/CR/LF are preserved exactly; other
+  ASCII controls and DEL are rejected. No trimming or normalisation merges fields.
+  The desktop accepts the same length for field approval lists. Exact matching and
+  explicit allowlists remain required.
   This backward-compatible rule applies to all policy versions and existing maps.
 - Exactly one unique, non-empty source identifier is pseudonymised to `record_id`.
   Other direct identifiers and all free text must be dropped. Map only that key,
