@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from .classification import safe_category
+from .classification import inferred_classification, safe_category
 from .errors import SafetyError
 from .ingestion import read_excel
 from .policy import load_policy, parse_policy
@@ -109,7 +109,7 @@ def parse_number(text: str) -> int | float:
 
 
 def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
-    """Use version 4 only for explicitly reviewed narrative fields."""
+    """Opt into new semantics only for explicitly selected field actions."""
     if not threshold.isascii() or not threshold.isdecimal():
         raise SafetyError("Enter a whole-number minimum group size of at least 2.")
     columns = {}
@@ -118,6 +118,11 @@ def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
             classification = "direct_identifier"
         elif draft.action == "review_text":
             classification = "free_text"
+        elif draft.action == "code" and (
+            draft.classification == "direct_identifier"
+            or inferred_classification(name) == "direct_identifier"
+        ):
+            classification = "direct_identifier"
         else:
             classification = draft.classification or ("unknown" if draft.action == "drop" else "")
         config: dict = {"action": draft.action, "classification": classification}
@@ -131,6 +136,11 @@ def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
             config["bounds"] = list(draft.bounds) if draft.bounds is not None else None
         columns[name] = config
     version = 4 if any(d.action == "review_text" for d in drafts.values()) else 3
+    if any(
+        c["action"] == "code" and c["classification"] == "direct_identifier"
+        for c in columns.values()
+    ):
+        version = 5
     payload = {"version": version, "min_group_size": int(threshold), "columns": columns}
     parse_policy(payload)
     return payload

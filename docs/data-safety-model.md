@@ -1,5 +1,15 @@
 # Data safety model
 
+Policy version 5 permits additional identifiers to be retained only as reviewed
+random codes, separate from the single linking key. These fields remain in
+per-field, joint and linked risk checks; they are not exempt because the output
+classification is pseudonymous. Repeated exact labels share a code, even for
+namesakes, and reveal equality/frequency. Codes differ across runs and columns
+unless cross-worksheet sharing is explicitly selected. Original labels remain
+prohibited in protected cells; coded identifiers are reference only. Private
+policies and encrypted codebooks contain original labels. Versions 1–4 retain
+their previous restrictions.
+
 ## Windows private artefact storage
 
 On Windows, private bundle directories must have a current-user owner and a
@@ -97,7 +107,8 @@ combination with other attributes. An **analytical attribute** serves an approve
 analysis but can still disclose information. **Free text** is unconstrained prose;
 **unknown** fields are unclassified. Unknown fields cannot be retained. Narrative fields require explicit version 4
 manual review; other free-text passthrough remains prohibited.
-Direct identifiers must be dropped except the single source key used in the map.
+Original direct identifiers must be dropped except the single source key used in
+the map; version 5 additionally permits explicitly reviewed random coding.
 The guided desktop records that source-key choice as `direct_identifier`
 automatically. Its plain-language retained-information choices map to
 `analytical_attribute` and `quasi_identifier`; **I'm not sure** remains unresolved

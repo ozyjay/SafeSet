@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 
 let actionOptions: [(String, String)] = [
     ("Remove", "drop"), ("Replace with random record ID", "pseudonymise"),
-    ("Replace categories with random codes", "code"), ("Keep short categories unchanged", "keep"),
+    ("Replace values with random codes", "code"), ("Keep short categories unchanged", "keep"),
     ("Review and redact text", "review_text"),
     ("Group numbers into ranges", "bin"), ("Keep exact numbers", "keep_numeric")
 ]
@@ -19,7 +19,7 @@ let retainedInformationOptions: [(String, String)] = [
 func plainLanguageSuggestion(_ classification: String) -> String {
     switch classification {
     case "direct_identifier":
-        return "This field may directly identify a person and would normally be removed or used as the one linking identifier."
+        return "This field may directly identify a person. Remove it, replace its values with random codes, or use it as the one linking identifier. Original identifying values cannot be kept."
     case "quasi_identifier":
         return "This field may distinguish a person or small group when combined with other information."
     case "analytical_attribute":
@@ -206,7 +206,7 @@ struct FieldCard: View {
                         ForEach(actionOptions, id: \.1) { item in Text(item.0).tag(item.1) }
                     }
                     .appFont(13)
-                    if ["keep", "code", "bin", "keep_numeric"].contains(field.action) {
+                    if ["keep", "code", "bin", "keep_numeric"].contains(field.action) && !field.isCodedIdentifier {
                         Picker("Why keep this field?", selection: $field.classification) {
                             ForEach(retainedInformationOptions, id: \.1) { item in
                                 Text(item.0).tag(item.1)
@@ -219,6 +219,10 @@ struct FieldCard: View {
                     Text("SafeSet will use this as the source identifier that links records. It is treated internally as a direct identifier and replaced with fresh random IDs.")
                         .appFont(12)
                         .foregroundStyle(.secondary)
+                }
+                if field.isCodedIdentifier {
+                    Text("Each distinct value receives a consistent random code, separate from your linking ID. Original names stay local. Equal names share a code even when they belong to different people. This field is reference only and still contributes to disclosure checks.")
+                        .appFont(12).foregroundStyle(.secondary)
                 }
                 if field.action == "keep" || field.action == "code" {
                     VStack(alignment: .leading, spacing: 5) {

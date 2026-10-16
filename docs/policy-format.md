@@ -1,4 +1,20 @@
-# Policy versions 1, 2, 3 and 4
+# Policy versions 1, 2, 3, 4 and 5
+
+Policy version 5 permits additional direct identifiers to use `code` with
+`classification: direct_identifier` and an explicitly reviewed `allowed_values`
+list. The existing bounded category-value rules still apply. Original labels
+never enter the protected copy: each distinct label receives a fresh UUIDv4,
+separate from the single linking identifier. Equal names share a code even for
+different people; these codes must not be used to infer entity identity.
+They remain in per-field, joint and linked disclosure checks and are reference
+only, excluded from editable fields. Version 5 inherits reviewed text and numeric
+behaviour from version 4. Versions 1–4 still reject direct-identifier coding.
+Desktop authoring selects version 5 when coding an explicitly classified or
+heading-detected identifier, including existing category-code decisions; other
+policies continue to use version 3 or 4. YAML must explicitly classify a detected
+identifier as `direct_identifier` to code it. The local action is **Replace values
+with random codes**. Saved policies contain approved original labels and must
+remain private. See `examples/example-coded-name-policy.yaml`.
 
 The local desktop reports rejected policy decisions against the affected field,
 with a fixed explanation of the incompatible action, classification, category
@@ -11,7 +27,8 @@ or diagnostic logs. Other approved field reviews are preserved for correction.
 Policy version 4 adds `review_text` for manually reviewed narrative cells. This is
 separate from restoration-bundle version 4. Older policies still reject this
 action and retain their original meaning. Desktop authoring keeps version 3
-unless a reviewed-text field is selected, when it writes version 4. Version 4
+unless a reviewed-text field is selected, when it writes version 4, or an
+additional identifier is coded, when it writes version 5. Version 4
 inherits version 3 numeric behaviour. The macOS control is **How to protect this
 field**; **Keep short categories unchanged** remains categorical `keep`.
 **Review and redact text** selects `review_text`, not unrestricted passthrough.
@@ -86,7 +103,7 @@ Additions and removals require separate approval; neither creates new codebook
 entries, identities or protection permissions. See architecture.md for the bounded
 desktop protocol and supported structural workbook layouts.
 
-The guided protected-workbook desktop constructs a strict version 3 or 4 policy in
+The guided protected-workbook desktop constructs a strict version 3, 4 or 5 policy in
 memory from explicit field decisions. Saving YAML is optional. Source-derived protected
 fields are immutable during version 2 bundle reconstruction; newly added result
 fields need separate explicit approval and are not policy source columns. The
@@ -95,7 +112,7 @@ version 1 identity maps.
 
 See `examples/example-policy.yaml`. YAML mappings reject duplicate keys and aliases;
 unknown keys and types fail. Top-level keys are exactly `version`, `columns` and
-`min_group_size`. The version must be integer 1, 2, 3 or 4; minimum group size an integer
+`min_group_size`. The version must be integer 1, 2, 3, 4 or 5; minimum group size an integer
 >=2. Version 1 policies retain their original meaning. Version 2 adds `code` and
 `keep_numeric`; those actions are rejected under version 1. Version 3 removes the
 decimal-place limit from `keep_numeric` while retaining its bounds. The example uses
@@ -116,7 +133,7 @@ same bounds and still require an explicit allowlist before restoration.
 
 Classifications: `direct_identifier`, `pseudonymous_identifier`, `quasi_identifier`,
 `analytical_attribute`, `free_text`, `unknown`. Pseudonymous source fields and
-unknown fields can only be dropped; free text requires version 4 review or removal.
+unknown fields can only be dropped; free text requires version 4 or later review or removal.
 The output `record_id` is always classified as
 pseudonymous; existing source pseudonyms are not reused.
 
@@ -134,10 +151,10 @@ serialised as an approved policy decision.
 | Action | Required configuration | Permitted classification |
 | --- | --- | --- |
 | `drop` | `action`, `classification` | Any recognised classification |
-| `pseudonymise` | `action`, `classification` | Direct identifier only; exactly one |
+| `pseudonymise` | `action`, `classification` | Direct identifier only; exactly one linking key |
 | `keep` | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
 | `bin` | Plus `bins`: list of at least two `[lower, upper]` numeric pairs | Quasi-identifier or analytical attribute |
-| `code` (v2/v3/v4) | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
+| `code` (v2–v5) | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute; direct identifier only in v5 |
 | `keep_numeric` (v2) | Plus `bounds: [lower, upper]` and `max_decimal_places` | Quasi-identifier or analytical attribute |
 | `keep_numeric` (v3/v4) | Plus `bounds: [lower, upper]` | Quasi-identifier or analytical attribute |
 
@@ -168,7 +185,10 @@ values, participate in per-field and joint group checks. A passing check is not 
 anonymity or recipient-suitability decision.
 
 A heading detected as a direct identifier cannot be kept even if classified as an
-analytical attribute. A heading detected as free text must be dropped or use version 4 `review_text`. For these
+analytical attribute. Version 5 permits coding only with explicit direct-identifier
+classification; original labels remain prohibited. A heading detected as free text must be dropped or use version 4 or later
+`review_text`. Explicit version 5 direct-identifier coding remains subject to bounded
+category rules and cannot pass through paragraphs. For these
 checks, punctuation and spaces are treated as word separators. Heuristics
 are a backstop, not a universal list. Domain authors must classify unfamiliar
 sensitive fields conservatively.
@@ -183,7 +203,7 @@ behaviour and add rejection tests first.
 
 Validation profiles are workflow configuration, not YAML policy keys. Adding a
 `validation_profile` key to any policy remains an unknown-key error.
-The relational workflow applies one strict version 3 or 4 policy to each
+The relational workflow applies one strict version 3, 4 or 5 policy to each
 selected worksheet. Each policy must contain exactly one pseudonymised source key;
 those explicitly selected keys form one shared entity domain even when their
 headings differ. `record_id` and `entity_id` are reserved relational output

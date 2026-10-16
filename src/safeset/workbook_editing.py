@@ -45,6 +45,7 @@ def validate_editable_fields(value: object, policies: dict[str, Policy]) -> dict
             or any(
                 name not in policies[sheet].columns
                 or policies[sheet].columns[name].action not in EDIT_ACTIONS
+                or policies[sheet].columns[name].classification == "direct_identifier"
                 for name in columns
             )
             for sheet, columns in value.items()

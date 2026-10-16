@@ -75,7 +75,11 @@ def validate(table: Table, policy: Policy, profile: str = "strict") -> Validatio
     attributes = policy.output_columns[1:]
     for name in attributes:
         rule = policy.columns[name]
-        report.classifications[name] = rule.classification
+        report.classifications[name] = (
+            "pseudonymous_identifier"
+            if rule.action == "code" and rule.classification == "direct_identifier"
+            else rule.classification
+        )
         values = [r[name] for r in table.rows]
         if rule.action == "review_text":
             approved = set(dict(rule.text_reviews).values())
@@ -106,6 +110,16 @@ def validate(table: Table, policy: Policy, profile: str = "strict") -> Validatio
         report.warnings.append("Exact numeric values are retained; review disclosure risk.")
     if any(policy.columns[name].action == "code" for name in attributes):
         report.warnings.append("Coded categories still reveal grouping and frequency patterns.")
+    if any(
+        policy.columns[name].action == "code"
+        and policy.columns[name].classification == "direct_identifier"
+        for name in attributes
+    ):
+        report.warnings.append(
+            "Additional identifiers are replaced with random codes. Equal source values share a "
+            "code, including namesakes; these fields do not establish identity and still reveal "
+            "equality and frequency."
+        )
     classes = Counter(tuple(r[n] for n in attributes) for r in table.rows)
     report.minimum_class_size = min(classes.values())
     report.unique_records = sum(n == 1 for n in classes.values())

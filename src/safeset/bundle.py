@@ -108,7 +108,7 @@ def validate_bundle(value: object) -> dict:
     ):
         raise SafetyError("Restoration bundle version or structure is unsupported.")
     policy = parse_policy(value["policy"])
-    if value["policy"]["version"] not in {2, 3, 4}:
+    if value["policy"]["version"] not in {2, 3, 4, 5}:
         raise SafetyError("Restoration bundle policy version is unsupported.")
     source_columns = value["source_columns"]
     protected_columns = value["protected_columns"]

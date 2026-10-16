@@ -1,5 +1,14 @@
 # Threat model
 
+Additional direct identifiers may be explicitly coded under policy version 5.
+Original labels remain local or inside private policies/authenticated encrypted
+codebooks, never exported cell values or logs. Codes are random, independent of
+the linking key and fresh each run; ordinary per-field and joint/linked checks
+still include them. Equality, namesakes and frequency remain visible. A name code
+cannot prove that two records belong to the same person. Coded identifiers are
+reference only and returned changes block restoration. Raw identifier retention
+and old-policy acceptance rules remain unchanged.
+
 ## Windows ACL boundary and remaining release gate
 
 Private Windows objects require current-user ownership and an explicit protected

@@ -96,7 +96,7 @@ def parse_policy(raw: object) -> Policy:
 
     require(isinstance(raw, dict))
     require(set(raw) == {"version", "columns", "min_group_size"})
-    require(type(raw["version"]) is int and raw["version"] in {1, 2, 3, 4})
+    require(type(raw["version"]) is int and raw["version"] in {1, 2, 3, 4, 5})
     version = raw["version"]
     require(
         type(raw["min_group_size"]) is int and 2 <= raw["min_group_size"] <= 50_000, "group_size"
@@ -110,9 +110,9 @@ def parse_policy(raw: object) -> Policy:
         action = config.get("action")
         classification = config.get("classification")
         actions = {"drop", "keep", "bin", "pseudonymise"}
-        if version in {2, 3, 4}:
+        if version in {2, 3, 4, 5}:
             actions |= {"code", "keep_numeric"}
-        if version == 4:
+        if version in {4, 5}:
             actions.add("review_text")
         require(isinstance(action, str) and action in actions, "action")
         require(isinstance(classification, str) and classification in CLASSES, "classification")
@@ -127,12 +127,21 @@ def parse_policy(raw: object) -> Policy:
         else:
             extra = set()
         require(set(config) == {"action", "classification"} | extra)
+        coded_identifier = (
+            version == 5 and action == "code" and classification == "direct_identifier"
+        )
         if action in {"keep", "bin", "code", "keep_numeric"}:
             require(
-                classification in {"quasi_identifier", "analytical_attribute"}, "classification"
+                coded_identifier or classification in {"quasi_identifier", "analytical_attribute"},
+                "classification",
             )
-            require(inferred_classification(name) != "direct_identifier", "identifier_retention")
-            require(inferred_classification(name) != "free_text", "narrative_action")
+            require(
+                inferred_classification(name) != "direct_identifier" or coded_identifier,
+                "identifier_retention",
+            )
+            require(
+                inferred_classification(name) != "free_text" or coded_identifier, "narrative_action"
+            )
         if action == "pseudonymise":
             require(classification == "direct_identifier", "source_key_classification")
         text_reviews = ()

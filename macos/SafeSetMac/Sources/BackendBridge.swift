@@ -9,7 +9,7 @@ enum BridgeFailure: Error {
 
 enum PolicyFeedback {
     static let messages = [
-        "identifier_retention": "This heading indicates an identifier. Choose Remove, or use it as the one linking identifier. Keeping or coding its values is not permitted.",
+        "identifier_retention": "This heading indicates an identifier. Choose Remove, Replace values with random codes, or use it as the one linking identifier. Keeping original identifying values is not permitted.",
         "narrative_action": "This heading indicates narrative text. Choose Review and redact text, or Remove; short-category actions cannot retain it.",
         "classification": "Choose why this retained field is needed. The classification must be compatible with its protection action.",
         "source_key_classification": "The linking field must be classified as a direct identifier.",
@@ -218,7 +218,7 @@ final class BackendBridge: @unchecked Sendable {
         case "output_directory": message = "The selected output directory does not exist."
         case "repository_destination": message = "Operational data cannot be written inside a source-code repository."
         case "destination_separation": message = "The protected workbook and private bundle must use separate directories."
-        case "shared_code_configuration": message = "Each shared category-code field must have the same heading and use Replace categories with random codes on at least two selected worksheets."
+        case "shared_code_configuration": message = "Each shared code field must have the same heading and use Replace values with random codes on at least two selected worksheets."
         case "bundle_authentication": message = "The private bundle could not be unlocked. Check that it belongs to this protected workbook and enter its passphrase again."
         case "bundle_unavailable": message = "SafeSet could not read the selected private bundle. Check its location and access permissions."
         case "bundle_incompatible": message = "The selected private bundle has an unsupported version or structure. Use the matching SafeSet app version and bundle."

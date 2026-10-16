@@ -1,5 +1,14 @@
 # Architecture and decisions
 
+Policy version 5 explicitly supports additional coded identifiers alongside the
+single linking key. The shared engine requires direct-identifier classification
+and reviewed bounded source labels, generates independent random UUIDv4 codes,
+and keeps these attributes in all disclosure grouping. Existing codebook and
+source-binding mechanisms provide restoration; bundle envelope versions are
+unchanged. macOS describes the separate roles and excludes coded identifiers
+from editable fields; the engine enforces that exclusion. Versions 1–4 retain
+previous acceptance rules. No network or automatic publication is introduced.
+
 Result-workbook restoration uses one explicit **Create restored workbook** action
 after displaying the validated summary. The desktop supplies all reviewed result
 fields, new-category groups and participant joins in that request. The shared
@@ -298,7 +307,7 @@ never participant values or codebooks. Legacy restoration remains unchanged.
 ## Relational workbook round trip (bundle version 3)
 
 The relational workflow protects an explicitly selected set of worksheets without
-flattening their schemas. Each worksheet has its own strict version 3 or 4 policy and
+flattening their schemas. Each worksheet has its own strict version 3, 4 or 5 policy and
 exact source-table binding. The single `pseudonymise` field selected in every
 worksheet is declared to belong to one shared entity domain: equal source-key text
 therefore receives the same fresh random `entity_id` throughout the workbook.
@@ -494,8 +503,8 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   explicit allowlists remain required.
   This backward-compatible rule applies to all policy versions and existing maps.
 - Exactly one unique, non-empty source identifier is pseudonymised to `record_id`.
-  Other direct identifiers must be dropped; narrative fields need explicit version 4
-  review or removal. Map only that key,
+  Other direct identifiers must be dropped or explicitly coded under policy version 5;
+  narrative fields need explicit version 4 or later review or removal. Map only that key,
   never names, notes or whole source rows. Rejoining dropped source fields is a
   separate local operation outside this workflow.
 - During bundle reconstruction, the bound original source supplies dropped fields

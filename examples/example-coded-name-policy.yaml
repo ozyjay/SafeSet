@@ -1,0 +1,13 @@
+# Invented labels only. Operational policies contain sensitive allowlists.
+version: 5
+min_group_size: 2
+columns:
+  Synthetic key:
+    action: pseudonymise
+    classification: direct_identifier
+  Student Name:
+    action: code
+    classification: direct_identifier
+    allowed_values:
+      - Synthetic Ada
+      - Synthetic Bea

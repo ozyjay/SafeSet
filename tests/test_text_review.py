@@ -450,7 +450,10 @@ def test_review_bounds_blank_response_and_yaml_round_trip(tmp_path):
 
 
 @pytest.mark.parametrize("region", [False, True])
-def test_desktop_reviewed_text_editable_bundle_round_trip(tmp_path, monkeypatch, region):
+@pytest.mark.parametrize("coded_name", [False, True])
+def test_desktop_reviewed_text_editable_bundle_round_trip(
+    tmp_path, monkeypatch, region, coded_name
+):
     monkeypatch.setattr(socket, "socket", lambda *_a, **_k: pytest.fail("Network attempted"))
     source, raw = fixture()
     path = tmp_path / "synthetic-narrative.xlsx"
@@ -473,6 +476,10 @@ def test_desktop_reviewed_text_editable_bundle_round_trip(tmp_path, monkeypatch,
         }
         for name, rule in raw["columns"].items()
     }
+    if coded_name:
+        drafts["Student Name"].update(
+            action="code", classification="analytical_attribute", allowed_values=["Synthetic Ada"]
+        )
     request = {
         "source": str(path),
         "sheets": [sheet],
@@ -502,6 +509,8 @@ def test_desktop_reviewed_text_editable_bundle_round_trip(tmp_path, monkeypatch,
         },
     )["ok"]
     assert read_excel(output).rows[0]["Journal response"] == REVIEWED
+    if coded_name:
+        assert read_excel(output).rows[0]["Student Name"] != "Synthetic Ada"
     restore_review = call(
         bridge,
         "prepare_relational_reconstruction",
@@ -527,6 +536,7 @@ def test_desktop_reviewed_text_editable_bundle_round_trip(tmp_path, monkeypatch,
     assert read_excel(restored) == source
     log = (tmp_path / "diagnostics/safeset.log").read_text()
     assert ORIGINAL not in log and REVIEWED not in log and PASSPHRASE not in log
+    assert "Synthetic Ada" not in log
 
 
 def test_legacy_map_export_cannot_publish_unrestorable_narrative(tmp_path):

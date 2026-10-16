@@ -3,6 +3,29 @@ import AppKit
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    @MainActor func testCodedNameRemainsSeparateFromLinkingIDAndReferenceOnly() {
+        let model = AppModel()
+        var key = FieldDraft(id: "Synthetic key")
+        key.action = "pseudonymise"
+        var name = FieldDraft(id: "Student Name")
+        name.hint = "direct_identifier"
+        name.action = "code"
+        // Existing decisions may still have an analytical classification.
+        name.classification = "analytical_attribute"
+        name.allowedValues = ["Synthetic Ada", "Synthetic Bea"]
+        XCTAssertTrue(name.isCodedIdentifier)
+        XCTAssertFalse(name.needsAttention)
+        XCTAssertEqual(name.payload()["classification"] as? String, "direct_identifier")
+        XCTAssertNil(model.decisionProblem([key, name]))
+        model.fields = [key, name]
+        XCTAssertFalse(model.editableCandidates("").contains("Student Name"))
+        name.allowedValues = []
+        XCTAssertTrue(name.needsAttention)
+        XCTAssertNotNil(model.decisionProblem([key, name]))
+        name.action = "keep"
+        XCTAssertFalse(name.isCodedIdentifier)
+    }
+
     @MainActor func testNewResultPromptAndApprovalGates() {
         let model = AppModel()
         model.resultWorkbookPrompt = true

@@ -17,12 +17,16 @@ struct FieldDraft: Identifiable, Equatable {
     var lower = ""
     var upper = ""
 
+    var isCodedIdentifier: Bool {
+        action == "code" && (hint == "direct_identifier" || classification == "direct_identifier")
+    }
+
     var needsAttention: Bool {
         if action.isEmpty { return true }
         if action == "drop" { return false }
         if action == "pseudonymise" { return false }
         if action == "review_text" { return textReviews.isEmpty }
-        if !["quasi_identifier", "analytical_attribute"].contains(classification) { return true }
+        if !isCodedIdentifier && !["quasi_identifier", "analytical_attribute"].contains(classification) { return true }
         if action == "keep" || action == "code" {
             return allowedValues.isEmpty || blankCount > 0
         }
@@ -54,6 +58,7 @@ struct FieldDraft: Identifiable, Equatable {
             ? [Double(lower)!, Double(upper)!] : NSNull()
         let policyClassification: String
         if action == "pseudonymise" { policyClassification = "direct_identifier" }
+        else if isCodedIdentifier { policyClassification = "direct_identifier" }
         else if action == "review_text" { policyClassification = "free_text" }
         else if action == "drop" && classification.isEmpty { policyClassification = "unknown" }
         else { policyClassification = classification }
@@ -333,6 +338,7 @@ struct SourceCellLocation: Identifiable {
                 return "Choose an action for every field in every selected worksheet."
             }
             if ["keep", "code", "bin", "keep_numeric"].contains(field.action)
+                && !field.isCodedIdentifier
                 && !["quasi_identifier", "analytical_attribute"].contains(field.classification) {
                 return "Choose why every retained or transformed field is needed. 'I'm not sure' still needs attention."
             }
@@ -389,7 +395,8 @@ struct SourceCellLocation: Identifiable {
 
     func editableCandidates(_ sheet: String) -> [String] {
         let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
-        return configured.filter { ["keep", "code", "keep_numeric"].contains($0.action) }
+        return configured.filter { ["keep", "code", "keep_numeric"].contains($0.action)
+            && !$0.isCodedIdentifier }
             .map(\.id)
     }
 

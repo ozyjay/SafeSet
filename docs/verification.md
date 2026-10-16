@@ -1,5 +1,24 @@
 # Verification
 
+## Separate coded identifiers — 16 October 2026
+
+Policy version 5 supports an explicitly reviewed coded identifier alongside the
+single linking key. Synthetic tests verify equal-label consistency, independent
+fresh random codes, original-label exclusion, minimal identity maps, real encrypted
+bundle round trips, changed-code rejection, per-field/joint/linked checks, old
+policy rejection and engine-enforced reference-only permissions. Desktop bridge
+round trips also cover reviewed narratives together with coded names, both for
+whole sheets and selected regions, with sockets denied and value-free diagnostics.
+
+The full Python suite passed (422 tests; 24 Windows-only skips). The updated
+narrative subset then passed all 54 tests, including the two additional combined
+coded-name cases. All 29 native tests passed. Ruff, diff whitespace checks, the
+Release build, strict app signature verification and relocated packaged-helper
+round-trip smoke test passed. A separate packaged-helper synthetic coded-name
+preparation passed without publishing a workbook or bundle, and checked logs
+exclude source names and headings. No operational workbook was read or exported.
+Manual visual UI interaction was not verified.
+
 ## Actionable workbook policy failures — 16 October 2026
 
 Recent value-free logs showed successful narrative approvals followed by

@@ -1,5 +1,11 @@
 # macOS app build and release
 
+The protection action **Replace values with random codes** also supports a
+separate coded name field alongside the linking ID. Detected identifiers are
+classified automatically and use policy version 5 after local value review.
+The field card explains consistent codes, namesakes, disclosure checks and
+reference-only status. Other retained fields still need a purpose classification.
+
 If workbook validation rejects a field decision, the alert names the field and
 explains the incompatible choice. The field is outlined in red and remains visible
 under **Show only fields needing attention**. Minimum-group errors highlight that
