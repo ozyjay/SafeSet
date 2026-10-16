@@ -74,6 +74,7 @@ from .text_review import (
     TextReviewRejection,
     approve_text_reviews,
     review_entries,
+    source_identifiers,
     validate_text_reviews,
 )
 from .workbook_editing import editing_instructions, file_digest
@@ -654,7 +655,9 @@ class Bridge:
             required = {"source", "sheet", "column"}
             if command == "approve_text_review":
                 required.add("text_reviews")
-            data = _payload(raw, required)
+            data = _payload(
+                raw, required, {"identifier_fields"} if command == "approve_text_review" else set()
+            )
             table = read_excel(
                 _path(data["source"]),
                 _sheet(data["sheet"]),
@@ -662,7 +665,10 @@ class Bridge:
                 allow_source_dates=True,
             )
             if command == "approve_text_review":
-                approve_text_reviews(table, _string(data["column"]), data["text_reviews"])
+                identifiers = source_identifiers(table, _columns(data.get("identifier_fields", [])))
+                approve_text_reviews(
+                    table, _string(data["column"]), data["text_reviews"], identifiers
+                )
                 return {"approved": True}
             return {"entries": review_entries(table, _string(data["column"]))}
         if command in {
@@ -676,7 +682,11 @@ class Bridge:
                 required.add("column")
             if command == "approve_region_text_review":
                 required.add("text_reviews")
-            data = _payload(raw, required)
+            data = _payload(
+                raw,
+                required,
+                {"identifier_fields"} if command == "approve_region_text_review" else set(),
+            )
             name = _string(data["name"])
             table = read_confirmed_regions(_path(data["source"]), {name: data["region"]})[name]
             if command == "inspect_region":
@@ -684,7 +694,10 @@ class Bridge:
             if command == "region_text_review":
                 return {"entries": review_entries(table, _string(data["column"]))}
             if command == "approve_region_text_review":
-                approve_text_reviews(table, _string(data["column"]), data["text_reviews"])
+                identifiers = source_identifiers(table, _columns(data.get("identifier_fields", [])))
+                approve_text_reviews(
+                    table, _string(data["column"]), data["text_reviews"], identifiers
+                )
                 return {"approved": True}
             column = _string(data["column"])
             if column not in table.columns:
@@ -981,10 +994,19 @@ class Bridge:
             if isinstance(error, TextReviewRejection) and command in {
                 "approve_text_review",
                 "approve_region_text_review",
+                "prepare_protection",
+                "prepare_relational_protection",
             }:
                 response["issues"] = error.issues
                 if error.highlights:
                     response["highlights"] = error.highlights
+                if error.field is not None:
+                    response["text_field"] = error.field
+                    sheet = error.sheet
+                    if sheet is None and command == "prepare_protection":
+                        sheet = request["payload"].get("sheet")
+                    if isinstance(sheet, str):
+                        response["sheet"] = sheet
         except (ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
             self.pending = None
             response = {

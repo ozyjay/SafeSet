@@ -490,6 +490,8 @@ struct SourceCellLocation: Identifiable {
                     self.invalidate()
                     if case BridgeFailure.policyRejected(let fields, let issues, let sheet) = error {
                         self.acceptPolicyIssues(fields, global: issues, sheet: sheet)
+                    } else if case BridgeFailure.protectionTextRejected(let field, let sheet, let issues, let highlights) = error {
+                        self.acceptProtectionTextIssues(field, sheet: sheet, issues: issues, highlights: highlights)
                     } else if self.textReviewSheet != nil {
                         self.textReviewCheckPassed = false
                         if case BridgeFailure.textReviewRejected(let issues, let highlights) = error {
@@ -519,6 +521,27 @@ struct SourceCellLocation: Identifiable {
         }
         alert = scope + (global + details).joined(separator: "\n\n")
             + (fields.isEmpty ? "" : "\n\nThe affected field is highlighted below, including when only fields needing attention are shown.")
+    }
+
+    func acceptProtectionTextIssues(
+        _ field: String, sheet: String?, issues: [String: [String]],
+        highlights: [String: [TextReviewHighlight]]
+    ) {
+        let scope = sheet ?? sourceSheet
+        let messages = Array(Set(issues.values.flatMap { $0 })).sorted()
+        policyFieldIssues[field] = messages
+        policyIssueSheet = scope
+        guard selectedSourceSheets.contains(scope),
+              fieldsBySheet[scope]?.contains(where: { $0.id == field && $0.action == "review_text" }) == true else {
+            alert = "\(field): \(messages.joined(separator: " "))"
+            return
+        }
+        reviewText(for: field, sheets: [scope]) {
+            guard let review = self.textReviewSheet else { return }
+            let checked = Dictionary(uniqueKeysWithValues: review.entries.map { ($0.digest, $0.text) })
+            self.showTextReviewIssues(issues, sheet: scope, highlights: highlights, checkedText: checked)
+            self.textReviewMessage = "Protection was blocked for this field on worksheet \(scope). Review the marked responses below, edit the text and approve it again."
+        }
     }
 
     func invalidate() {
@@ -731,7 +754,7 @@ struct SourceCellLocation: Identifiable {
         collect(0, valuesBySheet: [:], blankCount: 0)
     }
 
-    func reviewText(for field: String, sheets: [String]) {
+    func reviewText(for field: String, sheets: [String], completion: (() -> Void)? = nil) {
         textReviewCheckPassed = false
         textReviewMessage = ""
         textReviewIssues = [:]
@@ -743,6 +766,7 @@ struct SourceCellLocation: Identifiable {
                 self.textReviewSheet = TextReviewSheet(
                     source: reviewedSource, field: field, entries: entries
                 )
+                completion?()
                 return
             }
             let sheet = sheets[index]
@@ -805,15 +829,24 @@ struct SourceCellLocation: Identifiable {
                 entries.filter { $0.sheet == sheet }.map { ($0.digest, $0.text) }
             )
             let command = useRegions ? "approve_region_text_review" : "approve_text_review"
-            let payload: [String: Any] = useRegions
+            var payload: [String: Any] = useRegions
                 ? ["source": source, "name": sheet,
                    "region": regionSelections[sheet] ?? [:], "column": review.field,
                    "text_reviews": reviews]
                 : ["source": source, "sheet": sheet, "column": review.field,
                    "text_reviews": reviews]
+            payload["identifier_fields"] = self.textIdentifierFields(sheet)
             send(command, payload) { _ in validate(index + 1) }
         }
         validate(0)
+    }
+
+    func textIdentifierFields(_ sheet: String) -> [String] {
+        let configured = sheet == sourceSheet ? fields : (fieldsBySheet[sheet] ?? [])
+        return configured.filter {
+            $0.action == "pseudonymise" || $0.classification == "direct_identifier"
+                || $0.hint == "direct_identifier"
+        }.map(\.id).sorted()
     }
 
     func showTextReviewIssues(

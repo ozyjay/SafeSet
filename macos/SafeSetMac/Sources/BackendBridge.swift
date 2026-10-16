@@ -4,6 +4,7 @@ enum BridgeFailure: Error {
     case unavailable
     case rejected(String)
     case textReviewRejected([String: [String]], [String: [TextReviewHighlight]])
+    case protectionTextRejected(String, String?, [String: [String]], [String: [TextReviewHighlight]])
     case policyRejected([String: [String]], [String], String?)
 }
 
@@ -165,6 +166,12 @@ final class BackendBridge: @unchecked Sendable {
         if code == "text_review_required", let raw = response["issues"] as? [String: [String]] {
             let feedback = TextReviewFeedback.decode(raw)
             if !feedback.isEmpty {
+                if let field = response["text_field"] as? String {
+                    throw BridgeFailure.protectionTextRejected(
+                        field, response["sheet"] as? String, feedback,
+                        TextReviewFeedback.decodeHighlights(response["highlights"])
+                    )
+                }
                 throw BridgeFailure.textReviewRejected(
                     feedback, TextReviewFeedback.decodeHighlights(response["highlights"])
                 )

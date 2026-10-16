@@ -1,5 +1,13 @@
 # Threat model
 
+Narrative preflight and protection use the same declared identifier context when
+the current desktop supplies `identifier_fields`. Omission by an older or modified
+client cannot bypass the policy-derived check during protection/publication.
+Preparation failures can return the affected heading and worksheet with bounded
+response-binding/reason/range metadata; no matching identifiers or text excerpts
+are repeated in errors or logs. The native review reuses local saved edits for
+highlighting. These local diagnostics do not weaken mandatory disclosure checks.
+
 Additional direct identifiers may be explicitly coded under policy version 5.
 Original labels remain local or inside private policies/authenticated encrypted
 codebooks, never exported cell values or logs. Codes are random, independent of

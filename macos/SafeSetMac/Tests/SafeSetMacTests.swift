@@ -3,6 +3,27 @@ import AppKit
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    @MainActor func testNarrativePreflightIncludesSelectedAndCodedIdentifiers() {
+        let model = AppModel()
+        model.sourceSheet = "Synthetic"
+        var key = FieldDraft(id: "Synthetic key")
+        key.action = "pseudonymise" // The heading alone is not an identifier hint.
+        var name = FieldDraft(id: "Student Name")
+        name.action = "code"
+        name.hint = "direct_identifier"
+        var other = FieldDraft(id: "Synthetic alias")
+        other.action = "drop"
+        other.classification = "direct_identifier"
+        var text = FieldDraft(id: "Journal")
+        text.action = "review_text"
+        model.fields = [key, name, other, text]
+        model.fieldsBySheet["Synthetic"] = [] // Current edits take precedence.
+        XCTAssertEqual(model.textIdentifierFields("Synthetic"),
+                       ["Student Name", "Synthetic alias", "Synthetic key"])
+        model.fieldsBySheet["Other"] = [other, text]
+        XCTAssertEqual(model.textIdentifierFields("Other"), ["Synthetic alias"])
+    }
+
     @MainActor func testCodedNameRemainsSeparateFromLinkingIDAndReferenceOnly() {
         let model = AppModel()
         var key = FieldDraft(id: "Synthetic key")

@@ -33,6 +33,7 @@ from .pseudonyms import new_id, valid_id
 from .reconstruction import approved_analysis_sheets
 from .storage import check_map_read, map_destination, output_destination, private_directory, publish
 from .text_review import (
+    TextReviewRejection,
     check_text_candidate,
     check_text_review_source,
     reviewed_value,
@@ -203,7 +204,11 @@ def sanitise_relational(
             raise SafetyError("Source schema differs from policy; missing or unexpected columns.")
         if not source.rows:
             raise SafetyError("Empty worksheets cannot be exported.")
-        check_text_review_source(source, policy)
+        try:
+            check_text_review_source(source, policy)
+        except TextReviewRejection as error:
+            error.sheet = sheet
+            raise
         if "record_id" in source.columns or "entity_id" in source.columns:
             raise SafetyError("Source worksheets use a reserved relational heading.")
         sheet_rows = []

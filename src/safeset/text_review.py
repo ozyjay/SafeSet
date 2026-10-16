@@ -22,6 +22,8 @@ class TextReviewRejection(SafetyError):
         super().__init__(TEXT_REVIEW_ERROR)
         self.issues = issues
         self.highlights = highlights or {}
+        self.field: str | None = None
+        self.sheet: str | None = None
 
 
 def unsafe_text_controls(value: str) -> bool:
@@ -130,22 +132,36 @@ def reviewed_value(value: str, reviews: tuple[tuple[str, str], ...]) -> str:
     return result
 
 
+def source_identifiers(source: Table, fields: tuple[str, ...] = ()) -> set[str]:
+    """Combine declared identifiers with the mandatory heading backstop."""
+    if not set(fields).issubset(source.columns):
+        raise SafetyError("Source headings changed; load the Excel workbook headings again.")
+    return {
+        row[name].strip().casefold()
+        for name in source.columns
+        if name in fields or inferred_classification(name) == "direct_identifier"
+        for row in source.rows
+        if row[name].strip()
+    }
+
+
 def check_text_review_source(source: Table, policy) -> None:
     """Bind every approved version to exact source content and known identifiers."""
     rules = [(name, rule) for name, rule in policy.columns.items() if rule.action == "review_text"]
     if not rules:
         return
-    identifiers = {
-        row[name].strip().casefold()
+    fields = tuple(
+        name
         for name, rule in policy.columns.items()
-        if rule.classification == "direct_identifier"
-        or rule.action == "pseudonymise"
-        or inferred_classification(name) == "direct_identifier"
-        for row in source.rows
-        if row[name].strip()
-    }
+        if rule.classification == "direct_identifier" or rule.action == "pseudonymise"
+    )
+    identifiers = source_identifiers(source, fields)
     for name, rule in rules:
-        approve_text_reviews(source, name, dict(rule.text_reviews), identifiers)
+        try:
+            approve_text_reviews(source, name, dict(rule.text_reviews), identifiers)
+        except TextReviewRejection as error:
+            error.field = name
+            raise
 
 
 def check_text_candidate(source: Table, policy, protected: Table) -> None:

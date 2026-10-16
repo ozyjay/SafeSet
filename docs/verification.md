@@ -1,5 +1,31 @@
 # Verification
 
+## Narrative failure context during protection — 16 October 2026
+
+Value-free operational logs showed text approval succeeding before repeated
+protection preparation failed with `text_review_required`. The old preparation
+response omitted the rejected field, worksheet and issue ranges. A synthetic
+regression additionally reproduced a selected linking key whose heading was not
+recognised by narrative preflight: preflight passed but policy-aware preparation
+found its values in the reviewed text. This reproduces the inconsistency without
+claiming to identify the operational response from the logs.
+
+Current native preflight supplies declared identifier headings; the shared engine
+combines them with inferred headings and still independently checks the policy at
+protection/publication. Preparation failures now retain field/sheet and bounded
+response bindings, reasons and UTF-16 ranges. The native client opens the affected
+local field review with saved edits and highlights, and keeps the rejected field
+in the attention filter. No source text is repeated in error metadata or logs.
+
+All 427 Python tests passed, with 24 Windows-only skips; all 30 native tests passed.
+New regressions cover single-sheet, relational and region preparation, identical
+early/late matches, correction without losing other decisions, unknown heading
+rejection, no publication and value-free logs with sockets denied. Ruff, diff
+whitespace checks, Release build, relocated packaged-helper smoke and strict app
+signature verification passed. The packaged helper separately reproduced matching
+preflight/preparation metadata without publication. No operational workbook was
+read or exported. Manual visual interaction was not verified.
+
 ## Separate coded identifiers — 16 October 2026
 
 Policy version 5 supports an explicitly reviewed coded identifier alongside the

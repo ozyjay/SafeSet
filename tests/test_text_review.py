@@ -642,3 +642,93 @@ def test_policy_global_issue_distinguishes_group_size_from_field_decisions(tmp_p
     )
     assert not response["ok"] and response["error"] == "policy_configuration"
     assert response["fields"] == {} and response["policy_issues"] == ["group_size"]
+
+
+@pytest.mark.parametrize("mode", ["single", "relational", "region"])
+def test_protection_text_failure_names_field_and_matches_selected_identifier_context(
+    tmp_path, monkeypatch, mode
+):
+    monkeypatch.setattr(socket, "socket", lambda *_a, **_k: pytest.fail("Network attempted"))
+    source, raw = fixture()
+    source = Table(
+        source.columns,
+        tuple({**row, "Synthetic key": str(i + 1)} for i, row in enumerate(source.rows)),
+    )
+    path = tmp_path / "synthetic-context.xlsx"
+    path.write_bytes(excel_workbook_bytes({"Synthetic": source}))
+    for name in ("exports", "maps"):
+        (tmp_path / name).mkdir(mode=0o700)
+    bridge = Bridge()
+    text = REVIEWED + " There were 1 and 2 synthetic exercises."
+    reviews = {text_digest(ORIGINAL): text}
+    region = mode == "region"
+    scope = "Region" if region else "Synthetic"
+    approval = {
+        "source": str(path),
+        "column": "Journal response",
+        "text_reviews": reviews,
+        **(
+            {"name": scope, "region": {"sheet": "Synthetic", "range": "A1:C3"}}
+            if region
+            else {"sheet": scope}
+        ),
+    }
+    approve_command = "approve_region_text_review" if region else "approve_text_review"
+    # An older client supplied no selected-key context, so this could pass preflight.
+    assert call(bridge, approve_command, approval)["ok"]
+    approval["identifier_fields"] = ["Synthetic key"]
+    early = call(bridge, approve_command, approval)
+    assert not early["ok"] and early["issues"] == {text_digest(ORIGINAL): ["known_identifier"]}
+    drafts = {
+        name: {
+            "action": rule["action"],
+            "classification": rule["classification"],
+            "allowed_values": [],
+            "bins": [],
+            "bounds": None,
+            **({"text_reviews": reviews} if rule["action"] == "review_text" else {}),
+        }
+        for name, rule in raw["columns"].items()
+    }
+    request = {
+        "source": str(path),
+        "output": str(tmp_path / "exports/protected.xlsx"),
+        "bundle": str(tmp_path / "maps/private.enc"),
+        "threshold": "2",
+    }
+    if mode == "single":
+        command = "prepare_protection"
+        request.update(sheet=scope, drafts=drafts)
+    else:
+        command = "prepare_relational_protection"
+        request.update(sheets=[scope], drafts={scope: drafts}, validation_profile="strict")
+        if region:
+            discovery = call(bridge, "discover_regions", {"path": str(path)})["result"]
+            request.update(
+                regions={scope: approval["region"]},
+                region_digest=discovery["source_digest"],
+                editable_fields={scope: []},
+            )
+    failure = call(bridge, command, request)
+    assert not failure["ok"] and failure["error"] == "text_review_required"
+    assert failure["text_field"] == "Journal response" and failure["sheet"] == scope
+    assert failure["issues"] == early["issues"]
+    assert failure["highlights"] == early["highlights"]
+    ranges = failure["highlights"][text_digest(ORIGINAL)]
+    encoded_text = text.encode("utf-16-le")
+    assert [encoded_text[r["start"] * 2 : r["end"] * 2].decode("utf-16-le") for r in ranges] == [
+        "1",
+        "2",
+    ]
+    for value in (text, ORIGINAL, REVIEWED, "Synthetic Ada", str(path)):
+        assert value not in json.dumps(failure)
+    reviews[text_digest(ORIGINAL)] = REVIEWED
+    assert call(bridge, approve_command, approval)["ok"]
+    assert call(bridge, command, request)["result"]["validation"]["passed"]
+    assert not (tmp_path / "exports/protected.xlsx").exists()
+    assert not (tmp_path / "maps/private.enc").exists()
+    log = (tmp_path / "diagnostics/safeset.log").read_text()
+    for value in ("Journal response", "Synthetic key", text, ORIGINAL, REVIEWED, str(path)):
+        assert value not in log
+    approval["identifier_fields"] = ["Unknown synthetic field"]
+    assert not call(bridge, approve_command, approval)["ok"]

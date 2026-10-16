@@ -1,5 +1,14 @@
 # Architecture and decisions
 
+Narrative preflight accepts an optional bounded `identifier_fields` heading list
+for explicitly selected linking/direct identifiers. It combines that context with
+the shared heading backstop; protection always recomputes the mandatory set from
+the complete policy. A preparation-time narrative rejection preserves the affected
+field and worksheet, existing response bindings, fixed reasons and UTF-16 ranges.
+macOS opens that field's local review with the saved edited text and marked
+matches, and keeps the field visible in the attention filter. No source value is
+added to error metadata and no approval or publication is granted by this feedback.
+
 Policy version 5 explicitly supports additional coded identifiers alongside the
 single linking key. The shared engine requires direct-identifier classification
 and reviewed bounded source labels, generates independent random UUIDv4 codes,

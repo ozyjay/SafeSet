@@ -1,5 +1,13 @@
 # macOS app build and release
 
+If Review protection rejects an approved narrative field, the app now opens the
+affected field and worksheet in Review and redact text with the saved edits and
+blocking matches highlighted. It also marks the field as needing attention.
+Check for issues and text approval now include the selected linking ID and other
+declared identifier fields, matching the protection check even when their headings
+are not recognised automatically. Edit the marked responses and approve again;
+other approved fields remain intact.
+
 The protection action **Replace values with random codes** also supports a
 separate coded name field alongside the linking ID. Detected identifiers are
 classified automatically and use policy version 5 after local value review.
