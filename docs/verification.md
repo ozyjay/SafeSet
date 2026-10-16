@@ -1,5 +1,30 @@
 # Verification
 
+## Actionable workbook policy failures — 16 October 2026
+
+Recent value-free logs showed successful narrative approvals followed by
+`policy_configuration` rejection during protection preparation. The canonical
+policy parser now attaches fixed field/global reason codes while retaining its
+original safe exception string and acceptance rules. Selected local authoring
+commands return this metadata with optional worksheet scope. Native feedback
+names the affected decision, outlines its field and keeps it visible under the
+attention-only filter. Minimum-group errors mark that input. Other approved text
+reviews remain intact during correction; successful preparation clears stale
+policy feedback. No policy validation rule was relaxed.
+
+- Python suite: **411 passed, 24 Windows-only tests skipped**.
+- Swift package: **28 tests passed**. Regressions cover visible rejected fields,
+  retained text approvals, correction and value-free logs, plus global group-size
+  feedback separately from field errors.
+- Ruff and `git diff --check`: passed.
+- Release macOS build, strict signature verification and relocated-helper smoke:
+  passed. Packaged synthetic policy rejection named the field and worksheet;
+  correction validated with previous text reviews intact and no publication.
+- No operational workbook was read or changed. Native app inspection was
+  unavailable, so the operator's exact field choices could not be recovered from
+  logs. No manual visual check was performed. Relaunch `dist/SafeSet.app` to obtain
+  the specific failure on the next validation; the installed app is unchanged.
+
 ## Exact issue highlights in narrative review — 16 October 2026
 
 The local text editor now displays temporary amber highlights and underlines at

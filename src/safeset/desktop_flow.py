@@ -16,7 +16,7 @@ from .ingestion import (
     valid_heading,
 )
 from .mapping import read_mapping
-from .policy import Policy, load_policy, parse_policy
+from .policy import Policy, PolicyConfigurationError, load_policy, parse_policy
 from .policy_authoring import RuleDraft, policy_payload
 from .pseudonyms import valid_id
 from .reconstruction import (
@@ -170,8 +170,10 @@ def prepare_protection(
         len(table.rows),
         sum(rule.action == "drop" for rule in policy.columns.values()),
         sum(rule.action == "code" for rule in policy.columns.values()),
-        sum(rule.action in {"keep", "keep_numeric", "bin", "review_text"}
-            for rule in policy.columns.values()),
+        sum(
+            rule.action in {"keep", "keep_numeric", "bin", "review_text"}
+            for rule in policy.columns.values()
+        ),
         validation_profile,
     )
 
@@ -222,7 +224,11 @@ def prepare_relational_protection(
     for sheet in sheets:
         if set(sources[sheet].columns) != set(drafts[sheet]):
             raise SafetyError("Every source field needs an explicit protection decision.")
-        policies[sheet] = parse_policy(policy_payload(drafts[sheet], threshold))
+        try:
+            policies[sheet] = parse_policy(policy_payload(drafts[sheet], threshold))
+        except PolicyConfigurationError as error:
+            error.sheet = sheet
+            raise
     if editable_fields is not None:
         validate_editable_fields(editable_fields, policies)
         validate_editable_layout(source, editable_fields, regions)
@@ -422,7 +428,8 @@ def prepare_relational_reconstruction(
     )
     if bundle["version"] in {4, 5}:
         review_analysis_sheets(
-            analysis_sheets, list_excel_sheets(source_path),
+            analysis_sheets,
+            list_excel_sheets(source_path),
             sum(len(table.rows) for table in sources.values()),
         )
     new_columns = review_relational_reconstruction(sources, returned, bundle)

@@ -138,6 +138,7 @@ struct FieldCard: View {
     @Binding var field: FieldDraft
     var scope: String? = nil
     var metadata: String? = nil
+    var issues: [String] = []
     let categories: (String) -> Void
 
     var body: some View {
@@ -170,6 +171,10 @@ struct FieldCard: View {
             }
             if let scope {
                 Text(scope).appFont(12).foregroundStyle(.secondary)
+            }
+            ForEach(issues, id: \.self) { issue in
+                Label(issue, systemImage: "exclamationmark.triangle.fill")
+                    .appFont(13).foregroundStyle(.red)
             }
             if field.action != "drop" {
                 if field.blankCount > 0 && field.action != "review_text" {
@@ -277,6 +282,7 @@ struct FieldCard: View {
         .padding(14)
         .opacity(field.action == "drop" ? 0.55 : 1)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(issues.isEmpty ? .clear : .red, lineWidth: 2))
     }
 }
 
@@ -1221,13 +1227,27 @@ struct ProtectView: View {
                             scope: item.sheets.count == model.selectedSourceSheets.count
                                 ? "All selected worksheets"
                                 : "Worksheet\(item.sheets.count == 1 ? "" : "s"): \(item.sheets.joined(separator: ", "))",
-                            metadata: item.metadata
+                            metadata: item.metadata,
+                            issues: model.fieldPolicyMessages(item.id)
                         ) { model.categories(for: $0, sheets: item.sheets) }
                     }
                     HStack {
                         Text("Minimum group size")
                         TextField("2", text: $model.threshold)
                             .appFont(13).frame(width: 75)
+                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(
+                                model.policyGlobalIssues.contains(PolicyFeedback.messages["group_size"] ?? "")
+                                    ? .red : .clear, lineWidth: 2
+                            ))
+                            .onChange(of: model.threshold) {
+                                model.policyGlobalIssues.removeAll {
+                                    $0 == PolicyFeedback.messages["group_size"]
+                                }
+                            }
+                    }
+                    ForEach(model.policyGlobalIssues, id: \.self) { issue in
+                        Label(issue, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red).appFont(13)
                     }
                     Picker("Validation profile", selection: $model.validationProfile) {
                         Text("Strict — rare groups block export").tag("strict")

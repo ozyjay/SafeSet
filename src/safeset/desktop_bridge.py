@@ -32,7 +32,7 @@ from .document_flow import (
 from .errors import SafetyError
 from .ingestion import MAX_FIELD, list_excel_sheets, read_excel
 from .participant_workbook import LAYOUT_ERROR
-from .policy import parse_policy
+from .policy import PolicyConfigurationError, parse_policy
 from .policy_authoring import RuleDraft, load_drafts, local_category_review, save_policy
 from .pseudonyms import new_id
 from .reconciliation import (
@@ -967,6 +967,17 @@ class Bridge:
                 "ok": False,
                 "error": PUBLIC_SAFETY_ERRORS.get(str(error), "safety_rejected"),
             }
+            if isinstance(error, PolicyConfigurationError) and command in {
+                "prepare_protection",
+                "prepare_relational_protection",
+                "prepare_export",
+                "save_policy",
+                "load_policy",
+            }:
+                response["fields"] = error.fields
+                response["policy_issues"] = error.issues
+                if error.sheet is not None:
+                    response["sheet"] = error.sheet
             if isinstance(error, TextReviewRejection) and command in {
                 "approve_text_review",
                 "approve_region_text_review",

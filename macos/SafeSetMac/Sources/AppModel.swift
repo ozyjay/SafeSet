@@ -150,6 +150,9 @@ struct SourceCellLocation: Identifiable {
     @Published var textReviewHighlights: [String: [TextReviewHighlight]] = [:]
     @Published var textReviewCheckedText: [String: String] = [:]
     @Published var textReviewCheckPassed = false
+    @Published var policyFieldIssues: [String: [String]] = [:]
+    @Published var policyIssueSheet: String?
+    @Published var policyGlobalIssues: [String] = []
     @Published var returned = ""
     @Published var returnedSheets: [String] = []
     @Published var returnedSheet = ""
@@ -276,8 +279,14 @@ struct SourceCellLocation: Identifiable {
     }
 
     func fieldNeedsAttention(_ heading: String) -> Bool {
-        orderedSelectedSourceSheets.contains { sheet in
+        policyFieldIssues[heading]?.isEmpty == false || orderedSelectedSourceSheets.contains { sheet in
             fieldsBySheet[sheet]?.first(where: { $0.id == heading })?.needsAttention ?? false
+        }
+    }
+
+    func fieldPolicyMessages(_ heading: String) -> [String] {
+        (policyFieldIssues[heading] ?? []).map { message in
+            policyIssueSheet.map { "Worksheet \($0): \(message)" } ?? message
         }
     }
 
@@ -472,7 +481,9 @@ struct SourceCellLocation: Identifiable {
                 DispatchQueue.main.async {
                     self.busy = false
                     self.invalidate()
-                    if self.textReviewSheet != nil {
+                    if case BridgeFailure.policyRejected(let fields, let issues, let sheet) = error {
+                        self.acceptPolicyIssues(fields, global: issues, sheet: sheet)
+                    } else if self.textReviewSheet != nil {
                         self.textReviewCheckPassed = false
                         if case BridgeFailure.textReviewRejected(let issues, let highlights) = error {
                             let scope = payload["name"] as? String ?? payload["sheet"] as? String ?? ""
@@ -489,6 +500,18 @@ struct SourceCellLocation: Identifiable {
                 }
             }
         }
+    }
+
+    func acceptPolicyIssues(_ fields: [String: [String]], global: [String], sheet: String?) {
+        policyFieldIssues = fields
+        policyGlobalIssues = global
+        policyIssueSheet = sheet
+        let scope = sheet.map { "Worksheet: \($0)\n\n" } ?? ""
+        let details = fields.keys.sorted().map { heading in
+            "\(heading): \((fields[heading] ?? []).joined(separator: " "))"
+        }
+        alert = scope + (global + details).joined(separator: "\n\n")
+            + (fields.isEmpty ? "" : "\n\nThe affected field is highlighted below, including when only fields needing attention are shown.")
     }
 
     func invalidate() {
@@ -508,6 +531,9 @@ struct SourceCellLocation: Identifiable {
     }
 
     func chooseSource(_ url: URL) {
+        policyFieldIssues = [:]
+        policyGlobalIssues = []
+        policyIssueSheet = nil
         closeTextReview()
         source = url.path; fields = []; fieldsBySheet = [:]; sharedCodeFields = []
         useRegions = false; regionCandidates = []; regionSelections = [:]
@@ -528,6 +554,9 @@ struct SourceCellLocation: Identifiable {
     }
 
     func switchRegionMode(_ enabled: Bool) {
+        policyFieldIssues = [:]
+        policyGlobalIssues = []
+        policyIssueSheet = nil
         useRegions = enabled
         workbookEditing = true
         regionSelections = [:]
@@ -550,6 +579,9 @@ struct SourceCellLocation: Identifiable {
     }
 
     func toggleSourceSheet(_ sheet: String, selected: Bool) {
+        policyFieldIssues = [:]
+        policyGlobalIssues = []
+        policyIssueSheet = nil
         if !sourceSheet.isEmpty { fieldsBySheet[sourceSheet] = fields }
         if selected {
             selectedSourceSheets.insert(sheet)
@@ -631,6 +663,7 @@ struct SourceCellLocation: Identifiable {
     }
 
     func updateConsolidatedField(_ heading: String, with decision: FieldDraft) {
+        policyFieldIssues.removeValue(forKey: heading)
         for sheet in selectedSourceSheets {
             guard var sheetFields = fieldsBySheet[sheet],
                   let index = sheetFields.firstIndex(where: { $0.id == heading }) else { continue }
@@ -838,6 +871,7 @@ struct SourceCellLocation: Identifiable {
             fieldsBySheet[sheet] = sheetFields
             if sheet == sourceSheet { fields = sheetFields }
         }
+        policyFieldIssues.removeValue(forKey: review.field)
         closeTextReview()
         invalidate()
     }
@@ -847,6 +881,7 @@ struct SourceCellLocation: Identifiable {
             alert = "Blank categorical cells cannot be approved. Remove them or drop this field."
             return
         }
+        policyFieldIssues.removeValue(forKey: category.field)
         for sheet in category.sheets {
             guard var sheetFields = fieldsBySheet[sheet],
                   let index = sheetFields.firstIndex(where: { $0.id == category.field }) else { continue }
@@ -903,6 +938,9 @@ struct SourceCellLocation: Identifiable {
         }
         payload["bundle"] = bundleOutput.isEmpty ? NSNull() : bundleOutput
         send(relational ? "prepare_relational_protection" : "prepare_protection", payload) {
+            self.policyFieldIssues = [:]
+            self.policyGlobalIssues = []
+            self.policyIssueSheet = nil
             self.protectionReview = $0
         }
     }

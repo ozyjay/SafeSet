@@ -546,3 +546,89 @@ def test_legacy_map_export_cannot_publish_unrestorable_narrative(tmp_path):
             source_path=tmp_path / "source.xlsx",
         )
     assert not output.exists()
+
+
+@pytest.mark.parametrize("relational", [False, True])
+def test_policy_failure_identifies_field_without_losing_approved_text(tmp_path, relational):
+    source, raw = fixture()
+    path = tmp_path / "synthetic-policy-review.xlsx"
+    path.write_bytes(excel_workbook_bytes({"Synthetic": source}))
+    for name in ("exports", "maps"):
+        (tmp_path / name).mkdir(mode=0o700)
+    bridge = Bridge()
+    reviews = raw["columns"]["Journal response"]["text_reviews"]
+    assert call(
+        bridge,
+        "approve_text_review",
+        {
+            "source": str(path),
+            "sheet": "Synthetic",
+            "column": "Journal response",
+            "text_reviews": reviews,
+        },
+    )["ok"]
+    drafts = {
+        name: {
+            "action": rule["action"],
+            "classification": rule["classification"],
+            "allowed_values": [],
+            "bins": [],
+            "bounds": None,
+            **({"text_reviews": reviews} if rule["action"] == "review_text" else {}),
+        }
+        for name, rule in raw["columns"].items()
+    }
+    drafts["Student Name"].update(
+        action="keep", classification="analytical_attribute", allowed_values=["Synthetic Ada"]
+    )
+    request = {
+        "source": str(path),
+        "output": str(tmp_path / "exports/protected.xlsx"),
+        "bundle": str(tmp_path / "maps/bundle.enc"),
+        "threshold": "2",
+    }
+    if relational:
+        command = "prepare_relational_protection"
+        request.update(
+            sheets=["Synthetic"], drafts={"Synthetic": drafts}, validation_profile="strict"
+        )
+    else:
+        command = "prepare_protection"
+        request.update(sheet="Synthetic", drafts=drafts)
+    failed = call(bridge, command, request)
+    assert not failed["ok"] and failed["error"] == "policy_configuration"
+    assert failed["fields"] == {"Student Name": ["identifier_retention"]}
+    assert failed["policy_issues"] == []
+    if relational:
+        assert failed["sheet"] == "Synthetic"
+    encoded = json.dumps(failed)
+    for value in (ORIGINAL, REVIEWED, "Synthetic Ada", str(path)):
+        assert value not in encoded
+    drafts["Student Name"].update(action="drop", classification="unknown", allowed_values=[])
+    assert drafts["Journal response"]["text_reviews"] == reviews
+    passed = call(bridge, command, request)
+    assert passed["ok"] and passed["result"]["validation"]["passed"]
+    assert not (tmp_path / "exports/protected.xlsx").exists()
+    log = (tmp_path / "diagnostics/safeset.log").read_text()
+    for value in ("Student Name", ORIGINAL, REVIEWED, "Synthetic Ada", str(path)):
+        assert value not in log
+
+
+def test_policy_global_issue_distinguishes_group_size_from_field_decisions(tmp_path):
+    source, raw = fixture()
+    path = tmp_path / "synthetic-policy.yaml"
+    raw["min_group_size"] = 1
+    path.write_text(yaml.safe_dump(raw))
+    workbook = tmp_path / "synthetic.xlsx"
+    workbook.write_bytes(excel_bytes(source))
+    response = call(
+        Bridge(),
+        "load_policy",
+        {
+            "source": str(workbook),
+            "sheet": None,
+            "policy": str(path),
+        },
+    )
+    assert not response["ok"] and response["error"] == "policy_configuration"
+    assert response["fields"] == {} and response["policy_issues"] == ["group_size"]

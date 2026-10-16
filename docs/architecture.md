@@ -34,6 +34,17 @@ publication gate is removed.
 
 ## Standalone macOS desktop
 
+Policy authoring failures retain a fixed exception message and public error code.
+For local protection/policy-authoring requests only, the bridge can additionally
+return `fields` (literal field headings mapped to fixed reason codes),
+`policy_issues` (fixed global reasons) and an optional selected worksheet name.
+No source values, category lists, reviewed paragraphs or numeric inputs are added
+to error responses. These details never enter logs. The native form translates
+allowlisted reasons, outlines affected fields and keeps them in the attention-only
+filter. Global minimum-group errors mark that input. Changing a decision clears
+its stale feedback without discarding approved reviews for other fields.
+Validation still fails closed with the same supported policy domains and versions.
+
 ### Reviewed narrative fields
 
 Heading inference distinguishes the verb in prompts such as "address the learning

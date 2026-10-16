@@ -1,5 +1,13 @@
 # Policy versions 1, 2, 3 and 4
 
+The local desktop reports rejected policy decisions against the affected field,
+with a fixed explanation of the incompatible action, classification, category
+review, narrative review or numeric settings. Global failures such as minimum
+group size or source-key count are distinguished from field failures. This is
+protocol feedback only: no YAML keys or acceptance rules change. Field headings
+and selected worksheet names can appear in local feedback, never source values
+or diagnostic logs. Other approved field reviews are preserved for correction.
+
 Policy version 4 adds `review_text` for manually reviewed narrative cells. This is
 separate from restoration-bundle version 4. Older policies still reject this
 action and retain their original meaning. Desktop authoring keeps version 3

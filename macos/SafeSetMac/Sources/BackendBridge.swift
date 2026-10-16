@@ -4,6 +4,29 @@ enum BridgeFailure: Error {
     case unavailable
     case rejected(String)
     case textReviewRejected([String: [String]], [String: [TextReviewHighlight]])
+    case policyRejected([String: [String]], [String], String?)
+}
+
+enum PolicyFeedback {
+    static let messages = [
+        "identifier_retention": "This heading indicates an identifier. Choose Remove, or use it as the one linking identifier. Keeping or coding its values is not permitted.",
+        "narrative_action": "This heading indicates narrative text. Choose Review and redact text, or Remove; short-category actions cannot retain it.",
+        "classification": "Choose why this retained field is needed. The classification must be compatible with its protection action.",
+        "source_key_classification": "The linking field must be classified as a direct identifier.",
+        "text_review": "Review and approve this field's responses before validating the workbook.",
+        "categories": "Review a complete list of short, non-identifying source categories. Empty, repeated or unsafe category lists cannot be approved.",
+        "bins": "Enter at least two contiguous, increasing numeric ranges without gaps or overlaps.",
+        "bounds": "Enter increasing, finite, non-negative numeric bounds and supported precision settings.",
+        "action": "Choose a supported protection action for this field.",
+        "heading": "This field heading is unsupported or reserved. Correct it in the original workbook, then select the workbook again.",
+        "source_key_count": "Choose exactly one field to replace with random record IDs in each selected worksheet.",
+        "group_size": "Minimum group size must be a whole number from 2 to 50,000.",
+        "schema": "This policy configuration is unsupported. Review the field settings or load a policy matching the supported format."
+    ]
+
+    static func decode(_ fields: [String: [String]]) -> [String: [String]] {
+        fields.mapValues { $0.compactMap { messages[$0] } }.filter { !$0.value.isEmpty }
+    }
 }
 
 struct TextReviewHighlight: Equatable, Identifiable {
@@ -131,6 +154,14 @@ final class BackendBridge: @unchecked Sendable {
             return result
         }
         let code = response["error"] as? String ?? "invalid_request"
+        if code == "policy_configuration", let fields = response["fields"] as? [String: [String]],
+           let issues = response["policy_issues"] as? [String] {
+            let feedback = PolicyFeedback.decode(fields)
+            let global = issues.compactMap { PolicyFeedback.messages[$0] }
+            if !feedback.isEmpty || !global.isEmpty {
+                throw BridgeFailure.policyRejected(feedback, global, response["sheet"] as? String)
+            }
+        }
         if code == "text_review_required", let raw = response["issues"] as? [String: [String]] {
             let feedback = TextReviewFeedback.decode(raw)
             if !feedback.isEmpty {

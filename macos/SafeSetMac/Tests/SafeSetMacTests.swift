@@ -201,6 +201,36 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertEqual(actionOptions.first { $0.1 == "review_text" }?.0, "Review and redact text")
     }
 
+    @MainActor func testPolicyFeedbackKeepsRejectedFieldsVisibleAndPreservesTextReviews() {
+        let model = AppModel()
+        model.selectedSourceSheets = ["Synthetic"]
+        model.sourceSheets = ["Synthetic"]
+        model.sourceSheet = "Synthetic"
+        var name = FieldDraft(id: "Student Name")
+        name.action = "keep"
+        name.classification = "analytical_attribute"
+        name.allowedValues = ["Synthetic Ada"]
+        var text = FieldDraft(id: "Journal response")
+        text.action = "review_text"
+        text.textReviews = [String(repeating: "a", count: 64): "Reviewed synthetic paragraph."]
+        model.fields = [name, text]
+        model.fieldsBySheet = ["Synthetic": model.fields]
+        XCTAssertFalse(model.fieldNeedsAttention(name.id))
+        let decoded = PolicyFeedback.decode([
+            name.id: ["identifier_retention", "untrusted content"]
+        ])
+        XCTAssertEqual(decoded[name.id]?.count, 1)
+        model.acceptPolicyIssues(decoded, global: [], sheet: "Synthetic")
+        XCTAssertTrue(model.fieldNeedsAttention(name.id))
+        XCTAssertTrue(model.alert.contains(name.id))
+        XCTAssertTrue(model.fieldPolicyMessages(name.id)[0].contains("Synthetic"))
+        XCTAssertEqual(model.fields[1].textReviews, text.textReviews)
+        name.action = "drop"
+        model.updateConsolidatedField(name.id, with: name)
+        XCTAssertFalse(model.fieldNeedsAttention(name.id))
+        XCTAssertEqual(model.fields[1].textReviews, text.textReviews)
+    }
+
     @MainActor func testLongTextNeedsIndividualReviewAndStaysReferenceOnly() {
         let model = AppModel()
         model.source = "/synthetic/local-workbook.xlsx"

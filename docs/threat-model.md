@@ -29,6 +29,14 @@ sequences reveal local usage, but events cannot identify a particular workbook.
 Logging remains best effort and retains the existing POSIX-only storage boundary;
 Windows desktop diagnostic-file logging remains unavailable.
 
+Local policy-authoring rejection metadata may name an affected field and selected
+worksheet with fixed reason codes, so the operator can correct an incompatible
+decision. Headings remain potentially sensitive: they are displayed only in the
+local form and never enter exception strings or diagnostic logs. Source values,
+approved category contents and reviewed paragraphs are excluded from this feedback.
+The native client displays only allowlisted reason descriptions. This diagnostic
+context grants no export permission and does not change policy acceptance rules.
+
 Workbook headings may contain up to 4,096 characters, including surrounding
 whitespace and tabs/CR/LF. Exact spelling is preserved across policy, bundle,
 approval and restoration checks; no normalisation merges fields. Whitespace-only

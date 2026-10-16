@@ -1,5 +1,11 @@
 # macOS app build and release
 
+If workbook validation rejects a field decision, the alert names the field and
+explains the incompatible choice. The field is outlined in red and remains visible
+under **Show only fields needing attention**. Minimum-group errors highlight that
+input. Correct the marked choice and validate again; approved text reviews in
+other fields are preserved.
+
 Workbook field decisions use **How to protect this field**. **Keep short categories
 unchanged** is for short labels. For journal responses and other paragraphs, choose
 **Review and redact text**, open **Review and redact responses…**, edit identifying

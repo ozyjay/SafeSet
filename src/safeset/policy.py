@@ -21,6 +21,16 @@ CLASSES = {
 }
 
 
+class PolicyConfigurationError(SafetyError):
+    """Local authoring context, never part of exception text or diagnostic logs."""
+
+    def __init__(self, reason: str, field: str | None = None) -> None:
+        super().__init__("Policy schema or safety constraints are invalid; see policy-format.md.")
+        self.fields = {field: [reason]} if field is not None else {}
+        self.issues = [] if field is not None else [reason]
+        self.sheet: str | None = None
+
+
 class StrictLoader(yaml.SafeLoader):
     def compose_node(self, parent, index):
         if self.check_event(yaml.AliasEvent):
@@ -78,21 +88,24 @@ class Policy:
 
 
 def parse_policy(raw: object) -> Policy:
-    def require(condition: bool) -> None:
+    current_field = None
+
+    def require(condition: bool, reason: str = "schema") -> None:
         if not condition:
-            raise SafetyError(
-                "Policy schema or safety constraints are invalid; see policy-format.md."
-            )
+            raise PolicyConfigurationError(reason, current_field)
 
     require(isinstance(raw, dict))
     require(set(raw) == {"version", "columns", "min_group_size"})
     require(type(raw["version"]) is int and raw["version"] in {1, 2, 3, 4})
     version = raw["version"]
-    require(type(raw["min_group_size"]) is int and 2 <= raw["min_group_size"] <= 50_000)
+    require(
+        type(raw["min_group_size"]) is int and 2 <= raw["min_group_size"] <= 50_000, "group_size"
+    )
     require(isinstance(raw["columns"], dict) and 1 <= len(raw["columns"]) <= 128)
     columns = {}
     for name, config in raw["columns"].items():
-        require(valid_heading(name) and name != "record_id")
+        current_field = name if isinstance(name, str) else None
+        require(valid_heading(name) and name != "record_id", "heading")
         require(isinstance(config, dict))
         action = config.get("action")
         classification = config.get("classification")
@@ -101,8 +114,8 @@ def parse_policy(raw: object) -> Policy:
             actions |= {"code", "keep_numeric"}
         if version == 4:
             actions.add("review_text")
-        require(isinstance(action, str) and action in actions)
-        require(isinstance(classification, str) and classification in CLASSES)
+        require(isinstance(action, str) and action in actions, "action")
+        require(isinstance(classification, str) and classification in CLASSES, "classification")
         if action in {"keep", "code"}:
             extra = {"allowed_values"}
         elif action == "bin":
@@ -115,51 +128,55 @@ def parse_policy(raw: object) -> Policy:
             extra = set()
         require(set(config) == {"action", "classification"} | extra)
         if action in {"keep", "bin", "code", "keep_numeric"}:
-            require(classification in {"quasi_identifier", "analytical_attribute"})
-            require(inferred_classification(name) not in {"direct_identifier", "free_text"})
+            require(
+                classification in {"quasi_identifier", "analytical_attribute"}, "classification"
+            )
+            require(inferred_classification(name) != "direct_identifier", "identifier_retention")
+            require(inferred_classification(name) != "free_text", "narrative_action")
         if action == "pseudonymise":
-            require(classification == "direct_identifier")
+            require(classification == "direct_identifier", "source_key_classification")
         text_reviews = ()
         if action == "review_text":
-            require(classification == "free_text")
-            require(inferred_classification(name) != "direct_identifier")
-            require(validate_text_reviews(config["text_reviews"]))
+            require(classification == "free_text", "classification")
+            require(inferred_classification(name) != "direct_identifier", "identifier_retention")
+            require(validate_text_reviews(config["text_reviews"]), "text_review")
             text_reviews = tuple(config["text_reviews"].items())
         allowed = ()
         bins = []
         if action in {"keep", "code"}:
             values = config["allowed_values"]
-            require(isinstance(values, list) and 1 <= len(values) <= 1000)
-            require(all(isinstance(v, str) and safe_category(v) for v in values))
-            require(len(set(values)) == len(values))
+            require(isinstance(values, list) and 1 <= len(values) <= 1000, "categories")
+            require(all(isinstance(v, str) and safe_category(v) for v in values), "categories")
+            require(len(set(values)) == len(values), "categories")
             allowed = tuple(values)
         if action == "bin":
             pairs = config["bins"]
-            require(isinstance(pairs, list) and 2 <= len(pairs) <= 100)
+            require(isinstance(pairs, list) and 2 <= len(pairs) <= 100, "bins")
             for pair in pairs:
-                require(isinstance(pair, list) and len(pair) == 2)
-                require(all(type(n) in {int, float} for n in pair))
+                require(isinstance(pair, list) and len(pair) == 2, "bins")
+                require(all(type(n) in {int, float} for n in pair), "bins")
                 lo, hi = (Decimal(str(n)) for n in pair)
-                require(lo.is_finite() and hi.is_finite() and lo < hi)
-                require(not bins or bins[-1][1] == lo)
+                require(lo.is_finite() and hi.is_finite() and lo < hi, "bins")
+                require(not bins or bins[-1][1] == lo, "bins")
                 bins.append((lo, hi))
         bounds = None
         max_decimal_places = None
         if action == "keep_numeric":
             pair = config["bounds"]
-            require(isinstance(pair, list) and len(pair) == 2)
-            require(all(type(n) in {int, float} for n in pair))
+            require(isinstance(pair, list) and len(pair) == 2, "bounds")
+            require(all(type(n) in {int, float} for n in pair), "bounds")
             lo, hi = (Decimal(str(n)) for n in pair)
-            require(lo.is_finite() and hi.is_finite() and 0 <= lo < hi)
+            require(lo.is_finite() and hi.is_finite() and 0 <= lo < hi, "bounds")
             bounds = (lo, hi)
             if version == 2:
                 max_decimal_places = config["max_decimal_places"]
-                require(type(max_decimal_places) is int and 0 <= max_decimal_places <= 6)
+                require(type(max_decimal_places) is int and 0 <= max_decimal_places <= 6, "bounds")
         columns[name] = ColumnRule(
             action, classification, allowed, tuple(bins), bounds, max_decimal_places, text_reviews
         )
-        require(all(len(label) <= 64 for label in columns[name].labels))
-    require(sum(r.action == "pseudonymise" for r in columns.values()) == 1)
+        require(all(len(label) <= 64 for label in columns[name].labels), "bins")
+    current_field = None
+    require(sum(r.action == "pseudonymise" for r in columns.values()) == 1, "source_key_count")
     return Policy(columns, raw["min_group_size"], version)
 
 
