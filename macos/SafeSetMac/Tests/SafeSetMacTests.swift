@@ -194,8 +194,51 @@ final class SafeSetMacTests: XCTestCase {
 
     func testActionNamesMapToStrictPolicyActions() {
         XCTAssertEqual(actionOptions.map(\.1), [
-            "drop", "pseudonymise", "code", "keep", "bin", "keep_numeric"
+            "drop", "pseudonymise", "code", "keep", "review_text", "bin", "keep_numeric"
         ])
+        XCTAssertEqual(actionOptions.first { $0.1 == "keep" }?.0, "Keep short categories unchanged")
+        XCTAssertEqual(actionOptions.first { $0.1 == "review_text" }?.0, "Review and redact text")
+    }
+
+    @MainActor func testLongTextNeedsIndividualReviewAndStaysReferenceOnly() {
+        let model = AppModel()
+        model.source = "/synthetic/local-workbook.xlsx"
+        model.sourceSheet = "Synthetic"
+        model.selectedSourceSheets = ["Synthetic"]
+        var key = FieldDraft(id: "Synthetic key")
+        key.action = "pseudonymise"
+        var text = FieldDraft(id: "Journal response")
+        text.action = "review_text"
+        XCTAssertTrue(text.needsAttention)
+        XCTAssertEqual(text.payload()["classification"] as? String, "free_text")
+        model.fields = [key, text]
+        model.fieldsBySheet = ["Synthetic": model.fields]
+        XCTAssertFalse(model.canPrepareProtection)
+        XCTAssertTrue(model.editableCandidates("Synthetic").isEmpty)
+        var entry = TextReviewEntry(
+            sheet: "Synthetic", digest: String(repeating: "a", count: 64),
+            original: "A synthetic journal paragraph.", count: 1, text: "Reviewed paragraph."
+        )
+        let review = TextReviewSheet(source: model.source, field: text.id, entries: [entry])
+        model.acceptTextReview(review, entries: [entry])
+        XCTAssertTrue(model.fields[1].textReviews.isEmpty)
+        entry.reviewed = true
+        entry.edit("An edited paragraph.")
+        XCTAssertFalse(entry.reviewed)
+        entry.reviewed = true
+        model.acceptTextReview(review, entries: [entry])
+        XCTAssertFalse(model.fields[1].needsAttention)
+        XCTAssertTrue(model.canPrepareProtection)
+        XCTAssertEqual(model.fields[1].textReviews[entry.digest], "An edited paragraph.")
+        XCTAssertTrue(model.editableCandidates("Synthetic").isEmpty)
+        model.source = "/synthetic/different-workbook.xlsx"
+        entry.text = "Should not replace the old approval."
+        model.acceptTextReview(review, entries: [entry])
+        XCTAssertEqual(model.fields[1].textReviews[entry.digest], "An edited paragraph.")
+        var removed = model.fields[1]
+        removed.action = "drop"
+        model.updateConsolidatedField(text.id, with: removed)
+        XCTAssertTrue(model.fields[1].textReviews.isEmpty)
     }
 
     func testFieldActionsHideTechnicalClassificationAndBuildSafePayloads() {

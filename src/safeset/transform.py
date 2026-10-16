@@ -6,6 +6,7 @@ from .errors import SafetyError
 from .ingestion import Table
 from .policy import Policy
 from .pseudonyms import new_id
+from .text_review import check_text_review_source, reviewed_value
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ def sanitise(source: Table, policy: Policy) -> Candidate:
         raise SafetyError("Source schema differs from policy; missing or unexpected columns.")
     if not source.rows:
         raise SafetyError("Empty datasets cannot be exported.")
+    check_text_review_source(source, policy)
     identities = [r[policy.source_key] for r in source.rows]
     if any(not v.strip() or formula_or_control(v) for v in identities) or len(
         set(identities)
@@ -36,7 +38,9 @@ def sanitise(source: Table, policy: Policy) -> Candidate:
         records[record_id] = row[policy.source_key]
         result = {"record_id": record_id}
         for name, rule in policy.columns.items():
-            if rule.action == "keep":
+            if rule.action == "review_text":
+                result[name] = reviewed_value(row[name], rule.text_reviews)
+            elif rule.action == "keep":
                 result[name] = row[name]
             elif rule.action == "code":
                 value = row[name]

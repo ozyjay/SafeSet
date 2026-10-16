@@ -1,4 +1,46 @@
-# Policy versions 1, 2 and 3
+# Policy versions 1, 2, 3 and 4
+
+Policy version 4 adds `review_text` for manually reviewed narrative cells. This is
+separate from restoration-bundle version 4. Older policies still reject this
+action and retain their original meaning. Desktop authoring keeps version 3
+unless a reviewed-text field is selected, when it writes version 4. Version 4
+inherits version 3 numeric behaviour. The macOS control is **How to protect this
+field**; **Keep short categories unchanged** remains categorical `keep`.
+**Review and redact text** selects `review_text`, not unrestricted passthrough.
+See `examples/example-text-policy.yaml` for a visibly synthetic schema example;
+the desktop creates the content bindings for operational review.
+
+`review_text` requires exactly `action`, `classification: free_text` and
+`text_reviews`. The latter maps each distinct original cell's lowercase SHA-256
+content digest to its operator-approved replacement string. These digests bind
+content for integrity; they are never identifiers or exported pseudonyms. Every
+observed source value, including blanks, needs exactly one entry; missing,
+changed or extra values block protection. An empty replacement excludes that
+response's text. Non-empty replacements need non-whitespace content.
+Each response supports 4,096 characters, including tabs and CR/LF. Each field
+supports 1,000 distinct responses and 200,000 UTF-8 bytes of reviewed replacement
+text. The private policy file retains its 256 KiB limit; desktop frames retain
+their 1 MiB limit. Other ASCII controls/DEL, formula prefixes and recognised
+email/date/time/long-digit patterns are rejected. Known source names and
+identifiers are checked case-insensitively at word boundaries against the same
+worksheet's explicit/inferred identifier fields. This is a backstop; operators
+must remove identifying context and unfamiliar names themselves.
+
+Local review shows each original response and a replacement editor, with a
+separate confirmation for every response. Editing resets confirmation. The shared
+engine rechecks completeness and content before the desktop stores the decision.
+Validation and publication recheck it again. Reviewed text participates in
+per-field, joint and linked disclosure grouping; strict rare-group failures remain
+blocking. Narrative retention always adds a warning. Passing checks does not
+establish anonymity or recipient suitability.
+
+This action requires a restoration bundle; legacy map-only exports reject it.
+Reviewed text is immutable in returned workbooks and cannot be selected as an
+editable field. Restoration verifies the reviewed value and restores the original
+response only into the new local sensitive workbook. Added analysis/result fields
+still use their short-category rules. Private saved YAML and encrypted bundles
+contain reviewed text and source-content digests: treat those policies as sensitive
+and keep them local and outside repositories. Identity maps gain no paragraphs.
 
 Version 5 *restoration bundles* add confirmed workbook-region coordinates to the
 version 4 editable workflow. Each logical region uses an ordinary strict version 3
@@ -32,7 +74,7 @@ Additions and removals require separate approval; neither creates new codebook
 entries, identities or protection permissions. See architecture.md for the bounded
 desktop protocol and supported structural workbook layouts.
 
-The guided protected-workbook desktop constructs a strict version 3 policy in
+The guided protected-workbook desktop constructs a strict version 3 or 4 policy in
 memory from explicit field decisions. Saving YAML is optional. Source-derived protected
 fields are immutable during version 2 bundle reconstruction; newly added result
 fields need separate explicit approval and are not policy source columns. The
@@ -41,7 +83,7 @@ version 1 identity maps.
 
 See `examples/example-policy.yaml`. YAML mappings reject duplicate keys and aliases;
 unknown keys and types fail. Top-level keys are exactly `version`, `columns` and
-`min_group_size`. The version must be integer 1, 2 or 3; minimum group size an integer
+`min_group_size`. The version must be integer 1, 2, 3 or 4; minimum group size an integer
 >=2. Version 1 policies retain their original meaning. Version 2 adds `code` and
 `keep_numeric`; those actions are rejected under version 1. Version 3 removes the
 decimal-place limit from `keep_numeric` while retaining its bounds. The example uses
@@ -62,7 +104,8 @@ same bounds and still require an explicit allowlist before restoration.
 
 Classifications: `direct_identifier`, `pseudonymous_identifier`, `quasi_identifier`,
 `analytical_attribute`, `free_text`, `unknown`. Pseudonymous source fields and
-unknown fields can only be dropped. The output `record_id` is always classified as
+unknown fields can only be dropped; free text requires version 4 review or removal.
+The output `record_id` is always classified as
 pseudonymous; existing source pseudonyms are not reused.
 
 The desktop form does not ask for a classification when an action is `drop`.
@@ -82,9 +125,9 @@ serialised as an approved policy decision.
 | `pseudonymise` | `action`, `classification` | Direct identifier only; exactly one |
 | `keep` | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
 | `bin` | Plus `bins`: list of at least two `[lower, upper]` numeric pairs | Quasi-identifier or analytical attribute |
-| `code` (v2/v3) | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
+| `code` (v2/v3/v4) | Plus non-empty, unique string `allowed_values` | Quasi-identifier or analytical attribute |
 | `keep_numeric` (v2) | Plus `bounds: [lower, upper]` and `max_decimal_places` | Quasi-identifier or analytical attribute |
-| `keep_numeric` (v3) | Plus `bounds: [lower, upper]` | Quasi-identifier or analytical attribute |
+| `keep_numeric` (v3/v4) | Plus `bounds: [lower, upper]` | Quasi-identifier or analytical attribute |
 
 Keep labels must be short categories. Use quoted YAML strings for numbers/booleans.
 `code` checks source values against the same strict categorical allowlist, then
@@ -113,7 +156,7 @@ values, participate in per-field and joint group checks. A passing check is not 
 anonymity or recipient-suitability decision.
 
 A heading detected as a direct identifier cannot be kept even if classified as an
-analytical attribute. A heading detected as free text must be dropped. For these
+analytical attribute. A heading detected as free text must be dropped or use version 4 `review_text`. For these
 checks, punctuation and spaces are treated as word separators. Heuristics
 are a backstop, not a universal list. Domain authors must classify unfamiliar
 sensitive fields conservatively.
@@ -122,13 +165,13 @@ Output columns follow policy order with `record_id` first; dropped columns never
 appear. Source keys must be non-empty and unique, and remain exact strings in the
 map. Source keys with spreadsheet-formula prefixes or control characters fail
 before export so the resulting map remains restorable. Bin labels are limited to
-64 characters. There is no `generalise` or `redact` in any version. To add an action or schema option,
+64 characters. There is no automatic `generalise` or inferred text-redaction action. To add an action or schema option,
 follow `.github/skills/policy-schema/SKILL.md`, update examples and migration
 behaviour and add rejection tests first.
 
 Validation profiles are workflow configuration, not YAML policy keys. Adding a
 `validation_profile` key to any policy remains an unknown-key error.
-The relational workflow applies one ordinary strict version 3 policy to each
+The relational workflow applies one strict version 3 or 4 policy to each
 selected worksheet. Each policy must contain exactly one pseudonymised source key;
 those explicitly selected keys form one shared entity domain even when their
 headings differ. `record_id` and `entity_id` are reserved relational output

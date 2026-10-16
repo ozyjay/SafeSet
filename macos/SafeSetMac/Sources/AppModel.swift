@@ -12,6 +12,7 @@ struct FieldDraft: Identifiable, Equatable {
     var action = ""
     var classification = ""
     var allowedValues: [String] = []
+    var textReviews: [String: String] = [:]
     var binsText = ""
     var lower = ""
     var upper = ""
@@ -20,6 +21,7 @@ struct FieldDraft: Identifiable, Equatable {
         if action.isEmpty { return true }
         if action == "drop" { return false }
         if action == "pseudonymise" { return false }
+        if action == "review_text" { return textReviews.isEmpty }
         if !["quasi_identifier", "analytical_attribute"].contains(classification) { return true }
         if action == "keep" || action == "code" {
             return allowedValues.isEmpty || blankCount > 0
@@ -52,14 +54,39 @@ struct FieldDraft: Identifiable, Equatable {
             ? [Double(lower)!, Double(upper)!] : NSNull()
         let policyClassification: String
         if action == "pseudonymise" { policyClassification = "direct_identifier" }
+        else if action == "review_text" { policyClassification = "free_text" }
         else if action == "drop" && classification.isEmpty { policyClassification = "unknown" }
         else { policyClassification = classification }
-        return [
+        var result: [String: Any] = [
             "action": action, "classification": policyClassification,
             "allowed_values": allowedValues,
             "bins": bins, "bounds": bounds
         ]
+        if action == "review_text" { result["text_reviews"] = textReviews }
+        return result
     }
+}
+
+struct TextReviewEntry: Identifiable {
+    let sheet: String
+    let digest: String
+    let original: String
+    let count: Int
+    var text: String
+    var reviewed = false
+    var id: String { sheet + ":" + digest }
+
+    mutating func edit(_ value: String) {
+        text = value
+        reviewed = false
+    }
+}
+
+struct TextReviewSheet: Identifiable {
+    let id = UUID()
+    let source: String
+    let field: String
+    let entries: [TextReviewEntry]
 }
 
 struct CategorySheet: Identifiable {
@@ -116,6 +143,7 @@ struct SourceCellLocation: Identifiable {
     @Published var bundleOutput = ""
     @Published var protectionReview: [String: Any]?
     @Published var categorySheet: CategorySheet?
+    @Published var textReviewSheet: TextReviewSheet?
     @Published var returned = ""
     @Published var returnedSheets: [String] = []
     @Published var returnedSheet = ""
@@ -223,6 +251,7 @@ struct SourceCellLocation: Identifiable {
             draft.allowedValues = matches.allSatisfy { !$0.1.allowedValues.isEmpty }
                 ? Array(Set(matches.flatMap { $0.1.allowedValues })).sorted()
                 : []
+            if matches.contains(where: { $0.1.textReviews.isEmpty }) { draft.textReviews = [:] }
             let metadata: String
             if matches.count == 1 {
                 metadata = "\(draft.type) · \(draft.cardinality) values"
@@ -297,6 +326,9 @@ struct SourceCellLocation: Identifiable {
             }
             if ["keep", "code"].contains(field.action) && field.blankCount > 0 {
                 return "Remove blank categorical cells or drop the affected field before protection."
+            }
+            if field.action == "review_text" && field.textReviews.isEmpty {
+                return "Review and approve every response in each long-form text field."
             }
             if field.action == "bin" {
                 let validPairs = field.binsText.split(separator: "\n").filter { line in
@@ -453,6 +485,7 @@ struct SourceCellLocation: Identifiable {
     }
 
     func chooseSource(_ url: URL) {
+        textReviewSheet = nil
         source = url.path; fields = []; fieldsBySheet = [:]; sharedCodeFields = []
         useRegions = false; regionCandidates = []; regionSelections = [:]
         regionSourceDigest = ""
@@ -581,7 +614,10 @@ struct SourceCellLocation: Identifiable {
             let actionChanged = sheetFields[index].action != decision.action
             sheetFields[index].action = decision.action
             sheetFields[index].classification = decision.classification
-            if actionChanged { sheetFields[index].allowedValues = [] }
+            if actionChanged {
+                sheetFields[index].allowedValues = []
+                sheetFields[index].textReviews = [:]
+            }
             sheetFields[index].binsText = decision.binsText
             sheetFields[index].lower = decision.lower
             sheetFields[index].upper = decision.upper
@@ -596,6 +632,10 @@ struct SourceCellLocation: Identifiable {
         invalidate()
         let orderedSheets = orderedSelectedSourceSheets.filter { sheets.contains($0) }
         let action = consolidatedFields.first(where: { $0.id == field })?.draft.action ?? ""
+        if action == "review_text" {
+            reviewText(for: field, sheets: orderedSheets)
+            return
+        }
         func collect(_ index: Int, valuesBySheet: [String: [String]], blankCount: Int) {
             guard index < orderedSheets.count else {
                 let values = Set(valuesBySheet.values.flatMap { $0 })
@@ -626,6 +666,99 @@ struct SourceCellLocation: Identifiable {
             }
         }
         collect(0, valuesBySheet: [:], blankCount: 0)
+    }
+
+    func reviewText(for field: String, sheets: [String]) {
+        let reviewedSource = source
+        func collect(_ index: Int, entries: [TextReviewEntry]) {
+            guard index < sheets.count else {
+                self.textReviewSheet = TextReviewSheet(
+                    source: reviewedSource, field: field, entries: entries
+                )
+                return
+            }
+            let sheet = sheets[index]
+            let command = useRegions ? "region_text_review" : "text_review"
+            let payload: [String: Any] = useRegions
+                ? ["source": source, "name": sheet,
+                   "region": regionSelections[sheet] ?? [:], "column": field]
+                : ["source": source, "sheet": sheet, "column": field]
+            send(command, payload) { result in
+                guard self.source == reviewedSource else { return }
+                let values = result["entries"] as? [[String: Any]] ?? []
+                let added = values.compactMap { value -> TextReviewEntry? in
+                    guard let digest = value["digest"] as? String,
+                          let original = value["original"] as? String else { return nil }
+                    let saved = self.fieldsBySheet[sheet]?.first { $0.id == field }?
+                        .textReviews[digest]
+                    return TextReviewEntry(
+                        sheet: sheet, digest: digest, original: original,
+                        count: value["count"] as? Int ?? 0, text: saved ?? original
+                    )
+                }
+                collect(index + 1, entries: entries + added)
+            }
+        }
+        collect(0, entries: [])
+    }
+
+    func approveText(_ review: TextReviewSheet, entries: [TextReviewEntry]) {
+        guard source == review.source, !entries.isEmpty,
+              entries.allSatisfy({ $0.reviewed }),
+              Set(entries.map(\.id)) == Set(review.entries.map(\.id)) else {
+            alert = "Review and confirm every response before approving this field."
+            return
+        }
+        let sheets = orderedSelectedSourceSheets.filter { sheet in
+            entries.contains { $0.sheet == sheet }
+        }
+        func validate(_ index: Int) {
+            guard index < sheets.count else {
+                self.acceptTextReview(review, entries: entries)
+                return
+            }
+            let sheet = sheets[index]
+            let reviews = Dictionary(uniqueKeysWithValues:
+                entries.filter { $0.sheet == sheet }.map { ($0.digest, $0.text) }
+            )
+            let command = useRegions ? "approve_region_text_review" : "approve_text_review"
+            let payload: [String: Any] = useRegions
+                ? ["source": source, "name": sheet,
+                   "region": regionSelections[sheet] ?? [:], "column": review.field,
+                   "text_reviews": reviews]
+                : ["source": source, "sheet": sheet, "column": review.field,
+                   "text_reviews": reviews]
+            send(command, payload) { _ in validate(index + 1) }
+        }
+        validate(0)
+    }
+
+    func acceptTextReview(_ review: TextReviewSheet, entries: [TextReviewEntry]) {
+        let sheets = Set(entries.map(\.sheet))
+        guard source == review.source, !entries.isEmpty, entries.allSatisfy({ $0.reviewed }),
+              Set(entries.map(\.id)) == Set(review.entries.map(\.id)),
+              sheets.isSubset(of: selectedSourceSheets),
+              sheets.allSatisfy({ sheet in
+                  fieldsBySheet[sheet]?.first { $0.id == review.field }?.action == "review_text"
+              }) else {
+            alert = "The field selection changed. Open a new text review."
+            return
+        }
+        for sheet in sheets {
+            guard selectedSourceSheets.contains(sheet), var sheetFields = fieldsBySheet[sheet],
+                  let index = sheetFields.firstIndex(where: { $0.id == review.field }),
+                  sheetFields[index].action == "review_text" else {
+                alert = "The field selection changed. Open a new text review."
+                return
+            }
+            sheetFields[index].textReviews = Dictionary(uniqueKeysWithValues:
+                entries.filter { $0.sheet == sheet }.map { ($0.digest, $0.text) }
+            )
+            fieldsBySheet[sheet] = sheetFields
+            if sheet == sourceSheet { fields = sheetFields }
+        }
+        textReviewSheet = nil
+        invalidate()
     }
 
     func approveCategories(_ category: CategorySheet) {
@@ -1046,6 +1179,7 @@ struct SourceCellLocation: Identifiable {
                 self.fields[index].action = draft["action"] as? String ?? ""
                 self.fields[index].classification = draft["classification"] as? String ?? ""
                 self.fields[index].allowedValues = draft["allowed_values"] as? [String] ?? []
+                self.fields[index].textReviews = draft["text_reviews"] as? [String: String] ?? [:]
                 if let bins = draft["bins"] as? [[Double]] {
                     self.fields[index].binsText = bins.map { "\($0[0]),\($0[1])" }.joined(separator: "\n")
                 }

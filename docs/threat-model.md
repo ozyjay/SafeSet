@@ -37,7 +37,11 @@ heading allowance does not relax cell-value disclosure checks or permit heading
 text in logs. Long and multiline headings may be harder for an operator to review.
 
 The SwiftUI process may display headings, explicitly requested category labels
-and source-cell coordinates from a separate local diagnostic action. It does not
+and source-cell coordinates from a separate local diagnostic action. A dedicated
+operator-invoked narrative review may also display bounded source paragraphs and
+edited replacements locally. These remain in process memory, never preferences,
+logs or clipboard automatically. Private saved policies and encrypted bundles may
+contain reviewed text and content digests and must be treated as sensitive. It does not
 receive source rows, decrypted bundles or identity maps. The
 bundled Python helper reads bounded local JSON-line requests and replies with
 allowlisted review metadata or fixed error codes. It has no listener or network
@@ -80,6 +84,15 @@ Original fields omitted from the protected copy are copied back only in the loca
 restored workbook. Formula-like source strings remain literal text in that
 `.xlsx`; control characters still block reconstruction.
 
+With a version 4 `review_text` policy, the bundle additionally stores approved
+narrative replacements and content digests. Tabs/CR/LF in those original narrative
+fields are permitted during local restoration; other controls remain rejected.
+Every original distinct response must be reviewed locally, including blanks.
+Automatic checks reject recognised identifier patterns and known same-worksheet
+identifiers, but cannot detect every name or identifying context. Manual approval
+can be mistaken. All retained narratives enter the group/linkage checks; equality,
+frequency and semantic disclosure remain possible. No anonymity claim is made.
+
 ## Version 4 editable workbook boundary
 
 The separate result-workbook path treats every returned sheet and value as
@@ -110,8 +123,9 @@ worksheet and field names. It is not sent to the helper or stored in the bundle,
 and it grants no new workbook permissions. The returned workbook is still checked
 against authenticated fields, codes and participant membership.
 The UI asks the operator to omit names and student numbers, but arbitrary typed
-text is not screened before copying. Engine-generated prompt text and protocol
-responses contain no sensitive source values.
+text is not screened before copying. Engine-generated prompt text and ordinary
+protection/restoration review responses contain no sensitive source values; only
+the separately requested local text editor receives bounded paragraphs.
 Full input-file digest checks and single-use review tokens prevent stale approvals.
 Reference choice and the substantive correctness of assignments remain human
 decisions. Fixed summary/formula/chart ranges may require local adjustment after
@@ -187,8 +201,10 @@ This is a conservative local tool, not an anonymity or compliance guarantee.
 Protect source identities, identity maps, passphrases and restored data. The
 operator, policy author, OS and installed dependencies are trusted. The external
 analysis service is not trusted with source identities or maps. Treat returned
-analysis as untrusted input. Policies contain schema and categories only, never
-real identities or credentials.
+analysis as untrusted input. Ordinary policies contain schema and categories;
+version 4 narrative policies also hold reviewed text and source-content digests.
+Do not put identities or credentials in policy files, and keep narrative policies
+private because reviewed text can still reveal sensitive information.
 
 | Threat | MVP control | Remaining limitation |
 | --- | --- | --- |

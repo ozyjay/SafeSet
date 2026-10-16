@@ -34,14 +34,44 @@ publication gate is removed.
 
 ## Standalone macOS desktop
 
+### Reviewed narrative fields
+
+The field decision label is **How to protect this field**. Short unchanged values
+use **Keep short categories unchanged**. **Review and redact text** creates a
+version 4 `review_text` policy rule only after the operator reviews every distinct
+response in the local editor. Repeated exact responses are reviewed once with a
+cell count; approvals remain separate per worksheet/confirmed region. The shared
+`text_review` module validates approved replacements, exact content-digest coverage,
+known worksheet identifiers and bounds. Digests are integrity bindings, never
+pseudonyms. Identity maps retain their minimal schema.
+
+`text_review`/`region_text_review` are explicit local reads. Their approval commands
+re-read the source and validate replacements without returning paragraphs again.
+The UI commits the collected decisions only after every selected scope succeeds.
+Normal inspection and protection reviews still return no source paragraphs.
+Publication rechecks the current source and each row's exact approved replacement.
+All reviewed text participates in the existing per-field, joint and entity-linked
+group calculations and adds a narrative-risk warning. This does not assess
+semantic identifiability or guarantee removal of all names.
+
+The protected text remains reference-only, even in editable-workbook mode.
+Restoration requires it to match its bound reviewed value, then restores original
+paragraphs into the new local sensitive workbook. Tabs/CR/LF in such source fields
+are allowed for restoration; other controls remain blocked. Static Excel writers
+escape CRs to preserve exact text. Map-only export is unsupported for these rules.
+Native review UX is currently macOS; the validation and protocol are shared and
+the existing Windows publication gate is unchanged. See policy-format.md for bounds.
+
 The macOS 14+ Apple Silicon app uses SwiftUI for presentation and packages the
 same Python domain modules as a one-directory executable helper. A bounded,
 versioned JSON-line protocol runs solely over a child process's stdin/stdout.
 The app launches the helper from its own bundle; it opens no port or server.
 Requests contain local paths, explicit field decisions and transient passphrases.
-Responses contain only aggregate inspection, local category values after an
-explicit request, fixed error codes and review metadata. Source rows, maps,
-bundle payloads and passphrases never enter protocol responses or logs.
+Responses contain aggregate inspection, local category values after an explicit
+request, fixed error codes and review metadata. Dedicated operator-invoked text
+review commands may return bounded paragraphs from one selected field to the local
+review editor; approval returns only status. Source rows, maps, bundle payloads and
+passphrases never enter responses. No paragraph or review payload enters logs.
 
 For restoration convenience, the SwiftUI process stores the path of the
 most recently created or selected encrypted private bundle and the most recently
@@ -232,7 +262,7 @@ never participant values or codebooks. Legacy restoration remains unchanged.
 ## Relational workbook round trip (bundle version 3)
 
 The relational workflow protects an explicitly selected set of worksheets without
-flattening their schemas. Each worksheet has its own strict version 3 policy and
+flattening their schemas. Each worksheet has its own strict version 3 or 4 policy and
 exact source-table binding. The single `pseudonymise` field selected in every
 worksheet is declared to belong to one shared entity domain: equal source-key text
 therefore receives the same fresh random `entity_id` throughout the workbook.
@@ -418,7 +448,7 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   values are read without dataframe type inference; numeric cells become plain
   decimal text. Source identifiers requiring exact formatting must be stored
   as text in Excel. Exports write every cell as text.
-- Strict version 1, 2 and 3 policies; unknown options, duplicate YAML keys, aliases,
+- Strict version 1, 2, 3 and 4 policies; unknown options, duplicate YAML keys, aliases,
   unknown classifications, malformed bounds/bins and source-schema drift are errors.
 - Policy, mapping and result headings preserve literal Excel text within the
   ingestion bounds (at least one non-whitespace character, unique, at most 4,096
@@ -428,7 +458,8 @@ These bounds serve a modest local dataset workflow; this is not a streaming engi
   explicit allowlists remain required.
   This backward-compatible rule applies to all policy versions and existing maps.
 - Exactly one unique, non-empty source identifier is pseudonymised to `record_id`.
-  Other direct identifiers and all free text must be dropped. Map only that key,
+  Other direct identifiers must be dropped; narrative fields need explicit version 4
+  review or removal. Map only that key,
   never names, notes or whole source rows. Rejoining dropped source fields is a
   separate local operation outside this workflow.
 - During bundle reconstruction, the bound original source supplies dropped fields

@@ -6,8 +6,9 @@ import UniformTypeIdentifiers
 
 let actionOptions: [(String, String)] = [
     ("Remove", "drop"), ("Replace with random record ID", "pseudonymise"),
-    ("Obfuscate values", "code"), ("Keep", "keep"),
-    ("Group into ranges", "bin"), ("Keep exact number", "keep_numeric")
+    ("Replace categories with random codes", "code"), ("Keep short categories unchanged", "keep"),
+    ("Review and redact text", "review_text"),
+    ("Group numbers into ranges", "bin"), ("Keep exact numbers", "keep_numeric")
 ]
 let retainedInformationOptions: [(String, String)] = [
     ("Information useful for the analysis", "analytical_attribute"),
@@ -24,7 +25,7 @@ func plainLanguageSuggestion(_ classification: String) -> String {
     case "analytical_attribute":
         return "This field may be useful for the analysis, but keeping it still contributes to disclosure risk."
     case "free_text":
-        return "This looks like free text and would normally be removed because SafeSet does not redact it."
+        return "This looks like long-form text. Remove it, or choose Review and redact text to review each response locally before including it."
     case "pseudonymous_identifier":
         return "This looks like an existing identifier and should not be treated as automatically safe."
     default:
@@ -171,7 +172,7 @@ struct FieldCard: View {
                 Text(scope).appFont(12).foregroundStyle(.secondary)
             }
             if field.action != "drop" {
-                if field.blankCount > 0 {
+                if field.blankCount > 0 && field.action != "review_text" {
                     Label(
                         "\(field.blankCount) blank or whitespace-only cells",
                         systemImage: "exclamationmark.triangle.fill"
@@ -180,12 +181,14 @@ struct FieldCard: View {
                     .foregroundStyle(.red)
                 }
                 HStack {
-                    Picker("Appearance", selection: Binding(
+                    Picker("How to protect this field", selection: Binding(
                         get: { field.action },
                         set: { action in
                             field.action = action
                             if action == "pseudonymise" {
                                 field.classification = "direct_identifier"
+                            } else if action == "review_text" {
+                                field.classification = "free_text"
                             } else if action == "drop" {
                                 field.classification = ""
                             } else if !["quasi_identifier", "analytical_attribute"]
@@ -227,6 +230,20 @@ struct FieldCard: View {
                         }
                     }
                 }
+                if field.action == "review_text" {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Review every distinct response locally. Edit out names and identifying details, or clear a response to exclude its text. Only your reviewed text goes into the protected copy; the original stays local.")
+                            .appFont(12).foregroundStyle(.secondary)
+                        Button(field.textReviews.isEmpty
+                               ? "Review and redact responses…" : "Review approved text…") {
+                            categories(field.id)
+                        }.appFont(13)
+                        Text(field.textReviews.isEmpty
+                             ? "Text review required before validation."
+                             : "Text reviewed. Validate the workbook before export.")
+                            .appFont(12).foregroundStyle(.secondary)
+                    }
+                }
                 if field.action == "bin" {
                     TextField("One lower,upper range per line", text: $field.binsText, axis: .vertical)
                         .appFont(13)
@@ -260,6 +277,63 @@ struct FieldCard: View {
         .padding(14)
         .opacity(field.action == "drop" ? 0.55 : 1)
         .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct LongTextReviewView: View {
+    @EnvironmentObject var model: AppModel
+    let review: TextReviewSheet
+    @State private var entries: [TextReviewEntry]
+
+    init(review: TextReviewSheet) {
+        self.review = review
+        _entries = State(initialValue: review.entries)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Review and redact text").appFont(22, weight: .bold)
+            Text(review.field).appFont(13, weight: .semibold)
+            Text("These responses are shown only in this local review. Remove names, organisations, locations and other details that could identify someone. Pattern checks cannot find every identifier or identifying story.")
+                .foregroundStyle(.secondary)
+            Text("Keep the meaning needed for analysis. You can leave the protected text empty to exclude a response. Confirm every response after editing; editing again resets its confirmation. Maximum 4,096 characters per response.")
+                .foregroundStyle(.secondary)
+            Text("\(entries.filter(\.reviewed).count) of \(entries.count) distinct responses reviewed")
+                .appFont(13, weight: .semibold)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(entries.indices, id: \.self) { index in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(entries[index].sheet) · Response \(index + 1) · \(entries[index].count) cell(s)")
+                                .appFont(13, weight: .semibold)
+                            Text("Original — stays local").appFont(12, weight: .semibold)
+                            Text(entries[index].original.isEmpty ? "(Blank response)" : entries[index].original)
+                                .appFont(13).textSelection(.enabled)
+                            Text("Text to include in the protected copy").appFont(12, weight: .semibold)
+                            TextEditor(text: Binding(
+                                get: { entries[index].text },
+                                set: { entries[index].edit($0) }
+                            ))
+                            .appFont(13).frame(minHeight: 110)
+                            .border(.secondary.opacity(0.3))
+                            Toggle("I reviewed this response and removed identifying details", isOn: $entries[index].reviewed)
+                                .toggleStyle(.checkbox).appFont(13)
+                        }
+                        .padding(12)
+                        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+            }
+            Text("Reviewed text still contributes to rare-group and linkage checks. Approval does not establish anonymity. Text is reference-only in the protected workbook.")
+                .appFont(12).foregroundStyle(.secondary)
+            HStack {
+                Button("Cancel") { model.textReviewSheet = nil }
+                Spacer()
+                Button("Approve reviewed text") { model.approveText(review, entries: entries) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(entries.isEmpty || entries.contains { !$0.reviewed || $0.text.count > 4096 })
+            }
+        }.padding(24).frame(minWidth: 720, minHeight: 620)
     }
 }
 
@@ -1163,6 +1237,9 @@ struct ProtectView: View {
             }
             .padding(28)
             .frame(maxWidth: 850, alignment: .leading)
+        }
+        .sheet(item: $model.textReviewSheet) { review in
+            LongTextReviewView(review: review).environmentObject(model)
         }
         .sheet(item: $model.categorySheet) { category in
             VStack(alignment: .leading, spacing: 12) {

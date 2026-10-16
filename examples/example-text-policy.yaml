@@ -1,0 +1,15 @@
+# Visibly synthetic example only. Prefer the local desktop text-review editor.
+# This review binds exactly this fictional source response:
+# SYNTH-PERSON described an entirely invented learning exercise.
+# Other source responses require their own explicit review.
+version: 4
+min_group_size: 2
+columns:
+  Synthetic source key:
+    action: pseudonymise
+    classification: direct_identifier
+  Synthetic journal response:
+    action: review_text
+    classification: free_text
+    text_reviews:
+      ef40c6600ec9542d41b3274c65ee5eda198de4acd111fb774f5db25845b8af77: A participant described an entirely invented learning exercise.

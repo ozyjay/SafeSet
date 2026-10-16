@@ -6,6 +6,7 @@ from .errors import SafetyError
 from .ingestion import Table
 from .policy import Policy
 from .pseudonyms import valid_id
+from .text_review import reviewed_text_valid
 
 
 @dataclass
@@ -76,7 +77,14 @@ def validate(table: Table, policy: Policy, profile: str = "strict") -> Validatio
         rule = policy.columns[name]
         report.classifications[name] = rule.classification
         values = [r[name] for r in table.rows]
-        if rule.action == "keep":
+        if rule.action == "review_text":
+            approved = set(dict(rule.text_reviews).values())
+            valid_values = all(v in approved and reviewed_text_valid(v) for v in values)
+            report.warnings.append(
+                "Manually reviewed narrative text is retained; names and contextual identifiers "
+                "may remain. Review suitability before sharing."
+            )
+        elif rule.action == "keep":
             valid_values = all(v in rule.allowed_values and safe_category(v) for v in values)
         elif rule.action == "bin":
             valid_values = all(v in rule.labels for v in values)

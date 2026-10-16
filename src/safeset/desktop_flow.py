@@ -39,6 +39,7 @@ from .relational import (
 )
 from .restoration import restore
 from .storage import default_map_path, map_destination, output_destination, publish
+from .text_review import TEXT_BUNDLE_ERROR
 from .transform import Candidate, sanitise
 from .validation import ValidationReport, validate
 from .workbook_editing import (
@@ -169,7 +170,8 @@ def prepare_protection(
         len(table.rows),
         sum(rule.action == "drop" for rule in policy.columns.values()),
         sum(rule.action == "code" for rule in policy.columns.values()),
-        sum(rule.action in {"keep", "keep_numeric", "bin"} for rule in policy.columns.values()),
+        sum(rule.action in {"keep", "keep_numeric", "bin", "review_text"}
+            for rule in policy.columns.values()),
         validation_profile,
     )
 
@@ -599,6 +601,8 @@ def prepare_export(
 ) -> ExportReview:
     """Prepare and validate a candidate without publishing either artefact."""
     policy = load_policy(policy_path)
+    if any(rule.action == "review_text" for rule in policy.columns.values()):
+        raise SafetyError(TEXT_BUNDLE_ERROR)
     table = read_excel(source, sheet, allow_cached_formulas=True, allow_source_dates=True)
     candidate = sanitise(table, policy)
     validation = validate(candidate.table, policy)

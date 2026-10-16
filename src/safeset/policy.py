@@ -9,6 +9,7 @@ import yaml
 from .classification import inferred_classification, safe_category
 from .errors import SafetyError
 from .ingestion import read_bounded, valid_heading
+from .text_review import validate_text_reviews
 
 CLASSES = {
     "direct_identifier",
@@ -44,6 +45,7 @@ class ColumnRule:
     bins: tuple[tuple[Decimal, Decimal], ...] = ()
     bounds: tuple[Decimal, Decimal] | None = None
     max_decimal_places: int | None = None
+    text_reviews: tuple[tuple[str, str], ...] = ()
 
     @property
     def labels(self) -> tuple[str, ...]:
@@ -70,7 +72,7 @@ class Policy:
             *(
                 k
                 for k, v in self.columns.items()
-                if v.action in {"keep", "bin", "code", "keep_numeric"}
+                if v.action in {"keep", "bin", "code", "keep_numeric", "review_text"}
             ),
         )
 
@@ -84,7 +86,7 @@ def parse_policy(raw: object) -> Policy:
 
     require(isinstance(raw, dict))
     require(set(raw) == {"version", "columns", "min_group_size"})
-    require(type(raw["version"]) is int and raw["version"] in {1, 2, 3})
+    require(type(raw["version"]) is int and raw["version"] in {1, 2, 3, 4})
     version = raw["version"]
     require(type(raw["min_group_size"]) is int and 2 <= raw["min_group_size"] <= 50_000)
     require(isinstance(raw["columns"], dict) and 1 <= len(raw["columns"]) <= 128)
@@ -95,8 +97,10 @@ def parse_policy(raw: object) -> Policy:
         action = config.get("action")
         classification = config.get("classification")
         actions = {"drop", "keep", "bin", "pseudonymise"}
-        if version in {2, 3}:
+        if version in {2, 3, 4}:
             actions |= {"code", "keep_numeric"}
+        if version == 4:
+            actions.add("review_text")
         require(isinstance(action, str) and action in actions)
         require(isinstance(classification, str) and classification in CLASSES)
         if action in {"keep", "code"}:
@@ -105,6 +109,8 @@ def parse_policy(raw: object) -> Policy:
             extra = {"bins"}
         elif action == "keep_numeric":
             extra = {"bounds", "max_decimal_places"} if version == 2 else {"bounds"}
+        elif action == "review_text":
+            extra = {"text_reviews"}
         else:
             extra = set()
         require(set(config) == {"action", "classification"} | extra)
@@ -113,6 +119,12 @@ def parse_policy(raw: object) -> Policy:
             require(inferred_classification(name) not in {"direct_identifier", "free_text"})
         if action == "pseudonymise":
             require(classification == "direct_identifier")
+        text_reviews = ()
+        if action == "review_text":
+            require(classification == "free_text")
+            require(inferred_classification(name) != "direct_identifier")
+            require(validate_text_reviews(config["text_reviews"]))
+            text_reviews = tuple(config["text_reviews"].items())
         allowed = ()
         bins = []
         if action in {"keep", "code"}:
@@ -144,7 +156,7 @@ def parse_policy(raw: object) -> Policy:
                 max_decimal_places = config["max_decimal_places"]
                 require(type(max_decimal_places) is int and 0 <= max_decimal_places <= 6)
         columns[name] = ColumnRule(
-            action, classification, allowed, tuple(bins), bounds, max_decimal_places
+            action, classification, allowed, tuple(bins), bounds, max_decimal_places, text_reviews
         )
         require(all(len(label) <= 64 for label in columns[name].labels))
     require(sum(r.action == "pseudonymise" for r in columns.values()) == 1)

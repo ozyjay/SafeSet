@@ -444,7 +444,8 @@ def _workbook_bytes(workbook: Workbook) -> bytes:
     if not any(
         isinstance(cell.value, str) and "\r" in cell.value
         for sheet in workbook
-        for cell in sheet[1]
+        for row in sheet
+        for cell in row
     ):
         return buffer.getvalue()
     # XML parsers normalise literal CR/CRLF. Character references preserve the

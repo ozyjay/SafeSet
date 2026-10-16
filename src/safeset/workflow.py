@@ -8,6 +8,7 @@ from .ingestion import MAX_BYTES, Table, excel_bytes, read_excel, require_excel_
 from .mapping import encrypt_mapping, validate_mapping
 from .policy import Policy
 from .storage import map_destination, output_destination, private_directory, publish
+from .text_review import TEXT_BUNDLE_ERROR
 from .transform import Candidate
 from .validation import validate
 
@@ -66,6 +67,8 @@ def export_candidate(
     create_map: bool,
     source_path: Path,
 ) -> None:
+    if any(rule.action == "review_text" for rule in policy.columns.values()):
+        raise SafetyError(TEXT_BUNDLE_ERROR)
     if not approved or not create_map:
         raise SafetyError(
             "Explicit export approval and mapping creation authorisation are required."

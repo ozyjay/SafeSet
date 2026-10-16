@@ -95,7 +95,8 @@ A **direct identifier** connects a record to a person; a **pseudonymous identifi
 is the generated random `record_id`. A **quasi-identifier** may identify someone in
 combination with other attributes. An **analytical attribute** serves an approved
 analysis but can still disclose information. **Free text** is unconstrained prose;
-**unknown** fields are unclassified. Unknown fields and free text cannot be retained.
+**unknown** fields are unclassified. Unknown fields cannot be retained. Narrative fields require explicit version 4
+manual review; other free-text passthrough remains prohibited.
 Direct identifiers must be dropped except the single source key used in the map.
 The guided desktop records that source-key choice as `direct_identifier`
 automatically. Its plain-language retained-information choices map to
@@ -121,7 +122,7 @@ k-style diagnostic, not a formal privacy guarantee. IDs are excluded from groupi
 Strict validation is the default and retains that blocking behaviour. Under the
 explicit `controlled_pseudonymisation` profile, small cells and small joint or
 linked classes are warnings requiring review rather than mandatory failures.
-Unexpected fields, unsafe values, direct/free-text retention, domain violations,
+Unexpected fields, unsafe values, direct-identifier or unreviewed free-text retention, domain violations,
 malformed identifiers and restoration-integrity failures still block export with
 no override. This profile accepts additional residual disclosure risk for a
 controlled pseudonymised use; it does not establish anonymity.
@@ -143,6 +144,25 @@ warning. SafeSet does not infer semantic equivalence from a heading.
 
 Categorical allowlists, numeric bounds and bin intervals are deliberate
 minimisation boundaries.
+
+Version 4 `review_text` is a separate, explicitly reviewed narrative domain. The
+operator edits and individually confirms each distinct response locally; they can
+clear a response to exclude its text. The engine binds every replacement to the
+exact original content and rejects missing, stale or extra reviews, unsafe controls,
+formula prefixes, recognised identifier/date/time patterns and known same-worksheet
+source identifiers. Manual review must also remove unfamiliar names and identifying
+context; these checks cannot infer whether a story identifies its author.
+Reviewed paragraphs still participate in every per-field, joint and linked group
+check. Strict mode may therefore reject unique journal responses. The existing
+controlled-pseudonymisation profile still requires explicit risk review and does
+not bypass malformed text or incomplete review failures. Narrative retention always
+adds a warning. Passing validation does not establish anonymity.
+Reviewed text is immutable in the protected copy; restoration verifies it before
+returning the original paragraphs only in the new local sensitive workbook. This
+does not permit unreviewed paragraphs through `keep`, new result fields or analysis
+sheets. Saved review policies are sensitive, local artefacts. No operational
+paragraphs are used in tests or sent to a service.
+
 Keep values must be non-empty short labels (at most 64 characters and four words),
 with no identifier/date/formula shapes. This sacrifices flexibility to avoid silent
 free-text passthrough. Blank categorical values and out-of-range numeric values fail.
@@ -173,7 +193,7 @@ normalised source table and stores observed codebooks for reconstruction.
 No check measures auxiliary-data attacks, within-group sensitive-attribute
 homogeneity, longitudinal linkage or the suitability of a particular AI service.
 Human review and purpose limitation remain mandatory. No automatic suppression,
-privacy budget, probabilistic inference, redaction or safety override exists.
+privacy budget, probabilistic inference, automatic narrative redaction or safety override exists.
 
 
 ## Participant comparison during Restore

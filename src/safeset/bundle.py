@@ -14,6 +14,7 @@ from .mapping import MAP_LIMIT, _fernet, _unique_object
 from .policy import Policy, parse_policy
 from .pseudonyms import new_id, valid_id
 from .storage import check_map_read
+from .text_review import check_text_candidate
 
 MAGIC = b"SAFESET2\n"
 
@@ -35,6 +36,8 @@ def policy_payload(policy: Policy) -> dict:
         item = {"action": rule.action, "classification": rule.classification}
         if rule.action in {"keep", "code"}:
             item["allowed_values"] = list(rule.allowed_values)
+        elif rule.action == "review_text":
+            item["text_reviews"] = dict(rule.text_reviews)
         elif rule.action == "bin":
             item["bins"] = [[number(lo), number(hi)] for lo, hi in rule.bins]
         elif rule.action == "keep_numeric":
@@ -48,6 +51,7 @@ def policy_payload(policy: Policy) -> dict:
 def create_bundle(source: Table, policy: Policy, candidate) -> dict:
     if set(source.columns) != set(policy.columns) or candidate.mapping["version"] != 1:
         raise SafetyError("Source, policy and candidate do not match.")
+    check_text_candidate(source, policy, candidate.table)
     codebooks = {}
     for name, rule in policy.columns.items():
         if rule.action == "code":
@@ -104,7 +108,7 @@ def validate_bundle(value: object) -> dict:
     ):
         raise SafetyError("Restoration bundle version or structure is unsupported.")
     policy = parse_policy(value["policy"])
-    if value["policy"]["version"] not in {2, 3}:
+    if value["policy"]["version"] not in {2, 3, 4}:
         raise SafetyError("Restoration bundle policy version is unsupported.")
     source_columns = value["source_columns"]
     protected_columns = value["protected_columns"]

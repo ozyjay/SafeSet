@@ -32,6 +32,12 @@ from .policy import Policy, parse_policy
 from .pseudonyms import new_id, valid_id
 from .reconstruction import approved_analysis_sheets
 from .storage import check_map_read, map_destination, output_destination, private_directory, publish
+from .text_review import (
+    check_text_candidate,
+    check_text_review_source,
+    reviewed_value,
+    unsafe_text_controls,
+)
 from .validation import ValidationReport, validate
 from .workbook_editing import (
     changed_value,
@@ -122,6 +128,8 @@ def _new_unique(issued: set[str], message: str) -> str:
 
 
 def _transform_value(value: str, rule, codes: dict[str, str], issued: set[str]) -> str:
+    if rule.action == "review_text":
+        return reviewed_value(value, rule.text_reviews)
     if rule.action == "keep":
         if value not in rule.allowed_values:
             raise SafetyError("Source category is outside the approved domain.")
@@ -195,6 +203,7 @@ def sanitise_relational(
             raise SafetyError("Source schema differs from policy; missing or unexpected columns.")
         if not source.rows:
             raise SafetyError("Empty worksheets cannot be exported.")
+        check_text_review_source(source, policy)
         if "record_id" in source.columns or "entity_id" in source.columns:
             raise SafetyError("Source worksheets use a reserved relational heading.")
         sheet_rows = []
@@ -214,7 +223,7 @@ def sanitise_relational(
             record_id = _new_unique(issued, "Random ID collision; no export produced.")
             result = {"record_id": record_id, "entity_id": entity_id}
             for name, rule in policy.columns.items():
-                if rule.action in {"keep", "code", "keep_numeric", "bin"}:
+                if rule.action in {"keep", "code", "keep_numeric", "bin", "review_text"}:
                     codes = (
                         shared_books[name]
                         if rule.action == "code" and name in shared_books
@@ -357,9 +366,7 @@ def validate_relational_bundle(value: object) -> dict:
     legacy_keys = {"version", "export_id", "profile", "workbook_digest", "entities", "sheets"}
     keys = legacy_keys | {"shared_code_fields"}
     editing = (
-        isinstance(value, dict)
-        and type(value.get("version")) is int
-        and value["version"] in {4, 5}
+        isinstance(value, dict) and type(value.get("version")) is int and value["version"] in {4, 5}
     )
     if editing:
         keys |= {"editable_fields", "source_file_digest"}
@@ -531,8 +538,7 @@ def encrypt_relational_bundle(bundle: dict, passphrase: str) -> bytes:
     salt = os.urandom(16)
     payload = json.dumps(bundle, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
     magic = (
-        REGION_MAGIC if bundle["version"] == 5
-        else EDIT_MAGIC if bundle["version"] == 4 else MAGIC
+        REGION_MAGIC if bundle["version"] == 5 else EDIT_MAGIC if bundle["version"] == 4 else MAGIC
     )
     result = magic + salt + _fernet(passphrase, salt).encrypt(payload)
     if len(result) > MAP_LIMIT:
@@ -542,8 +548,11 @@ def encrypt_relational_bundle(bundle: dict, passphrase: str) -> bytes:
 
 def decrypt_relational_bundle(data: bytes, passphrase: str) -> dict:
     magic = (
-        REGION_MAGIC if data.startswith(REGION_MAGIC)
-        else EDIT_MAGIC if data.startswith(EDIT_MAGIC) else MAGIC
+        REGION_MAGIC
+        if data.startswith(REGION_MAGIC)
+        else EDIT_MAGIC
+        if data.startswith(EDIT_MAGIC)
+        else MAGIC
     )
     if len(data) > MAP_LIMIT or not data.startswith(magic) or len(data) < len(magic) + 17:
         raise SafetyError("Relational restoration bundle envelope is unsupported.")
@@ -634,6 +643,8 @@ def publish_relational_candidate(
         current = read_confirmed_regions(source_path, regions)
     if workbook_digest(current) != workbook_digest(sources):
         raise SafetyError("Source workbook changed after relational protection review.")
+    for name, source in current.items():
+        check_text_candidate(source, policies[name], candidate.tables[name])
     fresh_validation = validate_relational(candidate, policies, validation.profile)
     fresh_validation.require_pass()
     if editable_fields is not None and file_digest(source_path) != source_file_digest:
@@ -641,8 +652,13 @@ def publish_relational_candidate(
     if editable_fields is not None:
         validate_editable_layout(source_path, editable_fields, regions)
     bundle = create_relational_bundle(
-        sources, policies, candidate, validation.profile, editable_fields,
-        source_file_digest, regions,
+        sources,
+        policies,
+        candidate,
+        validation.profile,
+        editable_fields,
+        source_file_digest,
+        regions,
     )
     require_excel_path(output)
     destination = output_destination(output, source_path)
@@ -660,6 +676,8 @@ def publish_relational_candidate(
 
 
 def _expected(value: str, name: str, rule, codebooks: dict[str, dict[str, str]]) -> str:
+    if rule.action == "review_text":
+        return reviewed_value(value, rule.text_reviews)
     if rule.action == "keep":
         if value not in rule.allowed_values:
             raise SafetyError("Original source violates the bound protection policy.")
@@ -740,7 +758,15 @@ def review_relational_reconstruction(
                 not safe_category(row[name]) or len(row[name]) > MAX_FIELD for name in new_columns
             ):
                 raise SafetyError("New result contains unsafe or unsupported spreadsheet text.")
-        if any(has_control(value) for row in source.rows for value in row.values()):
+        if any(
+            (
+                unsafe_text_controls(value)
+                if policy.columns[name].action == "review_text"
+                else has_control(value)
+            )
+            for row in source.rows
+            for name, value in row.items()
+        ):
             raise SafetyError("Original source contains unsafe spreadsheet text.")
         result[sheet] = new_columns
     return result

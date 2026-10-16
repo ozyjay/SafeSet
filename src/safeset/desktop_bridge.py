@@ -30,7 +30,7 @@ from .document_flow import (
     prepare_document_restoration,
 )
 from .errors import SafetyError
-from .ingestion import MAX_FIELD, list_excel_sheets
+from .ingestion import MAX_FIELD, list_excel_sheets, read_excel
 from .participant_workbook import LAYOUT_ERROR
 from .policy import parse_policy
 from .policy_authoring import RuleDraft, load_drafts, local_category_review, save_policy
@@ -68,6 +68,13 @@ from .result_workbook import (
     prepare_result_workbook,
     update_result_workbook,
 )
+from .text_review import (
+    TEXT_BUNDLE_ERROR,
+    TEXT_REVIEW_ERROR,
+    approve_text_reviews,
+    review_entries,
+    validate_text_reviews,
+)
 from .workbook_editing import editing_instructions, file_digest
 
 PROTOCOL_VERSION = 1
@@ -76,6 +83,8 @@ MAX_RESPONSE = 1024 * 1024
 
 # Only fixed, value-free codes cross the desktop boundary. Unknown errors stay generic.
 PUBLIC_SAFETY_ERRORS = {
+    TEXT_BUNDLE_ERROR: "text_review_required",
+    TEXT_REVIEW_ERROR: "text_review_required",
     "Review is stale; prepare and review again.": "review_expired",
     RESULT_WORKBOOK_ERROR: "result_workbook_invalid",
     RESULT_WORKBOOK_JOIN_ERROR: "result_workbook_join",
@@ -300,7 +309,7 @@ def _drafts(value: object) -> dict[str, RuleDraft]:
         if (
             not isinstance(name, str)
             or not isinstance(raw, dict)
-            or set(raw)
+            or set(raw) - {"text_reviews"}
             != {
                 "action",
                 "classification",
@@ -321,6 +330,12 @@ def _drafts(value: object) -> dict[str, RuleDraft]:
         bounds = raw["bounds"]
         if bounds is not None and (not isinstance(bounds, list) or len(bounds) != 2):
             raise ValueError("draft")
+        reviews = raw.get("text_reviews", {})
+        if raw["action"] == "review_text":
+            if not validate_text_reviews(reviews):
+                raise SafetyError(TEXT_REVIEW_ERROR)
+        elif "text_reviews" in raw:
+            raise ValueError("draft")
         result[name] = RuleDraft(
             raw["action"],
             raw["classification"],
@@ -328,6 +343,7 @@ def _drafts(value: object) -> dict[str, RuleDraft]:
             tuple(tuple(pair) for pair in raw["bins"]),
             tuple(bounds) if bounds is not None else None,
             None,
+            tuple(reviews.items()),
         )
     return result
 
@@ -339,6 +355,7 @@ def _draft_dict(draft: RuleDraft) -> dict:
         "allowed_values": list(draft.allowed_values),
         "bins": [list(pair) for pair in draft.bins],
         "bounds": list(draft.bounds) if draft.bounds is not None else None,
+        **({"text_reviews": dict(draft.text_reviews)} if draft.action == "review_text" else {}),
     }
 
 
@@ -632,15 +649,42 @@ class Bridge:
             data = _payload(raw, {"path"})
             path = _path(data["path"])
             return {"regions": list(discover_regions(path)), "source_digest": file_digest(path)}
-        if command in {"inspect_region", "region_categories"}:
+        if command in {"text_review", "approve_text_review"}:
+            required = {"source", "sheet", "column"}
+            if command == "approve_text_review":
+                required.add("text_reviews")
+            data = _payload(raw, required)
+            table = read_excel(
+                _path(data["source"]),
+                _sheet(data["sheet"]),
+                allow_cached_formulas=True,
+                allow_source_dates=True,
+            )
+            if command == "approve_text_review":
+                approve_text_reviews(table, _string(data["column"]), data["text_reviews"])
+                return {"approved": True}
+            return {"entries": review_entries(table, _string(data["column"]))}
+        if command in {
+            "inspect_region",
+            "region_categories",
+            "region_text_review",
+            "approve_region_text_review",
+        }:
             required = {"source", "name", "region"}
-            if command == "region_categories":
+            if command != "inspect_region":
                 required.add("column")
+            if command == "approve_region_text_review":
+                required.add("text_reviews")
             data = _payload(raw, required)
             name = _string(data["name"])
             table = read_confirmed_regions(_path(data["source"]), {name: data["region"]})[name]
             if command == "inspect_region":
                 return inspect_table(table)
+            if command == "region_text_review":
+                return {"entries": review_entries(table, _string(data["column"]))}
+            if command == "approve_region_text_review":
+                approve_text_reviews(table, _string(data["column"]), data["text_reviews"])
+                return {"approved": True}
             column = _string(data["column"])
             if column not in table.columns:
                 raise SafetyError(

@@ -21,6 +21,7 @@ class RuleDraft:
     bins: tuple[tuple[int | float, int | float], ...] = ()
     bounds: tuple[int | float, int | float] | None = None
     max_decimal_places: int | None = None
+    text_reviews: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ def load_drafts(
             if rule.bounds is None
             else (number(rule.bounds[0]), number(rule.bounds[1])),
             max_decimal_places=rule.max_decimal_places if rule.action == "keep_numeric" else None,
+            text_reviews=rule.text_reviews,
         )
     return drafts, policy.min_group_size
 
@@ -107,24 +109,29 @@ def parse_number(text: str) -> int | float:
 
 
 def policy_payload(drafts: dict[str, RuleDraft], threshold: str) -> dict:
-    """Build a version 3 payload; the canonical parser enforces every safety rule."""
+    """Use version 4 only for explicitly reviewed narrative fields."""
     if not threshold.isascii() or not threshold.isdecimal():
         raise SafetyError("Enter a whole-number minimum group size of at least 2.")
     columns = {}
     for name, draft in drafts.items():
         if draft.action == "pseudonymise":
             classification = "direct_identifier"
+        elif draft.action == "review_text":
+            classification = "free_text"
         else:
             classification = draft.classification or ("unknown" if draft.action == "drop" else "")
         config: dict = {"action": draft.action, "classification": classification}
         if draft.action in {"keep", "code"}:
             config["allowed_values"] = list(draft.allowed_values)
+        elif draft.action == "review_text":
+            config["text_reviews"] = dict(draft.text_reviews)
         elif draft.action == "bin":
             config["bins"] = [list(pair) for pair in draft.bins]
         elif draft.action == "keep_numeric":
             config["bounds"] = list(draft.bounds) if draft.bounds is not None else None
         columns[name] = config
-    payload = {"version": 3, "min_group_size": int(threshold), "columns": columns}
+    version = 4 if any(d.action == "review_text" for d in drafts.values()) else 3
+    payload = {"version": version, "min_group_size": int(threshold), "columns": columns}
     parse_policy(payload)
     return payload
 

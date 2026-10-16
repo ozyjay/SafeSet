@@ -1,5 +1,30 @@
 # Verification
 
+## Reviewed long-form workbook text — 16 October 2026
+
+The macOS field control now says **How to protect this field**, with **Keep short
+categories unchanged** and a separate **Review and redact text** action. Narrative
+review requires individual local confirmation and uses version 4 policies; older
+policy semantics and category limits remain unchanged. The shared engine binds
+complete reviewed text to original content, checks recognised/known worksheet
+identifiers, includes narratives in disclosure grouping and keeps them immutable
+in returned workbooks. Legacy map-only narrative export fails closed.
+
+- Python suite: **386 passed, 24 Windows-only tests skipped**.
+- Swift package: **25 tests passed**, including text-review gates and edit reset.
+- Ruff and `git diff --check`: passed.
+- Release macOS build and strict code-signature verification: passed.
+- Existing relocated packaged-helper round trips and value-free logs: passed.
+- Rebuilt packaged helper: synthetic local narrative review, approval, encrypted
+  protection and editable-bundle restoration passed for worksheets and confirmed
+  regions. Logs excluded paragraphs and passphrases.
+- The synthetic version 4 YAML example parsed successfully. No operational
+  paragraph was read into this agent, used as a fixture or exported for these checks.
+- No manual visual UI check was completed: the native app-inspection connection
+  was unavailable. The running/installed app was not replaced; use `dist/SafeSet.app`.
+- Manual redaction may miss names or identifying context. Group checks and human
+  approval do not establish anonymity. Windows publication remains gated.
+
 ## Extended literal workbook headings — 16 October 2026
 
 Headings now accept surrounding whitespace, tabs/CR/LF and up to 4,096 characters,
