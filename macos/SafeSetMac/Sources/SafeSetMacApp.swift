@@ -300,6 +300,17 @@ struct LongTextReviewView: View {
                 .foregroundStyle(.secondary)
             Text("\(entries.filter(\.reviewed).count) of \(entries.count) distinct responses reviewed")
                 .appFont(13, weight: .semibold)
+            if !model.textReviewMessage.isEmpty {
+                Label(model.textReviewMessage, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red).appFont(13)
+                ForEach(model.textReviewIssues[""] ?? [], id: \.self) { message in
+                    Text(message).foregroundStyle(.red).appFont(13)
+                }
+            }
+            if entries.contains(where: { $0.text.count > 4096 }) {
+                Text("Shorten the responses marked over the character limit before approving.")
+                    .foregroundStyle(.red).appFont(13)
+            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(entries.indices, id: \.self) { index in
@@ -312,10 +323,21 @@ struct LongTextReviewView: View {
                             Text("Text to include in the protected copy").appFont(12, weight: .semibold)
                             TextEditor(text: Binding(
                                 get: { entries[index].text },
-                                set: { entries[index].edit($0) }
+                                set: { value in
+                                    guard value != entries[index].text else { return }
+                                    entries[index].edit(value)
+                                    model.textReviewIssues.removeValue(forKey: entries[index].id)
+                                }
                             ))
                             .appFont(13).frame(minHeight: 110)
                             .border(.secondary.opacity(0.3))
+                            Text("\(entries[index].text.count) / 4,096 characters")
+                                .appFont(12)
+                                .foregroundStyle(entries[index].text.count > 4096 ? .red : .secondary)
+                            ForEach(model.textReviewIssues[entries[index].id] ?? [], id: \.self) { message in
+                                Label(message, systemImage: "exclamationmark.triangle")
+                                    .foregroundStyle(.red).appFont(13)
+                            }
                             Toggle("I reviewed this response and removed identifying details", isOn: $entries[index].reviewed)
                                 .toggleStyle(.checkbox).appFont(13)
                         }
@@ -327,11 +349,13 @@ struct LongTextReviewView: View {
             Text("Reviewed text still contributes to rare-group and linkage checks. Approval does not establish anonymity. Text is reference-only in the protected workbook.")
                 .appFont(12).foregroundStyle(.secondary)
             HStack {
-                Button("Cancel") { model.textReviewSheet = nil }
+                Button("Cancel") { model.textReviewSheet = nil }.disabled(model.busy)
                 Spacer()
                 Button("Approve reviewed text") { model.approveText(review, entries: entries) }
                     .buttonStyle(.borderedProminent)
-                    .disabled(entries.isEmpty || entries.contains { !$0.reviewed || $0.text.count > 4096 })
+                    .disabled(model.busy || entries.isEmpty || entries.contains {
+                        !$0.reviewed || $0.text.count > 4096
+                    })
             }
         }.padding(24).frame(minWidth: 720, minHeight: 620)
     }

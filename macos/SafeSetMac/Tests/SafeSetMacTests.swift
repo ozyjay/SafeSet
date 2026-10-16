@@ -241,6 +241,39 @@ final class SafeSetMacTests: XCTestCase {
         XCTAssertTrue(model.fields[1].textReviews.isEmpty)
     }
 
+    @MainActor func testTextRejectionFeedbackIsVisibleWithoutLosingReviewState() {
+        let digest = String(repeating: "a", count: 64)
+        let feedback = TextReviewFeedback.decode([
+            digest: ["email", "known_identifier", "unexpected source text"],
+            "": ["source_changed"], "not-a-binding": ["email"]
+        ])
+        XCTAssertEqual(feedback[digest]?.count, 2)
+        XCTAssertNil(feedback["not-a-binding"])
+        XCTAssertFalse(feedback.values.flatMap { $0 }.contains("unexpected source text"))
+        let model = AppModel()
+        let entry = TextReviewEntry(
+            sheet: "Synthetic", digest: digest, original: "A synthetic paragraph.",
+            count: 1, text: "Edited synthetic paragraph.", reviewed: true
+        )
+        let review = TextReviewSheet(source: "/synthetic.xlsx", field: "Journal", entries: [entry])
+        model.textReviewSheet = review
+        model.showTextReviewIssues(feedback, sheet: "Synthetic")
+        XCTAssertFalse(model.textReviewMessage.isEmpty)
+        XCTAssertEqual(model.textReviewIssues[entry.id]?.count, 2)
+        XCTAssertEqual(model.textReviewIssues[""]?.count, 1)
+        XCTAssertEqual(model.textReviewSheet?.id, review.id)
+        XCTAssertEqual(model.textReviewSheet?.entries[0].text, entry.text)
+        XCTAssertEqual(model.textReviewSheet?.entries[0].reviewed, true)
+        var edited = entry
+        edited.edit(entry.text)
+        XCTAssertTrue(edited.reviewed)
+        edited.edit("A different synthetic paragraph.")
+        XCTAssertFalse(edited.reviewed)
+        model.busy = true
+        model.approveText(review, entries: [entry])
+        XCTAssertFalse(model.textReviewIssues.isEmpty)
+    }
+
     func testFieldActionsHideTechnicalClassificationAndBuildSafePayloads() {
         var identifier = FieldDraft(id: "Invented source key")
         identifier.action = "pseudonymise"

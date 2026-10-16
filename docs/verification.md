@@ -1,5 +1,27 @@
 # Verification
 
+## Visible text-review approval feedback — 16 October 2026
+
+Recent local logs showed repeated `approve_text_review` rejections with the generic
+`text_review_required` code. The native review sheet previously left the operator
+without a visible response-specific explanation. Rejected text approvals now add
+fixed reasons keyed by existing response bindings, with no matched values or
+excerpts. The sheet displays those reasons inline, preserves edits and confirmations,
+shows character counts and blocks duplicate submissions while busy. Unchanged
+editor updates retain confirmation and feedback; actual edits reset confirmation.
+The accepted text domain and all fail-closed publication checks remain unchanged.
+
+- Python suite: **396 passed, 24 Windows-only tests skipped**.
+- Swift package: **26 tests passed**, including fixed-code decoding, retained review
+  state, duplicate-submission prevention and unchanged-versus-edited confirmations.
+- Ruff and `git diff --check`: passed.
+- Release macOS build, signature verification and relocated-helper smoke: passed.
+- Packaged synthetic worksheet/region approvals returned fixed reasons for blocked
+  text and succeeded after correction. Paragraphs, response bindings and passphrases
+  remained absent from diagnostic logs.
+- No operational paragraphs were read or changed; no manual visual UI check was
+  performed. Relaunch the rebuilt `dist/SafeSet.app`; the installed app is unchanged.
+
 ## Reviewed long-form workbook text — 16 October 2026
 
 The macOS field control now says **How to protect this field**, with **Keep short

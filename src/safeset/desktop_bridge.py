@@ -71,6 +71,7 @@ from .result_workbook import (
 from .text_review import (
     TEXT_BUNDLE_ERROR,
     TEXT_REVIEW_ERROR,
+    TextReviewRejection,
     approve_text_reviews,
     review_entries,
     validate_text_reviews,
@@ -966,6 +967,11 @@ class Bridge:
                 "ok": False,
                 "error": PUBLIC_SAFETY_ERRORS.get(str(error), "safety_rejected"),
             }
+            if isinstance(error, TextReviewRejection) and command in {
+                "approve_text_review",
+                "approve_region_text_review",
+            }:
+                response["issues"] = error.issues
         except (ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
             self.pending = None
             response = {

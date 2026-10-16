@@ -77,6 +77,7 @@ struct TextReviewEntry: Identifiable {
     var id: String { sheet + ":" + digest }
 
     mutating func edit(_ value: String) {
+        guard value != text else { return }
         text = value
         reviewed = false
     }
@@ -144,6 +145,8 @@ struct SourceCellLocation: Identifiable {
     @Published var protectionReview: [String: Any]?
     @Published var categorySheet: CategorySheet?
     @Published var textReviewSheet: TextReviewSheet?
+    @Published var textReviewMessage = ""
+    @Published var textReviewIssues: [String: [String]] = [:]
     @Published var returned = ""
     @Published var returnedSheets: [String] = []
     @Published var returnedSheet = ""
@@ -449,7 +452,11 @@ struct SourceCellLocation: Identifiable {
 
     func send(_ command: String, _ payload: [String: Any],
               completion: @escaping ([String: Any]) -> Void) {
-        guard let bridge else { alert = "The bundled SafeSet engine is unavailable."; return }
+        guard let bridge else {
+            if textReviewSheet != nil { textReviewMessage = "The bundled SafeSet engine is unavailable." }
+            else { alert = "The bundled SafeSet engine is unavailable." }
+            return
+        }
         busy = true
         worker.async {
             do {
@@ -462,7 +469,16 @@ struct SourceCellLocation: Identifiable {
                 DispatchQueue.main.async {
                     self.busy = false
                     self.invalidate()
-                    self.alert = message
+                    if self.textReviewSheet != nil {
+                        if case BridgeFailure.textReviewRejected(let issues) = error {
+                            let scope = payload["name"] as? String ?? payload["sheet"] as? String ?? ""
+                            self.showTextReviewIssues(issues, sheet: scope)
+                        } else {
+                            self.textReviewMessage = message
+                        }
+                    } else {
+                        self.alert = message
+                    }
                 }
             }
         }
@@ -669,6 +685,8 @@ struct SourceCellLocation: Identifiable {
     }
 
     func reviewText(for field: String, sheets: [String]) {
+        textReviewMessage = ""
+        textReviewIssues = [:]
         let reviewedSource = source
         func collect(_ index: Int, entries: [TextReviewEntry]) {
             guard index < sheets.count else {
@@ -703,10 +721,13 @@ struct SourceCellLocation: Identifiable {
     }
 
     func approveText(_ review: TextReviewSheet, entries: [TextReviewEntry]) {
+        guard !busy else { return }
+        textReviewMessage = ""
+        textReviewIssues = [:]
         guard source == review.source, !entries.isEmpty,
               entries.allSatisfy({ $0.reviewed }),
               Set(entries.map(\.id)) == Set(review.entries.map(\.id)) else {
-            alert = "Review and confirm every response before approving this field."
+            textReviewMessage = "Review and confirm every response before approving this field."
             return
         }
         let sheets = orderedSelectedSourceSheets.filter { sheet in
@@ -733,6 +754,13 @@ struct SourceCellLocation: Identifiable {
         validate(0)
     }
 
+    func showTextReviewIssues(_ issues: [String: [String]], sheet: String) {
+        textReviewMessage = "Approval was blocked. Review the marked responses below, edit the text and confirm those responses again."
+        textReviewIssues = Dictionary(uniqueKeysWithValues: issues.map { digest, messages in
+            (digest.isEmpty ? "" : sheet + ":" + digest, messages)
+        })
+    }
+
     func acceptTextReview(_ review: TextReviewSheet, entries: [TextReviewEntry]) {
         let sheets = Set(entries.map(\.sheet))
         guard source == review.source, !entries.isEmpty, entries.allSatisfy({ $0.reviewed }),
@@ -741,14 +769,14 @@ struct SourceCellLocation: Identifiable {
               sheets.allSatisfy({ sheet in
                   fieldsBySheet[sheet]?.first { $0.id == review.field }?.action == "review_text"
               }) else {
-            alert = "The field selection changed. Open a new text review."
+            textReviewMessage = "The field selection changed. Open a new text review."
             return
         }
         for sheet in sheets {
             guard selectedSourceSheets.contains(sheet), var sheetFields = fieldsBySheet[sheet],
                   let index = sheetFields.firstIndex(where: { $0.id == review.field }),
                   sheetFields[index].action == "review_text" else {
-                alert = "The field selection changed. Open a new text review."
+                textReviewMessage = "The field selection changed. Open a new text review."
                 return
             }
             sheetFields[index].textReviews = Dictionary(uniqueKeysWithValues:

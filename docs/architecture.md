@@ -47,6 +47,12 @@ pseudonyms. Identity maps retain their minimal schema.
 
 `text_review`/`region_text_review` are explicit local reads. Their approval commands
 re-read the source and validate replacements without returning paragraphs again.
+Rejected approvals may include a bounded `issues` mapping from existing response
+content bindings (or an empty key for a field-wide issue) to fixed reason codes.
+No source values or matched identifiers are included. The native editor maps only
+allowlisted codes to instructions beside the affected response; errors remain in
+the sheet, preserving text and confirmation state. Busy approval disables duplicate
+submissions. No-op editor updates retain confirmation; actual edits reset it.
 The UI commits the collected decisions only after every selected scope succeeds.
 Normal inspection and protection reviews still return no source paragraphs.
 Publication rechecks the current source and each row's exact approved replacement.

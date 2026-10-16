@@ -22,6 +22,7 @@ from safeset.relational import (
     validate_relational,
 )
 from safeset.text_review import (
+    TextReviewRejection,
     approve_text_reviews,
     review_entries,
     text_digest,
@@ -153,6 +154,51 @@ def test_complete_review_and_known_source_identifiers_are_enforced():
     raw["columns"]["Journal response"]["text_reviews"][text_digest("Unobserved text")] = REVIEWED
     with pytest.raises(SafetyError, match="Long-form text"):
         sanitise(source, parse_policy(raw))
+
+
+@pytest.mark.parametrize(
+    "text,reason",
+    [
+        ("Contact synthetic@example.invalid", "email"),
+        ("An event on 2026-01-01", "date"),
+        ("An event at 14:30", "time"),
+        ("Phone 0412345678", "long_digits"),
+        ("Synthetic Ada described a fictional exercise.", "known_identifier"),
+        ("=An invented paragraph", "formula_prefix"),
+        ("\t  ", "whitespace_only"),
+        ("Synthetic\x7ftext", "control_character"),
+        ("x" * (MAX_FIELD + 1), "too_long"),
+    ],
+)
+def test_approval_reports_response_specific_fixed_reasons_without_values(tmp_path, text, reason):
+    source, _ = fixture()
+    path = tmp_path / "synthetic-narrative.xlsx"
+    path.write_bytes(excel_workbook_bytes({"Synthetic": source}))
+    response = call(
+        Bridge(),
+        "approve_text_review",
+        {
+            "source": str(path),
+            "sheet": "Synthetic",
+            "column": "Journal response",
+            "text_reviews": {text_digest(ORIGINAL): text},
+        },
+    )
+    assert not response["ok"] and response["error"] == "text_review_required"
+    assert reason in response["issues"][text_digest(ORIGINAL)]
+    encoded = json.dumps(response)
+    assert ORIGINAL not in encoded and text not in encoded
+    assert "Student Name" not in encoded and str(path) not in encoded
+    log = (tmp_path / "diagnostics/safeset.log").read_text()
+    assert text_digest(ORIGINAL) not in log and ORIGINAL not in log
+
+
+def test_stale_review_feedback_is_global_and_never_returns_new_source_content():
+    source, _ = fixture()
+    with pytest.raises(TextReviewRejection) as caught:
+        approve_text_reviews(source, "Journal response", {"b" * 64: REVIEWED})
+    assert caught.value.issues == {"": ["source_changed"]}
+    assert ORIGINAL not in str(caught.value)
 
 
 def test_reviewed_text_encrypted_round_trip_and_exact_output_binding(tmp_path, monkeypatch):

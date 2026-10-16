@@ -3,6 +3,38 @@ import Foundation
 enum BridgeFailure: Error {
     case unavailable
     case rejected(String)
+    case textReviewRejected([String: [String]])
+}
+
+enum TextReviewFeedback {
+    static let messages: [String: String] = [
+        "email": "Remove or replace an email address in this response.",
+        "date": "Remove or generalise a date in this response.",
+        "time": "Remove or generalise a clock time in this response.",
+        "long_digits": "Remove or replace a long number or phone-number pattern.",
+        "known_identifier": "Remove or replace a name or identifier also found in this worksheet's identifier fields.",
+        "formula_prefix": "The response starts with =, +, - or @. Rewrite the opening so it does not begin with a formula prefix.",
+        "control_character": "Remove unsupported control characters; ordinary tabs and line breaks are allowed.",
+        "whitespace_only": "This response contains only whitespace. Clear it completely to exclude its text.",
+        "too_long": "Shorten this response to 4,096 characters or fewer.",
+        "unsupported_text": "Use plain text for this response.",
+        "review_incomplete": "The response review is incomplete. Open a new review of this field.",
+        "source_changed": "The source responses changed. Cancel and open a new review of this field.",
+        "source_controls": "The original field contains unsupported control characters. Correct the source workbook, then review it again.",
+        "review_limit": "The reviewed field exceeds the local review size limit. Shorten or clear responses."
+    ]
+
+    static func decode(_ raw: [String: [String]]) -> [String: [String]] {
+        var result: [String: [String]] = [:]
+        for (digest, codes) in raw {
+            guard digest.isEmpty || (digest.count == 64 && digest.allSatisfy({
+                "0123456789abcdef".contains($0)
+            })) else { continue }
+            let descriptions = codes.compactMap { messages[$0] }
+            if !descriptions.isEmpty { result[digest] = descriptions }
+        }
+        return result
+    }
 }
 
 final class BackendBridge: @unchecked Sendable {
@@ -63,6 +95,10 @@ final class BackendBridge: @unchecked Sendable {
             return result
         }
         let code = response["error"] as? String ?? "invalid_request"
+        if code == "text_review_required", let raw = response["issues"] as? [String: [String]] {
+            let feedback = TextReviewFeedback.decode(raw)
+            if !feedback.isEmpty { throw BridgeFailure.textReviewRejected(feedback) }
+        }
         let message: String
         switch code {
         case "review_expired": message = "This review is no longer active. Select Validate and review again, then update your field selections before approving restoration."
