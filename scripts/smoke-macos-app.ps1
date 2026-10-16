@@ -4,6 +4,9 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $app = (Resolve-Path (Join-Path $repo $AppPath)).Path
 $work = (& /usr/bin/mktemp -d).Trim()
+# The private logger rejects symlinked path components, including macOS /var.
+$work = (& (Join-Path $repo '.venv/bin/python') -c `
+    'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' $work).Trim()
 $process = $null
 try {
     $moved = Join-Path $work 'SafeSet.app'
@@ -30,6 +33,9 @@ try {
     $start.RedirectStandardInput = $true
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
+    $diagnosticHome = Join-Path $work 'diagnostic-home'
+    New-Item -ItemType Directory $diagnosticHome | Out-Null
+    $start.Environment['HOME'] = $diagnosticHome
     $start.Environment['PATH'] = '/usr/bin:/bin'
     $start.Environment.Remove('PYTHONPATH') | Out-Null
     $start.Environment.Remove('VIRTUAL_ENV') | Out-Null
@@ -147,7 +153,21 @@ try {
     if ($transcript.Contains('SYNTH-001') -or $transcript.Contains($passphrase)) {
         throw 'Sensitive value appeared in a bridge response.'
     }
-    Write-Output 'Standalone relocated helper legacy and editable round trips passed.'
+    $diagnosticPath = Join-Path $diagnosticHome '.local/state/safeset/diagnostics.log'
+    $diagnosticText = Get-Content -LiteralPath $diagnosticPath -Raw
+    foreach ($expected in @('desktop.app start', 'desktop.list_sheets success',
+                            'desktop.prepare_reconstruction destination_exists',
+                            'desktop.approve_relational_reconstruction success')) {
+        if (-not $diagnosticText.Contains($expected)) {
+            throw 'Bundled helper diagnostic event is missing.'
+        }
+    }
+    foreach ($secret in @($source, $sheet, $passphrase, 'SYNTH-001', 'campus')) {
+        if ($diagnosticText.Contains($secret)) {
+            throw 'Sensitive value appeared in the diagnostic log.'
+        }
+    }
+    Write-Output 'Standalone relocated helper round trips and value-free diagnostics passed.'
 }
 finally {
     if ($process) {

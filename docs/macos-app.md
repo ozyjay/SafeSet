@@ -43,6 +43,13 @@ Both configurations create `dist/SafeSet.app` and `dist/SafeSet-local.zip`, repl
 the previous local build. Building does not update the installed app. The bundled
 Python helper uses the same packaging and safety checks in either configuration.
 
+Both configurations log fixed desktop operation and error codes to
+`~/.local/state/safeset/diagnostics.log`, including worksheet listing when a
+workbook is selected. Logs exclude filenames, headings, values, passphrases and
+request IDs. Rebuild and launch the new app to obtain these events; a previously
+running or installed app keeps its older bundled helper. No Debug build is needed
+for diagnostics. Backend stderr remains discarded to avoid exposing raw errors.
+
 In VS Code, use **Terminal → Run Build Task** for the default Release build, or
 **Terminal → Run Task → SafeSet: Build macOS Debug** for Debug. These workspace
 tasks start a separate `pwsh -NoProfile -NonInteractive -File` process and keep

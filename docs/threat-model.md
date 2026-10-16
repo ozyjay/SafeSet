@@ -21,6 +21,14 @@ publication remains disabled. See `docs/verification.md` for exact evidence.
 
 ## macOS app boundary
 
+The shared desktop bridge logs only explicitly allowlisted operation names and
+fixed outcome/error codes to the private local diagnostic log. Unknown commands
+and malformed requests use a fixed protocol stage. Request/response payloads,
+request IDs, paths and exception text are excluded. Timestamps and operation
+sequences reveal local usage, but events cannot identify a particular workbook.
+Logging remains best effort and retains the existing POSIX-only storage boundary;
+Windows desktop diagnostic-file logging remains unavailable.
+
 The SwiftUI process may display headings, explicitly requested category labels
 and source-cell coordinates from a separate local diagnostic action. It does not
 receive source rows, decrypted bundles or identity maps. The

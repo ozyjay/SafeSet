@@ -1,5 +1,25 @@
 # Verification
 
+## Desktop diagnostic logging — 16 October 2026
+
+The shared desktop bridge now records allowlisted operation names, fixed outcomes
+and public error codes to the existing private POSIX log. Synthetic regressions
+check workbook selection, known and unknown safety errors, malformed frames,
+unknown commands, public-code coverage and unchanged responses when logging is
+unavailable. Log assertions exclude source paths, headings, values, request IDs
+and passphrases. No operational workbook was read for these checks.
+
+- Python suite: **345 passed, 24 Windows-only tests skipped**.
+- Ruff and `git diff --check`: passed.
+- Release macOS app build and strict code-signature verification: passed.
+- Relocated packaged helper: legacy and editable-workbook round trips passed;
+  isolated diagnostic log contained workbook-selection, successful restoration
+  and existing-destination rejection events without synthetic secrets.
+- The packaged smoke uses a canonical temporary home path so macOS's `/var`
+  alias does not trigger the existing diagnostic symlink guard.
+- The installed app was not replaced. Windows diagnostic-file logging remains
+  unavailable; this change does not relax the Windows publication gate.
+
 ## Confirmed regions and manuscript review — 26 September 2026
 
 The shared engine now has a version 5 confirmed-region editable workbook path and

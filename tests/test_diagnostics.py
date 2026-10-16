@@ -1,14 +1,96 @@
 import ast
+import json
 import stat
 
+import pytest
 from typer.testing import CliRunner
 
 from safeset import diagnostics
 from safeset.cli import app
+from safeset.desktop_bridge import PUBLIC_SAFETY_ERRORS, Bridge
 from safeset.diagnostics import record
 from safeset.errors import SafetyError
 
 from .conftest import ROOT
+
+
+def desktop_call(bridge, command, payload):
+    return json.loads(
+        bridge.process_line(
+            json.dumps(
+                {
+                    "version": 1,
+                    "id": "secret-synthetic-request",
+                    "command": command,
+                    "payload": payload,
+                }
+            ).encode()
+            + b"\n"
+        )
+    )
+
+
+def test_desktop_logs_workbook_open_without_source_metadata():
+    result = desktop_call(
+        Bridge(),
+        "list_sheets",
+        {
+            "path": str(ROOT / "examples/synthetic_students.xlsx"),
+        },
+    )
+    assert result["ok"]
+    content = diagnostics.log_path().read_text()
+    assert "desktop.list_sheets start" in content
+    assert "desktop.list_sheets success" in content
+    for secret in (
+        str(ROOT),
+        "synthetic_students",
+        "student_number",
+        "SYNTH-001",
+        "secret-synthetic-request",
+    ):
+        assert secret not in content
+
+
+@pytest.mark.parametrize(
+    "message,code",
+    [
+        ("Original source does not match the restoration bundle.", "source_mismatch"),
+        ("secret-synthetic-exception", "safety_rejected"),
+    ],
+)
+def test_desktop_logs_only_fixed_failure_codes(monkeypatch, message, code):
+    def reject(*args):
+        raise SafetyError(message)
+
+    bridge = Bridge()
+    monkeypatch.setattr(bridge, "dispatch", reject)
+    response = desktop_call(
+        bridge, "prepare_result_workbook", {"passphrase": "secret-synthetic-pass"}
+    )
+    assert response["error"] == code
+    content = diagnostics.log_path().read_text()
+    assert "desktop.prepare_result_workbook rejected" in content
+    assert f"desktop.prepare_result_workbook {code}" in content
+    assert "secret-synthetic" not in content
+
+
+def test_desktop_unknown_commands_and_malformed_frames_are_value_free():
+    bridge = Bridge()
+    assert desktop_call(bridge, "secret-synthetic-command", {})["error"] == "invalid_request"
+    assert not json.loads(bridge.process_line(b"secret-synthetic-frame\n"))["ok"]
+    content = diagnostics.log_path().read_text()
+    assert "desktop.protocol invalid_request" in content
+    assert "secret-synthetic" not in content
+
+
+def test_desktop_error_allowlist_covers_public_codes():
+    assert set(PUBLIC_SAFETY_ERRORS.values()) <= diagnostics.DESKTOP_ERROR_CODES
+
+
+def test_desktop_logging_failure_does_not_change_response(monkeypatch):
+    monkeypatch.setattr("safeset.desktop_bridge.record", lambda *args: False)
+    assert desktop_call(Bridge(), "hello", {})["ok"]
 
 
 def test_private_log_contains_only_fixed_events():

@@ -364,6 +364,13 @@ outside repositories. It never accepts free-form event text. On POSIX, the log
 directory requires owner-only mode 0700 and the file mode 0600; symlinks and
 hard-linked log files are rejected. Logging is best effort and does not change
 validation, approval or publication outcomes. The log is truncated at 1 MiB.
+The shared desktop bridge records helper start/close, allowlisted operation
+start/success/rejection and fixed public error codes, including worksheet listing
+when a workbook is selected. Malformed frames and unknown commands use a fixed
+protocol stage. Requests, responses, request IDs and exception text are never
+logged. Both Debug and Release helpers use this path; rebuilding the app is
+required to update a previously bundled helper. The log contains no workbook
+identifier, so it cannot associate events with a particular file.
 The desktop bridge also maps exact, fixed restoration failures to value-free
 error codes for local user guidance. Unknown failures remain generic; exception
 text, headings, cell values and paths do not cross this error boundary.

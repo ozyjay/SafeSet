@@ -21,6 +21,7 @@ from .desktop_flow import (
     prepare_relational_reconstruction,
     restore_results,
 )
+from .diagnostics import DESKTOP_COMMANDS, record
 from .document import DocumentTerm, inspect_document, review_document_content
 from .document_flow import (
     approve_document_protection,
@@ -892,6 +893,7 @@ class Bridge:
 
     def process_line(self, line: bytes) -> bytes:
         request_id = ""
+        stage = "desktop.protocol"
         try:
             if len(line) > MAX_REQUEST or not line.endswith(b"\n"):
                 raise ValueError("frame")
@@ -907,6 +909,9 @@ class Bridge:
                 raise ValueError("request")
             request_id = _string(request["id"])
             command = _string(request["command"])
+            if command in DESKTOP_COMMANDS:
+                stage = f"desktop.{command}"
+                record(stage, "start")
             result = self.dispatch(command, request["payload"])
             response = {"version": PROTOCOL_VERSION, "id": request_id, "ok": True, "result": result}
         except SafetyError as error:
@@ -935,15 +940,25 @@ class Bridge:
             }
         encoded = json.dumps(response, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
         if len(encoded) > MAX_RESPONSE:
+            record(stage, "rejected")
+            record(stage, "response_limit")
             encoded = b'{"version":1,"id":"","ok":false,"error":"response_limit"}'
+        else:
+            if response["ok"]:
+                record(stage, "success")
+            else:
+                record(stage, "rejected")
+                record(stage, response["error"])
         return encoded + b"\n"
 
 
 def main() -> None:
     bridge = Bridge()
+    record("desktop.app", "start")
     while True:
         line = sys.stdin.buffer.readline(MAX_REQUEST + 2)
         if not line:
+            record("desktop.app", "closed")
             return
         sys.stdout.buffer.write(bridge.process_line(line))
         sys.stdout.buffer.flush()
