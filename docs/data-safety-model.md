@@ -152,6 +152,11 @@ exact original content and rejects missing, stale or extra reviews, unsafe contr
 formula prefixes, recognised identifier/date/time patterns and known same-worksheet
 source identifiers. Manual review must also remove unfamiliar names and identifying
 context; these checks cannot infer whether a story identifies its author.
+Narrative prompts using "address" as a verb in phrases about learning, research or
+development needs are inferred as free text. Literal address/name/email headings
+remain identifier fields. A local response review does not use its own column as
+an inferred identifier source; actual identifier headings still fail approval and
+policy validation. Heading inference remains advisory and incomplete.
 Reviewed paragraphs still participate in every per-field, joint and linked group
 check. Strict mode may therefore reject unique journal responses. The existing
 controlled-pseudonymisation profile still requires explicit risk review and does

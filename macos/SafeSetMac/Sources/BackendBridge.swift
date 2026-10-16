@@ -3,7 +3,26 @@ import Foundation
 enum BridgeFailure: Error {
     case unavailable
     case rejected(String)
-    case textReviewRejected([String: [String]])
+    case textReviewRejected([String: [String]], [String: [TextReviewHighlight]])
+}
+
+struct TextReviewHighlight: Equatable, Identifiable {
+    let reason: String
+    let start: Int
+    let end: Int
+    var id: String { "\(reason):\(start):\(end)" }
+    var range: NSRange { NSRange(location: start, length: end - start) }
+
+    func valid(in text: String) -> Bool {
+        let units = Array(text.utf16)
+        guard start >= 0, end > start, end <= units.count else { return false }
+        func boundary(_ offset: Int) -> Bool {
+            offset == 0 || offset == units.count
+                || !((0xD800...0xDBFF).contains(units[offset - 1])
+                     && (0xDC00...0xDFFF).contains(units[offset]))
+        }
+        return boundary(start) && boundary(end)
+    }
 }
 
 enum TextReviewFeedback {
@@ -19,6 +38,7 @@ enum TextReviewFeedback {
         "too_long": "Shorten this response to 4,096 characters or fewer.",
         "unsupported_text": "Use plain text for this response.",
         "review_incomplete": "The response review is incomplete. Open a new review of this field.",
+        "identifier_field": "This heading indicates an identifier field. Remove it or use it as the linking identifier; it cannot be retained as reviewed narrative text.",
         "source_changed": "The source responses changed. Cancel and open a new review of this field.",
         "source_controls": "The original field contains unsupported control characters. Correct the source workbook, then review it again.",
         "review_limit": "The reviewed field exceeds the local review size limit. Shorten or clear responses."
@@ -32,6 +52,22 @@ enum TextReviewFeedback {
             })) else { continue }
             let descriptions = codes.compactMap { messages[$0] }
             if !descriptions.isEmpty { result[digest] = descriptions }
+        }
+        return result
+    }
+
+    static func decodeHighlights(_ raw: Any?) -> [String: [TextReviewHighlight]] {
+        guard let payload = raw as? [String: [[String: Any]]] else { return [:] }
+        var result: [String: [TextReviewHighlight]] = [:]
+        for (digest, ranges) in payload {
+            guard digest.count == 64 && digest.allSatisfy({ "0123456789abcdef".contains($0) })
+                else { continue }
+            result[digest] = ranges.prefix(128).compactMap { range in
+                guard let reason = range["reason"] as? String, messages[reason] != nil,
+                      let start = range["start"] as? Int, let end = range["end"] as? Int,
+                      start >= 0, end > start, end <= 1_048_576 else { return nil }
+                return TextReviewHighlight(reason: reason, start: start, end: end)
+            }
         }
         return result
     }
@@ -97,7 +133,11 @@ final class BackendBridge: @unchecked Sendable {
         let code = response["error"] as? String ?? "invalid_request"
         if code == "text_review_required", let raw = response["issues"] as? [String: [String]] {
             let feedback = TextReviewFeedback.decode(raw)
-            if !feedback.isEmpty { throw BridgeFailure.textReviewRejected(feedback) }
+            if !feedback.isEmpty {
+                throw BridgeFailure.textReviewRejected(
+                    feedback, TextReviewFeedback.decodeHighlights(response["highlights"])
+                )
+            }
         }
         let message: String
         switch code {

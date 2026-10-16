@@ -972,6 +972,8 @@ class Bridge:
                 "approve_region_text_review",
             }:
                 response["issues"] = error.issues
+                if error.highlights:
+                    response["highlights"] = error.highlights
         except (ValueError, TypeError, KeyError, UnicodeError, OverflowError, RecursionError):
             self.pending = None
             response = {

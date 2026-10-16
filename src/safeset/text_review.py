@@ -11,14 +11,17 @@ TEXT_REVIEW_ERROR = "Long-form text needs complete current review with identifyi
 TEXT_BUNDLE_ERROR = "Long-form text protection requires a restoration bundle."
 MAX_TEXT_REVIEWS = 1000
 MAX_REVIEW_BYTES = 200_000
+MAX_HIGHLIGHTS = 1024
+MAX_RESPONSE_HIGHLIGHTS = 128
 
 
 class TextReviewRejection(SafetyError):
     """Fixed reason codes keyed only by existing local review bindings."""
 
-    def __init__(self, issues: dict[str, list[str]]) -> None:
+    def __init__(self, issues: dict[str, list[str]], highlights: dict | None = None) -> None:
         super().__init__(TEXT_REVIEW_ERROR)
         self.issues = issues
+        self.highlights = highlights or {}
 
 
 def unsafe_text_controls(value: str) -> bool:
@@ -55,6 +58,51 @@ def reviewed_text_issues(value: object) -> list[str]:
 
 def reviewed_text_valid(value: object) -> bool:
     return not reviewed_text_issues(value)
+
+
+def text_issue_ranges(value: str) -> list[tuple[str, int, int]]:
+    """Return code-point spans locally; no matched text is returned."""
+    spans = []
+    if len(value) > MAX_FIELD:
+        spans.append(("too_long", MAX_FIELD, len(value)))
+    if value and not value.strip():
+        spans.append(("whitespace_only", 0, len(value)))
+    stripped = value.lstrip()
+    if stripped.startswith(("=", "+", "-", "@")):
+        start = len(value) - len(stripped)
+        spans.append(("formula_prefix", start, start + 1))
+    spans.extend(
+        ("control_character", i, i + 1) for i, ch in enumerate(value) if unsafe_text_controls(ch)
+    )
+    for code, pattern in (
+        ("email", EMAIL),
+        ("date", DATE),
+        ("time", TIME),
+        ("long_digits", LONG_DIGITS),
+    ):
+        for match in pattern.finditer(value):
+            start, end = match.span()
+            if code == "email":
+                while start < end and value[start] in "(<[{":
+                    start += 1
+                while end > start and value[end - 1] in ",.;:!?)]}>":
+                    end -= 1
+            elif code == "long_digits":
+                while end > start and not value[end - 1].isdecimal():
+                    end -= 1
+            spans.append((code, start, end))
+    return spans
+
+
+def utf16_ranges(value: str, spans: list[tuple[str, int, int]]) -> list[dict]:
+    """Use native text-view offsets, including non-BMP and case-folded characters."""
+    offsets = [0]
+    for char in value:
+        offsets.append(offsets[-1] + (2 if ord(char) > 0xFFFF else 1))
+    return [
+        {"reason": reason, "start": offsets[start], "end": offsets[end]}
+        for reason, start, end in sorted(set(spans), key=lambda span: (span[1], span[2], span[0]))
+    ][:MAX_RESPONSE_HIGHLIGHTS]
 
 
 def validate_text_reviews(value: object) -> bool:
@@ -128,6 +176,8 @@ def approve_text_reviews(
         )
     ):
         raise TextReviewRejection({"": ["review_incomplete"]})
+    if inferred_classification(column) == "direct_identifier":
+        raise TextReviewRejection({"": ["identifier_field"]})
     issues = {
         key: codes for key, value in reviews.items() if (codes := reviewed_text_issues(value))
     }
@@ -145,15 +195,20 @@ def approve_text_reviews(
         identifiers = {
             row[name].strip().casefold()
             for name in source.columns
-            if inferred_classification(name) == "direct_identifier"
+            if name != column and inferred_classification(name) == "direct_identifier"
             for row in source.rows
             if row[name].strip()
         }
+    sorted_identifiers = sorted(identifiers)
+    highlights = {}
+    remaining = MAX_HIGHLIGHTS
     for key, output in reviews.items():
         if not isinstance(output, str):
             continue
+        spans = text_issue_ranges(output)
         folded = output.casefold()
-        for identifier in identifiers:
+        origins = [i for i, char in enumerate(output) for _ in char.casefold()]
+        for identifier in sorted_identifiers:
             start = 0
             while (position := folded.find(identifier, start)) >= 0:
                 end = position + len(identifier)
@@ -163,12 +218,17 @@ def approve_text_reviews(
                 ) and (end == len(folded) or not (folded[end].isalnum() or folded[end] == "_")):
                     if "known_identifier" not in issues.setdefault(key, []):
                         issues[key].append("known_identifier")
-                    break
+                    if len(spans) < MAX_RESPONSE_HIGHLIGHTS:
+                        spans.append(("known_identifier", origins[position], origins[end - 1] + 1))
                 start = position + 1
+        if spans and remaining:
+            ranges = utf16_ranges(output, spans)[:remaining]
+            highlights[key] = ranges
+            remaining -= len(ranges)
     if global_issues:
         issues[""] = global_issues
     if issues:
-        raise TextReviewRejection(issues)
+        raise TextReviewRejection(issues, highlights)
 
 
 def review_entries(table: Table, column: str) -> list[dict]:

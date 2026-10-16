@@ -77,7 +77,7 @@ struct TextReviewEntry: Identifiable {
     var id: String { sheet + ":" + digest }
 
     mutating func edit(_ value: String) {
-        guard value != text else { return }
+        guard !value.utf16.elementsEqual(text.utf16) else { return }
         text = value
         reviewed = false
     }
@@ -147,6 +147,9 @@ struct SourceCellLocation: Identifiable {
     @Published var textReviewSheet: TextReviewSheet?
     @Published var textReviewMessage = ""
     @Published var textReviewIssues: [String: [String]] = [:]
+    @Published var textReviewHighlights: [String: [TextReviewHighlight]] = [:]
+    @Published var textReviewCheckedText: [String: String] = [:]
+    @Published var textReviewCheckPassed = false
     @Published var returned = ""
     @Published var returnedSheets: [String] = []
     @Published var returnedSheet = ""
@@ -470,9 +473,13 @@ struct SourceCellLocation: Identifiable {
                     self.busy = false
                     self.invalidate()
                     if self.textReviewSheet != nil {
-                        if case BridgeFailure.textReviewRejected(let issues) = error {
+                        self.textReviewCheckPassed = false
+                        if case BridgeFailure.textReviewRejected(let issues, let highlights) = error {
                             let scope = payload["name"] as? String ?? payload["sheet"] as? String ?? ""
-                            self.showTextReviewIssues(issues, sheet: scope)
+                            self.showTextReviewIssues(
+                                issues, sheet: scope, highlights: highlights,
+                                checkedText: payload["text_reviews"] as? [String: String] ?? [:]
+                            )
                         } else {
                             self.textReviewMessage = message
                         }
@@ -501,7 +508,7 @@ struct SourceCellLocation: Identifiable {
     }
 
     func chooseSource(_ url: URL) {
-        textReviewSheet = nil
+        closeTextReview()
         source = url.path; fields = []; fieldsBySheet = [:]; sharedCodeFields = []
         useRegions = false; regionCandidates = []; regionSelections = [:]
         regionSourceDigest = ""
@@ -685,8 +692,11 @@ struct SourceCellLocation: Identifiable {
     }
 
     func reviewText(for field: String, sheets: [String]) {
+        textReviewCheckPassed = false
         textReviewMessage = ""
         textReviewIssues = [:]
+        textReviewHighlights = [:]
+        textReviewCheckedText = [:]
         let reviewedSource = source
         func collect(_ index: Int, entries: [TextReviewEntry]) {
             guard index < sheets.count else {
@@ -721,11 +731,19 @@ struct SourceCellLocation: Identifiable {
     }
 
     func approveText(_ review: TextReviewSheet, entries: [TextReviewEntry]) {
+        checkText(review, entries: entries, approve: true)
+    }
+
+    func checkText(_ review: TextReviewSheet, entries: [TextReviewEntry], approve: Bool = false) {
         guard !busy else { return }
+        textReviewCheckPassed = false
         textReviewMessage = ""
         textReviewIssues = [:]
+        textReviewHighlights = [:]
+        textReviewCheckedText = [:]
         guard source == review.source, !entries.isEmpty,
-              entries.allSatisfy({ $0.reviewed }),
+              (!approve || entries.allSatisfy({ $0.reviewed })),
+              Set(entries.map(\.sheet)).isSubset(of: selectedSourceSheets),
               Set(entries.map(\.id)) == Set(review.entries.map(\.id)) else {
             textReviewMessage = "Review and confirm every response before approving this field."
             return
@@ -735,7 +753,11 @@ struct SourceCellLocation: Identifiable {
         }
         func validate(_ index: Int) {
             guard index < sheets.count else {
-                self.acceptTextReview(review, entries: entries)
+                if approve { self.acceptTextReview(review, entries: entries) }
+                else {
+                    self.textReviewCheckPassed = true
+                    self.textReviewMessage = "No automatic issues found. Review and confirm every response, then approve the text."
+                }
                 return
             }
             let sheet = sheets[index]
@@ -754,11 +776,42 @@ struct SourceCellLocation: Identifiable {
         validate(0)
     }
 
-    func showTextReviewIssues(_ issues: [String: [String]], sheet: String) {
-        textReviewMessage = "Approval was blocked. Review the marked responses below, edit the text and confirm those responses again."
+    func showTextReviewIssues(
+        _ issues: [String: [String]], sheet: String,
+        highlights: [String: [TextReviewHighlight]] = [:], checkedText: [String: String] = [:]
+    ) {
+        textReviewCheckPassed = false
+        textReviewMessage = "Review the highlighted text below. Use Show match or Next match to find each issue, edit the text and confirm the response again."
         textReviewIssues = Dictionary(uniqueKeysWithValues: issues.map { digest, messages in
             (digest.isEmpty ? "" : sheet + ":" + digest, messages)
         })
+        textReviewHighlights = Dictionary(uniqueKeysWithValues: highlights.map { digest, ranges in
+            (sheet + ":" + digest, ranges)
+        })
+        textReviewCheckedText = Dictionary(uniqueKeysWithValues: checkedText.map { digest, text in
+            (sheet + ":" + digest, text)
+        })
+    }
+
+    func highlights(for entry: TextReviewEntry) -> [TextReviewHighlight] {
+        guard let checked = textReviewCheckedText[entry.id],
+              checked.utf16.elementsEqual(entry.text.utf16) else { return [] }
+        return (textReviewHighlights[entry.id] ?? []).filter { $0.valid(in: entry.text) }
+    }
+
+    func issueMessages(for entry: TextReviewEntry) -> [String] {
+        if let checked = textReviewCheckedText[entry.id],
+           !checked.utf16.elementsEqual(entry.text.utf16) { return [] }
+        return textReviewIssues[entry.id] ?? []
+    }
+
+    func closeTextReview() {
+        textReviewSheet = nil
+        textReviewMessage = ""
+        textReviewIssues = [:]
+        textReviewHighlights = [:]
+        textReviewCheckedText = [:]
+        textReviewCheckPassed = false
     }
 
     func acceptTextReview(_ review: TextReviewSheet, entries: [TextReviewEntry]) {
@@ -785,7 +838,7 @@ struct SourceCellLocation: Identifiable {
             fieldsBySheet[sheet] = sheetFields
             if sheet == sourceSheet { fields = sheetFields }
         }
-        textReviewSheet = nil
+        closeTextReview()
         invalidate()
     }
 

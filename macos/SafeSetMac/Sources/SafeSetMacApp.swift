@@ -280,10 +280,92 @@ struct FieldCard: View {
     }
 }
 
+struct TextReviewSelection {
+    let id = UUID()
+    let range: NSRange
+}
+
+struct ReviewedTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    let highlights: [TextReviewHighlight]
+    let selection: TextReviewSelection?
+    let fontSize: Double
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .noBorder
+        guard let editor = scroll.documentView as? NSTextView else { return scroll }
+        editor.isRichText = false
+        editor.allowsUndo = true
+        editor.isAutomaticLinkDetectionEnabled = false
+        editor.isAutomaticDataDetectionEnabled = false
+        editor.isAutomaticSpellingCorrectionEnabled = false
+        editor.isContinuousSpellCheckingEnabled = false
+        editor.isAutomaticQuoteSubstitutionEnabled = false
+        editor.isAutomaticDashSubstitutionEnabled = false
+        editor.isAutomaticTextReplacementEnabled = false
+        editor.isHorizontallyResizable = false
+        editor.isVerticallyResizable = true
+        editor.autoresizingMask = [.width]
+        editor.textContainer?.widthTracksTextView = true
+        editor.textContainer?.containerSize = NSSize(width: scroll.contentSize.width,
+                                                    height: .greatestFiniteMagnitude)
+        editor.textContainerInset = NSSize(width: 6, height: 6)
+        editor.setAccessibilityLabel("Text to include in the protected copy")
+        editor.delegate = context.coordinator
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let editor = scroll.documentView as? NSTextView else { return }
+        context.coordinator.parent = self
+        if !editor.string.utf16.elementsEqual(text.utf16) { editor.string = text }
+        editor.font = .systemFont(ofSize: fontSize)
+        editor.textColor = .textColor
+        Self.applyHighlights(highlights, to: editor)
+        if let selection, context.coordinator.lastSelection != selection.id,
+           Range(selection.range, in: text) != nil {
+            editor.window?.makeFirstResponder(editor)
+            editor.setSelectedRange(selection.range)
+            editor.scrollRangeToVisible(selection.range)
+            context.coordinator.lastSelection = selection.id
+        }
+    }
+
+    static func applyHighlights(_ highlights: [TextReviewHighlight], to editor: NSTextView) {
+        let full = NSRange(location: 0, length: editor.string.utf16.count)
+        for key in [NSAttributedString.Key.backgroundColor, .underlineColor, .underlineStyle] {
+            editor.layoutManager?.removeTemporaryAttribute(key, forCharacterRange: full)
+        }
+        for highlight in highlights where highlight.valid(in: editor.string) {
+            editor.layoutManager?.addTemporaryAttributes([
+                .backgroundColor: NSColor.systemOrange.withAlphaComponent(0.35),
+                .underlineColor: NSColor.systemRed,
+                .underlineStyle: NSUnderlineStyle.single.rawValue
+            ], forCharacterRange: highlight.range)
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: ReviewedTextEditor
+        var lastSelection: UUID?
+        init(_ parent: ReviewedTextEditor) { self.parent = parent }
+        func textDidChange(_ notification: Notification) {
+            guard let editor = notification.object as? NSTextView else { return }
+            parent.text = editor.string
+        }
+    }
+}
+
 struct LongTextReviewView: View {
     @EnvironmentObject var model: AppModel
+    @Environment(\.appTextScale) private var textScale
     let review: TextReviewSheet
     @State private var entries: [TextReviewEntry]
+    @State private var selections: [String: TextReviewSelection] = [:]
 
     init(review: TextReviewSheet) {
         self.review = review
@@ -301,8 +383,9 @@ struct LongTextReviewView: View {
             Text("\(entries.filter(\.reviewed).count) of \(entries.count) distinct responses reviewed")
                 .appFont(13, weight: .semibold)
             if !model.textReviewMessage.isEmpty {
-                Label(model.textReviewMessage, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red).appFont(13)
+                Label(model.textReviewMessage, systemImage: model.textReviewCheckPassed
+                      ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(model.textReviewCheckPassed ? .green : .red).appFont(13)
                 ForEach(model.textReviewIssues[""] ?? [], id: \.self) { message in
                     Text(message).foregroundStyle(.red).appFont(13)
                 }
@@ -321,22 +404,43 @@ struct LongTextReviewView: View {
                             Text(entries[index].original.isEmpty ? "(Blank response)" : entries[index].original)
                                 .appFont(13).textSelection(.enabled)
                             Text("Text to include in the protected copy").appFont(12, weight: .semibold)
-                            TextEditor(text: Binding(
+                            ReviewedTextEditor(text: Binding(
                                 get: { entries[index].text },
                                 set: { value in
-                                    guard value != entries[index].text else { return }
+                                    guard !value.utf16.elementsEqual(entries[index].text.utf16) else { return }
                                     entries[index].edit(value)
                                     model.textReviewIssues.removeValue(forKey: entries[index].id)
+                                    model.textReviewHighlights.removeValue(forKey: entries[index].id)
+                                    model.textReviewCheckedText.removeValue(forKey: entries[index].id)
+                                    selections.removeValue(forKey: entries[index].id)
+                                    model.textReviewMessage = "Text changed. Check for issues again, then confirm the edited response."
+                                    model.textReviewCheckPassed = false
                                 }
-                            ))
+                            ), highlights: model.highlights(for: entries[index]),
+                               selection: selections[entries[index].id], fontSize: 13 * textScale)
                             .appFont(13).frame(minHeight: 110)
                             .border(.secondary.opacity(0.3))
                             Text("\(entries[index].text.count) / 4,096 characters")
                                 .appFont(12)
                                 .foregroundStyle(entries[index].text.count > 4096 ? .red : .secondary)
-                            ForEach(model.textReviewIssues[entries[index].id] ?? [], id: \.self) { message in
-                                Label(message, systemImage: "exclamationmark.triangle")
-                                    .foregroundStyle(.red).appFont(13)
+                            ForEach(model.issueMessages(for: entries[index]), id: \.self) { message in
+                                HStack(alignment: .top) {
+                                    Label(message, systemImage: "exclamationmark.triangle")
+                                        .foregroundStyle(.red).appFont(13)
+                                    let matches = model.highlights(for: entries[index]).filter {
+                                        TextReviewFeedback.messages[$0.reason] == message
+                                    }
+                                    if !matches.isEmpty {
+                                        Button(matches.count > 1 ? "Next match" : "Show match") {
+                                            let id = entries[index].id
+                                            let previous = matches.firstIndex {
+                                                $0.range == selections[id]?.range
+                                            }
+                                            let next = previous.map { ($0 + 1) % matches.count } ?? 0
+                                            selections[id] = TextReviewSelection(range: matches[next].range)
+                                        }.appFont(12)
+                                    }
+                                }
                             }
                             Toggle("I reviewed this response and removed identifying details", isOn: $entries[index].reviewed)
                                 .toggleStyle(.checkbox).appFont(13)
@@ -349,8 +453,10 @@ struct LongTextReviewView: View {
             Text("Reviewed text still contributes to rare-group and linkage checks. Approval does not establish anonymity. Text is reference-only in the protected workbook.")
                 .appFont(12).foregroundStyle(.secondary)
             HStack {
-                Button("Cancel") { model.textReviewSheet = nil }.disabled(model.busy)
+                Button("Cancel") { model.closeTextReview() }.disabled(model.busy)
                 Spacer()
+                Button("Check for issues") { model.checkText(review, entries: entries) }
+                    .disabled(model.busy || entries.isEmpty)
                 Button("Approve reviewed text") { model.approveText(review, entries: entries) }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.busy || entries.isEmpty || entries.contains {

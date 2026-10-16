@@ -12,6 +12,12 @@ DIRECT = re.compile(
     re.I,
 )
 TEXT = re.compile(r"(^|_)(notes?|comments?|description|feedback|text)(_|$)", re.I)
+ADDRESS_VERB = re.compile(
+    r"(^|_)address_(?=(?:(?:the|your|my|our|their|these|those|any)_)?"
+    r"(?:learning|development|research|training|support|needs?|challenges?|issues?|"
+    r"concerns?|gaps?|problems?)(_|$))",
+    re.I,
+)
 QUASI = re.compile(r"campus|subject|course|year|gpa|postcode|birth|date|gender", re.I)
 EMAIL = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 DATE = re.compile(r"\b(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b")
@@ -24,9 +30,12 @@ def inferred_classification(name: str) -> str:
     # Match words in ordinary Excel headings as well as legacy snake_case names.
     words = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name)
     words = re.sub(r"\W+", "_", words)
-    if DIRECT.search(words):
+    # In narrative prompts, 'address the learning needs' uses a verb, not an
+    # address identifier. Other identifier words in the heading still win.
+    address_as_verb = bool(ADDRESS_VERB.search(words))
+    if DIRECT.search(ADDRESS_VERB.sub(r"\1", words)):
         return "direct_identifier"
-    if TEXT.search(words):
+    if TEXT.search(words) or address_as_verb:
         return "free_text"
     if QUASI.search(words):
         return "quasi_identifier"

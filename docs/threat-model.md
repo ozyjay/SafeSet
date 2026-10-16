@@ -42,9 +42,11 @@ operator-invoked narrative review may also display bounded source paragraphs and
 edited replacements locally. These remain in process memory, never preferences,
 logs or clipboard automatically. Private saved policies and encrypted bundles may
 contain reviewed text and content digests and must be treated as sensitive.
-Rejected text approvals can return only existing local response bindings and fixed
-reason codes. They never include matched names, identifier values or excerpts;
-neither the bindings nor detailed reasons enter logs. The native sheet displays
+Rejected text approvals can return existing local response bindings, fixed reason
+codes and bounded character offsets into the exact submitted replacement. They
+never include matched names, identifier values or excerpts; bindings, reasons and
+offsets never enter logs. Native highlights are displayed only for an unchanged
+submitted-text snapshot; malformed or stale offsets are ignored. The native sheet displays
 allowlisted explanations and keeps edits in memory for correction. It does not
 receive source rows, decrypted bundles or identity maps. The
 bundled Python helper reads bounded local JSON-line requests and replies with

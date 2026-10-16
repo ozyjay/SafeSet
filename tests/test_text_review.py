@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from safeset.bundle import create_bundle, decrypt_bundle, encrypt_bundle
+from safeset.classification import inferred_classification
 from safeset.desktop_bridge import Bridge
 from safeset.errors import SafetyError
 from safeset.ingestion import MAX_FIELD, Table, excel_bytes, excel_workbook_bytes, read_excel
@@ -130,8 +131,54 @@ def test_text_review_does_not_relax_categories_or_identifier_headings():
     }
     with pytest.raises(SafetyError):
         parse_policy(raw)
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "How could you address the research challenges in this fictional project?",
+        "What training would help you address your learning needs?",
+        "Describe ways to address development needs.",
+    ],
+)
+def test_narrative_address_verb_is_not_an_identifier_source(heading):
+    source, raw = fixture()
+    text = "A wholly invented response about requesting training and laboratory support."
+    rows = tuple({**row, heading: text} for row in source.rows)
+    rows = tuple(
+        {name: value for name, value in row.items() if name != "Journal response"} for row in rows
+    )
+    source = Table(("Synthetic key", "Student Name", heading), rows)
+    raw["columns"][heading] = raw["columns"].pop("Journal response")
+    raw["columns"][heading]["text_reviews"] = {text_digest(text): text}
+    assert inferred_classification(heading) == "free_text"
+    approve_text_reviews(source, heading, {text_digest(text): text})
+    policy = parse_policy(raw)
+    candidate = sanitise(source, policy)
+    assert validate(candidate.table, policy).passed
+    bundle = create_bundle(source, policy, candidate)
+    assert reconstruct(source, candidate.table, bundle, ()) == source
+
+
+@pytest.mark.parametrize(
+    "heading",
+    [
+        "Address",
+        "Postal address",
+        "Email address",
+        "What is your address?",
+        "Student Name",
+        "How could you address your learning needs? Email address",
+    ],
+)
+def test_actual_identifier_headings_remain_blocked_for_narrative_review(heading):
+    assert inferred_classification(heading) == "direct_identifier"
+    source = Table((heading,), ({heading: "Synthetic identifier"},))
+    with pytest.raises(TextReviewRejection) as caught:
+        approve_text_reviews(source, heading, {text_digest("Synthetic identifier"): "A paragraph."})
+    assert caught.value.issues == {"": ["identifier_field"]}
     _, raw = fixture()
-    raw["columns"]["Student Name"] = raw["columns"].pop("Journal response")
+    raw["columns"][heading] = raw["columns"].pop("Journal response")
     with pytest.raises(SafetyError):
         parse_policy(raw)
 
@@ -199,6 +246,75 @@ def test_stale_review_feedback_is_global_and_never_returns_new_source_content():
         approve_text_reviews(source, "Journal response", {"b" * 64: REVIEWED})
     assert caught.value.issues == {"": ["source_changed"]}
     assert ORIGINAL not in str(caught.value)
+
+
+def test_highlights_identify_every_repeated_match_using_utf16_offsets(tmp_path):
+    source, _ = fixture()
+    text = (
+        "🧪 Synthetic Ada emailed synthetic@example.invalid, then synthetic@example.invalid. "
+        "Synthetic Ada noted 2026-01-01 at 14:30; phone 0412345678."
+    )
+    path = tmp_path / "synthetic-highlight.xlsx"
+    path.write_bytes(excel_workbook_bytes({"Synthetic": source}))
+    response = call(
+        Bridge(),
+        "approve_text_review",
+        {
+            "source": str(path),
+            "sheet": "Synthetic",
+            "column": "Journal response",
+            "text_reviews": {text_digest(ORIGINAL): text},
+        },
+    )
+    assert not response["ok"]
+    ranges = response["highlights"][text_digest(ORIGINAL)]
+    matched = {}
+    encoded = text.encode("utf-16-le")
+    for mark in ranges:
+        excerpt = encoded[2 * mark["start"] : 2 * mark["end"]].decode("utf-16-le")
+        matched.setdefault(mark["reason"], []).append(excerpt)
+    assert matched["known_identifier"] == ["Synthetic Ada", "Synthetic Ada"]
+    assert matched["email"] == ["synthetic@example.invalid"] * 2
+    assert matched["date"] == ["2026-01-01"]
+    assert matched["time"] == ["14:30"]
+    assert matched["long_digits"] == ["2026-01-01", "0412345678"]
+    assert set(ranges[0]) == {"reason", "start", "end"}
+    serialised = json.dumps(response)
+    for secret in ("Synthetic Ada", "synthetic@example.invalid", text, str(path)):
+        assert secret not in serialised
+    log = (tmp_path / "diagnostics/safeset.log").read_text()
+    assert text_digest(ORIGINAL) not in log and "highlights" not in log
+
+
+def test_known_identifier_casefold_ranges_point_to_original_characters():
+    source, _ = fixture()
+    source = Table(
+        source.columns, tuple({**row, "Student Name": "Synthetic Straße"} for row in source.rows)
+    )
+    text = "🧪 SYNTHETIC STRASSE reflected. Synthetic Straße also reflected."
+    with pytest.raises(TextReviewRejection) as caught:
+        approve_text_reviews(source, "Journal response", {text_digest(ORIGINAL): text})
+    encoded = text.encode("utf-16-le")
+    spans = caught.value.highlights[text_digest(ORIGINAL)]
+    assert [
+        encoded[2 * s["start"] : 2 * s["end"]].decode("utf-16-le")
+        for s in spans
+        if s["reason"] == "known_identifier"
+    ] == ["SYNTHETIC STRASSE", "Synthetic Straße"]
+
+
+def test_highlights_are_bounded_and_oversize_ranges_use_native_offsets():
+    source, _ = fixture()
+    text = "🧪" * (MAX_FIELD + 1)
+    with pytest.raises(TextReviewRejection) as caught:
+        approve_text_reviews(source, "Journal response", {text_digest(ORIGINAL): text})
+    assert caught.value.highlights[text_digest(ORIGINAL)] == [
+        {"reason": "too_long", "start": MAX_FIELD * 2, "end": (MAX_FIELD + 1) * 2}
+    ]
+    text = "synthetic@example.invalid " * 200
+    with pytest.raises(TextReviewRejection) as caught:
+        approve_text_reviews(source, "Journal response", {text_digest(ORIGINAL): text})
+    assert len(caught.value.highlights[text_digest(ORIGINAL)]) <= 128
 
 
 def test_reviewed_text_encrypted_round_trip_and_exact_output_binding(tmp_path, monkeypatch):

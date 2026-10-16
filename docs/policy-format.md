@@ -25,6 +25,10 @@ email/date/time/long-digit patterns are rejected. Known source names and
 identifiers are checked case-insensitively at word boundaries against the same
 worksheet's explicit/inferred identifier fields. This is a backstop; operators
 must remove identifying context and unfamiliar names themselves.
+The verb "address" in narrative learning/research-needs prompts is distinguished
+from address identifier headings. Such prompts still require removal or reviewed
+text; the distinction does not enable categorical passthrough. Actual identifier
+headings remain ineligible for `review_text`.
 
 Local review shows each original response and a replacement editor, with a
 separate confirmation for every response. Editing resets confirmation. The shared

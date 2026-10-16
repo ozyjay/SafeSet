@@ -6,9 +6,12 @@ unchanged** is for short labels. For journal responses and other paragraphs, cho
 details out of each response and confirm every distinct response. Editing resets
 its confirmation. Empty protected text excludes that response's text. Approve the
 reviewed text, then validate the workbook and review the export summary as usual.
-If approval is blocked, the review sheet lists fixed reasons beside each affected
-response and shows its character count. Correct the marked text and confirm it
-again. Errors stay within the sheet and preserve other edits and confirmations.
+Use **Check for issues** before approval to highlight detected problems directly
+in the protected-text editor. **Show match** selects the marked text for editing;
+**Next match** cycles repeated matches. Approval failures show the same highlights
+and reasons. Character counts remain visible. Edit the marked text and confirm the
+response again; edits clear stale highlights. Checking alone does not approve a
+field. Errors stay within the sheet and preserve other edits and confirmations.
 The review runs locally and supports 4,096 characters per response. Paragraphs
 still contribute to disclosure checks; unique responses may fail strict group
 checks. Reviewed text is reference-only in returned workbooks. No automatic name

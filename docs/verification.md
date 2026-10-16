@@ -1,5 +1,53 @@
 # Verification
 
+## Exact issue highlights in narrative review — 16 October 2026
+
+The local text editor now displays temporary amber highlights and underlines at
+detected issue locations. **Show match** selects a location for editing; **Next
+match** cycles repeated matches. **Check for issues** runs the shared stateless
+text checks without committing field approval. Explicit confirmation and approval
+remain required, and the accepted text domain is unchanged.
+
+The helper returns only bounded UTF-16 ranges, fixed reasons and existing response
+bindings. Unicode case-folded matches map back to original characters. Native
+highlights require the exact submitted UTF-16 snapshot; stale, out-of-bounds or
+surrogate-splitting ranges are ignored. Editing resets confirmation and highlights;
+closing the review clears temporary snapshots. No matched text, positions or
+bindings enter logs.
+
+- Python suite: **408 passed, 24 Windows-only tests skipped**.
+- Swift package: **27 tests passed**, including native temporary text attributes,
+  unchanged stored text, stale ranges, Unicode representation changes and clearing
+  snapshots. Python regressions cover repeated matches, emoji, case-fold expansion
+  and bounded feedback.
+- Ruff and `git diff --check`: passed.
+- Release macOS build, strict signature verification and relocated-helper smoke:
+  passed. Packaged worksheet/region highlights and corrected approvals passed.
+- No operational workbook was read for this change. No manual visual interaction
+  was performed; native text attributes were verified in tests. Relaunch the rebuilt
+  `dist/SafeSet.app`; the installed app is unchanged.
+
+## Narrative address-verb self-match — 16 October 2026
+
+An operator's local review warning was traced without printing identifiers: a
+narrative prompt using "address" as a verb was inferred as an address field, so
+its full response was treated as its own known identifier. Bounded narrative
+address-verb phrases now suggest free text; genuine name/email/address headings
+remain identifier fields. Local narrative approval excludes its own column from
+inferred identifier discovery and rejects actual identifier headings explicitly.
+Other identifier words retain precedence and categorical rules remain unchanged.
+
+- Python suite: **405 passed, 24 Windows-only tests skipped**.
+- Swift package: **26 tests passed**; Ruff and `git diff --check` passed.
+- Release macOS build, strict signature verification and relocated-helper smoke:
+  passed.
+- Packaged synthetic address-verb narrative: local text approval and protection
+  validation passed without self-matching. Synthetic policy regressions cover
+  protection/restoration and preserve genuine identifier-heading rejection.
+- A read-only local diagnostic of the operator's field confirmed the self-match
+  was resolved. No operational paragraph or identifier was printed, added to tests,
+  approved in the running app or exported. The installed app was not replaced.
+
 ## Visible text-review approval feedback — 16 October 2026
 
 Recent local logs showed repeated `approve_text_review` rejections with the generic

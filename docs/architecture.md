@@ -36,6 +36,13 @@ publication gate is removed.
 
 ### Reviewed narrative fields
 
+Heading inference distinguishes the verb in prompts such as "address the learning
+needs" from an address identifier. Those bounded verb/narrative phrases suggest
+free text, while address/email/name headings and other identifier words retain
+their existing rejection rules. Local review never treats its own response column
+as an inferred identifier source; an actual identifier heading is rejected at
+approval and by policy parsing, rather than being matched against itself.
+
 The field decision label is **How to protect this field**. Short unchanged values
 use **Keep short categories unchanged**. **Review and redact text** creates a
 version 4 `review_text` policy rule only after the operator reviews every distinct
@@ -53,6 +60,18 @@ No source values or matched identifiers are included. The native editor maps onl
 allowlisted codes to instructions beside the affected response; errors remain in
 the sheet, preserving text and confirmation state. Busy approval disables duplicate
 submissions. No-op editor updates retain confirmation; actual edits reset it.
+Optional `highlights` metadata maps the same response bindings to fixed reason
+codes and half-open UTF-16 character ranges in the submitted replacement. The
+engine maps case-folded identifier matches back to original characters, including
+Unicode expansions, and bounds feedback to 128 ranges per response and 1,024 total.
+Matched text is never repeated in the response. Native highlight display is bound
+to the exact submitted text snapshot; edits clear it, and out-of-bounds or
+surrogate-splitting ranges are ignored. The AppKit plain-text editor applies
+temporary amber background/underline attributes without changing stored text.
+**Show match** selects a location; **Next match** cycles repeated matches.
+**Check for issues** reuses stateless local review validation without saving field
+approval. Only explicit approval commits reviewed text. Highlight snapshots are
+cleared on cancellation or completion and never persisted or logged.
 The UI commits the collected decisions only after every selected scope succeeds.
 Normal inspection and protection reviews still return no source paragraphs.
 Publication rechecks the current source and each row's exact approved replacement.

@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
@@ -272,6 +273,58 @@ final class SafeSetMacTests: XCTestCase {
         model.busy = true
         model.approveText(review, entries: [entry])
         XCTAssertFalse(model.textReviewIssues.isEmpty)
+    }
+
+    @MainActor func testIssueHighlightsDecorateExactTextAndIgnoreStaleOrInvalidRanges() {
+        let text = "🧪 Synthetic Ada wrote a fictional response."
+        let range = (text as NSString).range(of: "Synthetic Ada")
+        let mark = TextReviewHighlight(reason: "known_identifier", start: range.location,
+                                       end: NSMaxRange(range))
+        XCTAssertTrue(mark.valid(in: text))
+        XCTAssertFalse(TextReviewHighlight(reason: "email", start: 0, end: 1).valid(in: text))
+        let editor = NSTextView()
+        editor.string = text
+        ReviewedTextEditor.applyHighlights([mark], to: editor)
+        XCTAssertNotNil(editor.layoutManager?.temporaryAttribute(
+            .backgroundColor, atCharacterIndex: range.location, effectiveRange: nil
+        ))
+        XCTAssertNil(editor.layoutManager?.temporaryAttribute(
+            .backgroundColor, atCharacterIndex: 0, effectiveRange: nil
+        ))
+        XCTAssertEqual(editor.string, text)
+        ReviewedTextEditor.applyHighlights([], to: editor)
+        XCTAssertNil(editor.layoutManager?.temporaryAttribute(
+            .backgroundColor, atCharacterIndex: range.location, effectiveRange: nil
+        ))
+        let digest = String(repeating: "a", count: 64)
+        let model = AppModel()
+        var entry = TextReviewEntry(sheet: "Synthetic", digest: digest, original: text,
+                                    count: 1, text: text)
+        model.showTextReviewIssues([digest: ["A fixed warning."]], sheet: "Synthetic",
+                                  highlights: [digest: [mark]], checkedText: [digest: text])
+        XCTAssertEqual(model.highlights(for: entry), [mark])
+        entry.edit("A changed synthetic paragraph.")
+        XCTAssertTrue(model.highlights(for: entry).isEmpty)
+        XCTAssertTrue(model.issueMessages(for: entry).isEmpty)
+        let decoded = TextReviewFeedback.decodeHighlights([digest: [
+            ["reason": "email", "start": 3, "end": 5],
+            ["reason": "email", "start": -1, "end": 5],
+            ["reason": "untrusted text", "start": 0, "end": 2]
+        ]])
+        XCTAssertEqual(decoded[digest]?.count, 1)
+        let decomposed = "e\u{301} Synthetic Ada"
+        let composed = "é Synthetic Ada"
+        var unicodeEntry = TextReviewEntry(sheet: "Synthetic", digest: digest,
+                                           original: decomposed, count: 1,
+                                           text: decomposed, reviewed: true)
+        model.showTextReviewIssues([digest: ["A fixed warning."]], sheet: "Synthetic",
+                                  highlights: [digest: [mark]], checkedText: [digest: decomposed])
+        unicodeEntry.edit(composed)
+        XCTAssertFalse(unicodeEntry.reviewed)
+        XCTAssertTrue(model.highlights(for: unicodeEntry).isEmpty)
+        model.closeTextReview()
+        XCTAssertTrue(model.textReviewCheckedText.isEmpty)
+        XCTAssertTrue(model.textReviewHighlights.isEmpty)
     }
 
     func testFieldActionsHideTechnicalClassificationAndBuildSafePayloads() {
