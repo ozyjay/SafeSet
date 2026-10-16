@@ -7,6 +7,9 @@ Preparation failures can return the affected heading and worksheet with bounded
 response-binding/reason/range metadata; no matching identifiers or text excerpts
 are repeated in errors or logs. The native review reuses local saved edits for
 highlighting. These local diagnostics do not weaken mandatory disclosure checks.
+Native narrative editors have independent undo histories, cleared when response
+identity or programmatically supplied text changes, to prevent stale undo actions
+from inserting another response's text or applying invalid character ranges.
 
 Additional direct identifiers may be explicitly coded under policy version 5.
 Original labels remain local or inside private policies/authenticated encrypted

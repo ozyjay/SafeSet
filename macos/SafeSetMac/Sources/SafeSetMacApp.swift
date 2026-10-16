@@ -297,6 +297,7 @@ struct TextReviewSelection {
 
 struct ReviewedTextEditor: NSViewRepresentable {
     @Binding var text: String
+    let entryID: String
     let highlights: [TextReviewHighlight]
     let selection: TextReviewSelection?
     let fontSize: Double
@@ -332,7 +333,7 @@ struct ReviewedTextEditor: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         guard let editor = scroll.documentView as? NSTextView else { return }
         context.coordinator.parent = self
-        if !editor.string.utf16.elementsEqual(text.utf16) { editor.string = text }
+        context.coordinator.synchronise(editor)
         editor.font = .systemFont(ofSize: fontSize)
         editor.textColor = .textColor
         Self.applyHighlights(highlights, to: editor)
@@ -362,8 +363,43 @@ struct ReviewedTextEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: ReviewedTextEditor
         var lastSelection: UUID?
-        init(_ parent: ReviewedTextEditor) { self.parent = parent }
+        private var entryID: String?
+        private var synchronising = false
+        private let responseUndoManager = UndoManager()
+        private weak var editor: NSTextView?
+        init(_ parent: ReviewedTextEditor) {
+            self.parent = parent
+            super.init()
+            for name in [Notification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
+                NotificationCenter.default.addObserver(self, selector: #selector(undoOrRedoCompleted),
+                                                       name: name, object: responseUndoManager)
+            }
+        }
+        deinit { NotificationCenter.default.removeObserver(self) }
+        @objc private func undoOrRedoCompleted(_ notification: Notification) {
+            guard !synchronising, let editor else { return }
+            parent.text = editor.string
+        }
+        func undoManager(for view: NSTextView) -> UndoManager? { responseUndoManager }
+        func synchronise(_ editor: NSTextView) {
+            self.editor = editor
+            let changedEntry = entryID != parent.entryID
+            let changedText = !editor.string.utf16.elementsEqual(parent.text.utf16)
+            guard changedEntry || changedText else { return }
+            synchronising = true
+            defer { synchronising = false }
+            editor.breakUndoCoalescing()
+            editor.undoManager?.removeAllActions()
+            if changedText { editor.string = parent.text }
+            if changedEntry {
+                editor.setSelectedRange(NSRange(location: 0, length: 0))
+                editor.scrollRangeToVisible(NSRange(location: 0, length: 0))
+                lastSelection = nil
+            }
+            entryID = parent.entryID
+        }
         func textDidChange(_ notification: Notification) {
+            guard !synchronising else { return }
             guard let editor = notification.object as? NSTextView else { return }
             parent.text = editor.string
         }
@@ -406,7 +442,7 @@ struct LongTextReviewView: View {
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    ForEach(entries.indices, id: \.self) { index in
+                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, _ in
                         VStack(alignment: .leading, spacing: 8) {
                             Text("\(entries[index].sheet) · Response \(index + 1) · \(entries[index].count) cell(s)")
                                 .appFont(13, weight: .semibold)
@@ -426,7 +462,8 @@ struct LongTextReviewView: View {
                                     model.textReviewMessage = "Text changed. Check for issues again, then confirm the edited response."
                                     model.textReviewCheckPassed = false
                                 }
-                            ), highlights: model.highlights(for: entries[index]),
+                            ), entryID: entries[index].id,
+                               highlights: model.highlights(for: entries[index]),
                                selection: selections[entries[index].id], fontSize: 13 * textScale)
                             .appFont(13).frame(minHeight: 110)
                             .border(.secondary.opacity(0.3))
@@ -1393,7 +1430,7 @@ struct ProtectView: View {
             .frame(maxWidth: 850, alignment: .leading)
         }
         .sheet(item: $model.textReviewSheet) { review in
-            LongTextReviewView(review: review).environmentObject(model)
+            LongTextReviewView(review: review).id(review.id).environmentObject(model)
         }
         .sheet(item: $model.categorySheet) { category in
             VStack(alignment: .leading, spacing: 12) {

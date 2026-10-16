@@ -55,7 +55,7 @@ enum TextReviewFeedback {
         "date": "Remove or generalise a date in this response.",
         "time": "Remove or generalise a clock time in this response.",
         "long_digits": "Remove or replace a long number or phone-number pattern.",
-        "known_identifier": "Remove or replace a name or identifier also found in this worksheet's identifier fields.",
+        "known_identifier": "This text matches a value in this worksheet's identifier fields. Short numeric IDs can also match list numbers or counts. Rewrite the marked text to remove the match; confirmation alone cannot clear it.",
         "formula_prefix": "The response starts with =, +, - or @. Rewrite the opening so it does not begin with a formula prefix.",
         "control_character": "Remove unsupported control characters; ordinary tabs and line breaks are allowed.",
         "whitespace_only": "This response contains only whitespace. Clear it completely to exclude its text.",

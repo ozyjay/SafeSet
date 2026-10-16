@@ -1,8 +1,70 @@
 import XCTest
 import AppKit
+import SwiftUI
 @testable import SafeSetMac
 
 final class SafeSetMacTests: XCTestCase {
+    @MainActor func testResponseRebindingClearsUndoWithoutWritingIntoNewResponse() {
+        var first = "Synthetic first response."
+        var second = "Synthetic second response with different content."
+        func representation(_ secondResponse: Bool) -> ReviewedTextEditor {
+            ReviewedTextEditor(text: secondResponse
+                ? Binding(get: { second }, set: { second = $0 })
+                : Binding(get: { first }, set: { first = $0 }),
+                entryID: secondResponse ? "synthetic-second" : "synthetic-first",
+                highlights: [], selection: nil, fontSize: 13)
+        }
+        let editor = NSTextView()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView?.addSubview(editor)
+        window.makeFirstResponder(editor)
+        editor.allowsUndo = true
+        let coordinator = ReviewedTextEditor.Coordinator(representation(false))
+        editor.delegate = coordinator
+        coordinator.synchronise(editor)
+        editor.insertText("Synthetic edit.", replacementRange:
+            NSRange(location: 0, length: editor.string.utf16.count))
+        editor.breakUndoCoalescing()
+        XCTAssertEqual(first, "Synthetic edit.")
+        XCTAssertTrue(editor.undoManager?.canUndo == true)
+        // A normal SwiftUI update must preserve undo for the current response.
+        coordinator.synchronise(editor)
+        XCTAssertTrue(editor.undoManager?.canUndo == true)
+        editor.undoManager?.undo()
+        XCTAssertEqual(editor.string, "Synthetic first response.")
+        XCTAssertEqual(first, "Synthetic first response.")
+        editor.undoManager?.redo()
+        XCTAssertEqual(first, "Synthetic edit.")
+        coordinator.parent = representation(true)
+        coordinator.synchronise(editor)
+        XCTAssertFalse(editor.undoManager?.canUndo == true)
+        editor.undoManager?.undo()
+        XCTAssertEqual(editor.string, second)
+        XCTAssertEqual(second, "Synthetic second response with different content.")
+        XCTAssertEqual(first, "Synthetic edit.")
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 0, length: 0))
+        let otherEditor = NSTextView()
+        let otherCoordinator = ReviewedTextEditor.Coordinator(representation(false))
+        otherEditor.delegate = otherCoordinator
+        XCTAssertFalse(editor.undoManager === otherEditor.undoManager)
+        // Rebinding an identical string still denotes a different response.
+        editor.insertText("x", replacementRange: NSRange(location: 0, length: 0))
+        editor.breakUndoCoalescing()
+        XCTAssertTrue(editor.undoManager?.canUndo == true)
+        first = second
+        coordinator.parent = representation(false)
+        coordinator.synchronise(editor)
+        XCTAssertFalse(editor.undoManager?.canUndo == true)
+        // External text replacement within one response must also discard stale undo.
+        editor.insertText("y", replacementRange: NSRange(location: 0, length: 0))
+        editor.breakUndoCoalescing()
+        first = "Synthetic external replacement."
+        coordinator.synchronise(editor)
+        XCTAssertFalse(editor.undoManager?.canUndo == true)
+        XCTAssertEqual(editor.string, first)
+    }
+
     @MainActor func testNarrativePreflightIncludesSelectedAndCodedIdentifiers() {
         let model = AppModel()
         model.sourceSheet = "Synthetic"

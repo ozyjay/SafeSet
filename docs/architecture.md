@@ -98,6 +98,13 @@ to the exact submitted text snapshot; edits clear it, and out-of-bounds or
 surrogate-splitting ranges are ignored. The AppKit plain-text editor applies
 temporary amber background/underline attributes without changing stored text.
 **Show match** selects a location; **Next match** cycles repeated matches.
+Review rows use worksheet/response identities, and a new review session recreates
+its view state. Each native editor owns its undo manager. Switching response or
+programmatically replacing text clears undo history before changing the text;
+ordinary updates preserve the current response's undo history. Programmatic
+synchronisation cannot write back through the edit delegate. Identifier feedback
+explains that short numeric IDs can collide with list numbers or counts; these
+matches still block approval under the existing engine rules.
 **Check for issues** reuses stateless local review validation without saving field
 approval. Only explicit approval commits reviewed text. Highlight snapshots are
 cleared on cancellation or completion and never persisted or logged.
